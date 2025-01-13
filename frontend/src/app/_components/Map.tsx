@@ -7,6 +7,7 @@ import {
   Popup,
   useMapEvent,
   Polyline,
+  Polygon,
 } from "react-leaflet";
 import { LatLngExpression, LatLngTuple } from "leaflet";
 import React, { useEffect, useState } from "react";
@@ -16,7 +17,6 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.css";
 import "leaflet-defaulticon-compatibility";
-import { Poly } from "next/font/google";
 
 // Default marker icon
 const defaultIcon = new L.Icon({
@@ -31,24 +31,36 @@ const defaultIcon = new L.Icon({
 interface MapProps {
   center: LatLngExpression | LatLngTuple;
   zoom?: number;
-  markers: { id: number; position: LatLngTuple }[];
+  markers: { id: string; position: LatLngTuple }[];
+  impassableMarkers: { id: string; position: LatLngTuple }[];
+  listOfImpassibleMarkers: { id: string; position: LatLngTuple }[][];
   onMapRightClick: (latlng: LatLngTuple) => void;
   onAddMarker: (latlng: LatLngTuple) => void;
-  onUpdateMarkerPosition: (id: number, newPosition: LatLngTuple) => void;
+  onUpdateMarkerPosition: (id: string, newPosition: LatLngTuple) => void;
+  onUpdateImpassibleMarkerPosition: (
+    id: string,
+    newPosition: LatLngTuple
+  ) => void;
+  onUpdateListOfImpassibleMarkers: (id: string, newPosition: LatLngTuple) => void;
   polylineCoordinates: LatLngTuple[];
 }
 
 const defaults = {
   zoom: 19,
 };
+const redOptions = { color: "red" };
 
 const Map = ({
   zoom = defaults.zoom,
   center,
   markers,
+  impassableMarkers,
+  listOfImpassibleMarkers,
   onMapRightClick,
   onAddMarker,
   onUpdateMarkerPosition,
+  onUpdateImpassibleMarkerPosition,
+  onUpdateListOfImpassibleMarkers,
   polylineCoordinates,
 }: MapProps) => {
   return (
@@ -63,9 +75,11 @@ const Map = ({
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      { polylineCoordinates.length > 0 && (<Polyline positions={polylineCoordinates} color="blue" />)}
+      {polylineCoordinates.length > 0 && (
+        <Polyline positions={polylineCoordinates} color="blue" />
+      )}
       {markers.map((marker, index) => {
-        // Create a custom icon with the default marker and a number overlay
+        // Create a custom icon with the default marker and a string overlay
         const customIcon = L.divIcon({
           className: "custom-marker",
           html: `  
@@ -75,7 +89,7 @@ const Map = ({
                                 position: absolute;   
                                 top: 2px;   
                                 left: 1px;   
-                                background-color: red;   
+                                background-color: blue;   
                                 color: white;   
                                 border-radius: 50%;   
                                 width: 23.5px;   
@@ -86,7 +100,7 @@ const Map = ({
                                 font-size: 12px;   
                                 font-weight: bold;   
                                 z-index: 1000;">  
-                                ${marker.id}  
+                                ${marker.id.split("-")[1]}  
                             </div>  
                         </div>  
                     `,
@@ -110,6 +124,104 @@ const Map = ({
           />
         );
       })}
+      {impassableMarkers.map((marker, index) => {
+        // Create a custom icon with the default marker and a string overlay
+        const customIcon = L.divIcon({
+          className: "custom-marker",
+          html: `  
+                        <div style="position: relative;">  
+                            <img src="${defaultIcon.options.iconUrl}" style="width: 25px; height: 41px;" />  
+                            <div style="  
+                                position: absolute;   
+                                top: 2px;   
+                                left: 1px;   
+                                background-color: red;   
+                                color: white;   
+                                border-radius: 50%;   
+                                width: 23.5px;   
+                                height: 23.5px;   
+                                display: flex;   
+                                align-items: center;   
+                                justify-content: center;   
+                                font-size: 12px;   
+                                font-weight: bold;   
+                                z-index: 1000;">  
+                                ${marker.id.split("-")[1]}
+                            </div>  
+                        </div>  
+                    `,
+          iconSize: [25, 41],
+          iconAnchor: [12, 41],
+        });
+
+        return (
+          <DraggableMarker
+            key={marker.id}
+            position={marker.position}
+            id={marker.id}
+            customIcon={customIcon}
+            onUpdateMarkerPosition={onUpdateImpassibleMarkerPosition}
+          />
+        );
+      })}
+      {impassableMarkers.length >= 3 && (
+        <Polygon
+          positions={impassableMarkers.map((marker) => marker.position)}
+          pathOptions={redOptions}
+        />
+      )}
+
+      {listOfImpassibleMarkers.map((impassibleMarkers, index) => {
+        // Render the polygon for the current group of impassible markers
+        return (
+          <React.Fragment key={index}>
+            <Polygon
+              positions={impassibleMarkers.map((marker) => marker.position)}
+              pathOptions={redOptions}
+            />
+            {impassibleMarkers.map((marker) => {
+              // Create a custom icon with the default marker and a string overlay
+              const customIcon = L.divIcon({
+                className: "custom-marker",
+                html: `    
+                <div style="position: relative;">    
+                    <img src="${defaultIcon.options.iconUrl}" style="width: 25px; height: 41px;" />    
+                    <div style="    
+                        position: absolute;     
+                        top: 2px;     
+                        left: 1px;     
+                        background-color: red;     
+                        color: white;     
+                        border-radius: 50%;     
+                        width: 23.5px;     
+                        height: 23.5px;     
+                        display: flex;     
+                        align-items: center;     
+                        justify-content: center;     
+                        font-size: 12px;     
+                        font-weight: bold;     
+                        z-index: 1000;">    
+                        ${marker.id.split("-")[1]}    
+                    </div>    
+                </div>    
+              `,
+                iconSize: [25, 41],
+                iconAnchor: [12, 41],
+              });
+
+              return (
+                <DraggableMarker
+                  key={marker.id}
+                  position={marker.position}
+                  id={marker.id}
+                  customIcon={customIcon}
+                  onUpdateMarkerPosition={onUpdateListOfImpassibleMarkers}
+                />
+              );
+            })}
+          </React.Fragment>
+        );
+      })}
       <MapEventHandler onMapRightClick={onMapRightClick} />
     </MapContainer>
   );
@@ -122,14 +234,11 @@ const DraggableMarker = ({
   onUpdateMarkerPosition,
 }: {
   position: LatLngTuple;
-  id: number;
+  id: string;
   customIcon: L.DivIcon;
-  onUpdateMarkerPosition: (id: number, newPosition: LatLngTuple) => void;
+  onUpdateMarkerPosition: (id: string, newPosition: LatLngTuple) => void;
 }) => {
-  
-  useEffect(() => {
-
-  }, [position]);
+  useEffect(() => {}, [position]);
 
   const handleDragEnd = (event: any) => {
     const newPosition: LatLngTuple = [

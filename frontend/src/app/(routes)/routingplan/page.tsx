@@ -3,11 +3,10 @@
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { LatLngTuple } from "leaflet";
-import { Polyline } from "react-leaflet";
 import polyline from "@mapbox/polyline";
 
 interface Marker {
-  id: number;
+  id: string;
   position: LatLngTuple;
 }
 
@@ -22,15 +21,24 @@ export default function Page() {
   );
 
   const [markers, setMarkers] = useState<Marker[]>([]);
+  const [impassibleMarkers, setImpassibleMarkers] = useState<Marker[]>([]);
+  const [listOfImpassibleMarkers, setListOfImpassibleMarkers] = useState<
+    Marker[][]
+  >([]);
   const [center, setCenter] = useState<LatLngTuple>([-6.8904, 107.6102]);
   const [directions, setDirections] = useState<any>(null);
   const [polylineCoordinates, setPolylineCoordinates] = useState<LatLngTuple[]>(
     []
   );
-  const callApiForDirections = async () => {
-    const coordinates = markers.map((marker) => [marker.position[1], marker.position[0]]);
+  const [flagImpassible, setFlagImpassible] = useState<boolean>(false);
 
-    const body = {
+  const callApiForDirections = async () => {
+    const coordinates = markers.map((marker) => [
+      marker.position[1],
+      marker.position[0],
+    ]);
+
+    const body: any = {
       coordinates: coordinates,
       extra_info: [
         "suitability",
@@ -44,6 +52,28 @@ export default function Page() {
       language: "id",
     };
 
+    if (listOfImpassibleMarkers.length > 0) {
+      // Flatten the listOfImpassibleMarkers to get all coordinates
+      const impassibleCoordinates = listOfImpassibleMarkers.flatMap((group) =>
+        group.map((marker) => [marker.position[1], marker.position[0]])
+      );
+
+      // Check if there are at least 3 coordinates to form a polygon
+      if (impassibleCoordinates.length >= 3) {
+        body.options = {
+          avoid_polygons: {
+            type: "Polygon",
+            coordinates: [
+              [
+                ...impassibleCoordinates,
+                impassibleCoordinates[0], // Closing the loop by adding the first point again
+              ],
+            ],
+          },
+        };
+      }
+    }
+
     try {
       const response = await fetch(
         "https://api.openrouteservice.org/v2/directions/driving-hgv/json",
@@ -51,7 +81,7 @@ export default function Page() {
           method: "POST",
           headers: {
             Authorization:
-              "5b3ce3597851110001cf62486b0a56a32a7d4b649f84b0b80d97be54",
+              process.env.NEXT_PUBLIC_API_ORS || "", // Get the API key from the environment variables
             "Content-Type": "application/json",
           },
           body: JSON.stringify(body),
@@ -77,21 +107,34 @@ export default function Page() {
       setPolylineCoordinates(latLngs); // Set the polyline coordinates
       console.log(polylineCoordinates); // Optionally log the polyline coordinates
       console.log(latLngs); // Optionally log the polyline coordinates
-      console.log(geometry)
+      console.log(geometry);
     } catch (error) {
       console.error("Error fetching directions:", error);
     }
   };
 
   const addMarker = (latlng: LatLngTuple) => {
-    setMarkers((prev) => [...prev, { id: markers.length, position: latlng }]);
+    setMarkers((prev) => [
+      ...prev,
+      { id: `${Date.now()}-${prev.length}`, position: latlng },
+    ]);
   };
 
   const handleMapRightClick = (latlng: LatLngTuple) => {
-    setMarkers((prev) => [...prev, { id: markers.length, position: latlng }]);
+    if (flagImpassible) {
+      setImpassibleMarkers((prev) => [
+        ...prev,
+        { id: `${Date.now()}-${impassibleMarkers.length}`, position: latlng },
+      ]);
+    } else {
+      setMarkers((prev) => [
+        ...prev,
+        { id: `${Date.now()}-${prev.length}`, position: latlng },
+      ]);
+    }
   };
 
-  const removeMarker = (id: number) => {
+  const removeMarker = (id: string) => {
     setMarkers((prev) => {
       // Filter out the marker to be removed
       const updatedMarkers = prev.filter((marker) => marker.id !== id);
@@ -103,7 +146,19 @@ export default function Page() {
     });
   };
 
-  const updateMarkerPosition = (id: number, newPosition: LatLngTuple) => {
+  const removeImpassibleMarker = (id: string) => {
+    setImpassibleMarkers((prev) => {
+      // Filter out the marker to be removed
+      const updatedMarkers = prev.filter((marker) => marker.id !== id);
+      // Reassign IDs to the remaining markers
+      return updatedMarkers.map((marker, index) => ({
+        ...marker,
+        id: index, // Reassign ID based on the new index
+      }));
+    });
+  };
+
+  const updateMarkerPosition = (id: string, newPosition: LatLngTuple) => {
     setMarkers((prev) =>
       prev.map((marker) =>
         marker.id === id ? { ...marker, position: newPosition } : marker
@@ -111,10 +166,45 @@ export default function Page() {
     );
   };
 
+  const updateImpassibleMarkerPosition = (
+    id: string,
+    newPosition: LatLngTuple
+  ) => {
+    setImpassibleMarkers((prev) =>
+      prev.map((marker) =>
+        marker.id === id ? { ...marker, position: newPosition } : marker
+      )
+    );
+  };
 
-  useEffect(() => {  
-    console.log("Polyline Coordinates Updated:", polylineCoordinates);  
-  }, [polylineCoordinates]); 
+  const updateListOfImpassibleMarkers = (
+    id: string,
+    newPosition: LatLngTuple
+  ) => {
+    setListOfImpassibleMarkers((prev) =>
+      prev.map((group) =>
+        group.map((marker) =>
+          marker.id === id ? { ...marker, position: newPosition } : marker
+        )
+      )
+    );
+  };
+
+  const handleDone = () => {
+    // Store the impassible markers in the listOfImpassibleMarkers state
+    setListOfImpassibleMarkers((prev) => [...prev, [...impassibleMarkers]]);
+    console.log("Impassible Markers Stored:", [...impassibleMarkers]);
+    setImpassibleMarkers([]); // Reset impassible markers to an empty array
+    setFlagImpassible(false); // Exit impassible mode
+  };
+
+  const handleCancel = () => {
+    setFlagImpassible(false); // Exit impassible mode
+  };
+
+  useEffect(() => {
+    console.log("Polyline Coordinates Updated:", polylineCoordinates);
+  }, [polylineCoordinates]);
 
   return (
     <>
@@ -122,41 +212,134 @@ export default function Page() {
         <Map
           center={center}
           markers={markers}
+          impassableMarkers={impassibleMarkers}
+          listOfImpassibleMarkers={listOfImpassibleMarkers}
           onMapRightClick={handleMapRightClick}
           onAddMarker={addMarker}
           onUpdateMarkerPosition={updateMarkerPosition}
+          onUpdateImpassibleMarkerPosition={updateImpassibleMarkerPosition}
+          onUpdateListOfImpassibleMarkers={updateListOfImpassibleMarkers}
           polylineCoordinates={polylineCoordinates}
         />
       </div>
-      <div>
-        <h2>List of Destination:</h2>
-        <ul>
-          {markers.map((marker) => (
-            <li key={marker.id}>
-              {marker.id}. Latitude: {marker.position[0]}, Longitude:{" "}
-              {marker.position[1]}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          width: "100%",
+        }}
+      >
+        <div style={{ flex: 1, marginRight: "10px" }}>
+          <h2>List of Destination:</h2>
+          <ul>
+            {markers.map((marker) => (
+              <li key={marker.id}>
+                {marker.id.split("-")[1]}. Latitude: {marker.position[0]},
+                Longitude: {marker.position[1]}
+                <button
+                  onClick={() => removeMarker(marker.id)}
+                  style={{ marginLeft: "10px" }}
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+          <button
+            onClick={callApiForDirections}
+            style={{
+              margin: "10px",
+              padding: "10px",
+              backgroundColor: "blue",
+              color: "white",
+              border: "none",
+              borderRadius: "5px",
+            }}
+          >
+            Get Directions
+          </button>
+        </div>
+
+        <div style={{ flex: 1, marginLeft: "10px" }}>
+          <h2>List of Impassible Markers:</h2>
+          <ul>
+            {impassibleMarkers.map((marker) => (
+              <li key={marker.id}>
+                {marker.id.split("-")[1]}. Latitude: {marker.position[0]},
+                Longitude: {marker.position[1]}
+                <button
+                  onClick={() => removeImpassibleMarker(marker.id)}
+                  style={{ marginLeft: "10px" }}
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+          {flagImpassible ? (
+            <>
               <button
-                onClick={() => removeMarker(marker.id)}
-                style={{ marginLeft: "10px" }}
+                onClick={handleDone}
+                style={{
+                  margin: "10px",
+                  padding: "10px",
+                  backgroundColor: "green",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "5px",
+                }}
               >
-                Remove
+                Done
               </button>
-            </li>
-          ))}
-        </ul>
-        <button
-          onClick={callApiForDirections}
-          style={{
-            margin: "10px",
-            padding: "10px",
-            backgroundColor: "blue",
-            color: "white",
-            border: "none",
-            borderRadius: "5px",
-          }}
-        >
-          Get Directions
-        </button>
+              <button
+                onClick={handleCancel}
+                style={{
+                  margin: "10px",
+                  padding: "10px",
+                  backgroundColor: "red",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "5px",
+                }}
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setFlagImpassible(true)}
+              style={{
+                margin: "10px",
+                padding: "10px",
+                backgroundColor: "blue",
+                color: "white",
+                border: "none",
+                borderRadius: "5px",
+              }}
+            >
+              Set Impassible Markers
+            </button>
+          )}
+        </div>
+
+        <div style={{ flex: 1, marginLeft: "10px" }}>
+          <h2>List of Impassible Polygons</h2>
+          <ul>
+            {listOfImpassibleMarkers.map((markers, index) => (
+              <li key={index}>
+                <h3>Impassible Polygon {index + 1}</h3>
+                <ul>
+                  {markers.map((marker) => (
+                    <li key={marker.id}>
+                      {marker.id.split("-")[1]}. Latitude: {marker.position[0]},
+                      Longitude: {marker.position[1]}
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
     </>
   );
