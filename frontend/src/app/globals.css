@@ -28,3 +28,7 @@ body {
   .leaflet-control-geosearch .leaflet-bar-part {
     display: none;
   }
+
+.legend{
+  z-index: 1000;
+}

@@ -10,6 +10,7 @@ interface Marker {
   position: LatLngTuple;
 }
 
+
 export default function Page() {
   const Map = useMemo(
     () =>
@@ -21,18 +22,18 @@ export default function Page() {
   );
 
   const [markers, setMarkers] = useState<Marker[]>([]);
+  const [segments, setSegments] = useState<any>([]);
+  const [tollways, setTollways] = useState<any>([]);
   const [impassibleMarkers, setImpassibleMarkers] = useState<Marker[]>([]);
   const [listOfImpassibleMarkers, setListOfImpassibleMarkers] = useState<
     Marker[][]
   >([]);
   const [center, setCenter] = useState<LatLngTuple>([-6.8904, 107.6102]);
   const [directions, setDirections] = useState<any>(null);
-  const [polylineCoordinates, setPolylineCoordinates] = useState<LatLngTuple[]>(
-    []
-  );
   const [flagImpassible, setFlagImpassible] = useState<boolean>(false);
 
   const callApiForDirections = async () => {
+    setSegments([]); // Reset the segments state to an empty array
     const coordinates = markers.map((marker) => [
       marker.position[1],
       marker.position[0],
@@ -103,11 +104,28 @@ export default function Page() {
       const decoded = polyline.decode(geometry); // Decode the polyline
       const latLngs = decoded.map(
         (coord) => [coord[0], coord[1]] as LatLngTuple
-      ); // Convert to [lat, lng]
-      setPolylineCoordinates(latLngs); // Set the polyline coordinates
-      console.log(polylineCoordinates); // Optionally log the polyline coordinates
-      console.log(latLngs); // Optionally log the polyline coordinates
-      console.log(geometry);
+      );
+
+      const waytypes = data.routes[0].extras.waytypes.values;
+      const tollwayss = data.routes[0].extras.tollways.values;
+      console.log(tollwayss);
+
+      for(const waytype of waytypes){
+        const startIdx = waytype[0];
+        const endIdx = waytype[1];
+        const typeValue = waytype[2];
+        const segment = latLngs.slice(startIdx, endIdx + 1);
+        setSegments((prev: any) => [...prev, {segment, typeValue}]);
+      }
+
+      for(const tollway of tollwayss){
+        const startIdx = tollway[0];
+        const endIdx = tollway[1];
+        const tollwayValue = tollway[2];
+        const segment = latLngs.slice(startIdx, endIdx + 1);
+        setTollways((prev: any) => [...prev, {segment, tollwayValue}]);
+      }
+
     } catch (error) {
       console.error("Error fetching directions:", error);
     }
@@ -203,8 +221,8 @@ export default function Page() {
   };
 
   useEffect(() => {
-    console.log("Polyline Coordinates Updated:", polylineCoordinates);
-  }, [polylineCoordinates]);
+    console.log("Polyline Coordinates Updated:", segments);
+  }, [segments]);
 
   return (
     <>
@@ -219,7 +237,8 @@ export default function Page() {
           onUpdateMarkerPosition={updateMarkerPosition}
           onUpdateImpassibleMarkerPosition={updateImpassibleMarkerPosition}
           onUpdateListOfImpassibleMarkers={updateListOfImpassibleMarkers}
-          polylineCoordinates={polylineCoordinates}
+          segments={segments}
+          tollways={tollways}
         />
       </div>
       <div

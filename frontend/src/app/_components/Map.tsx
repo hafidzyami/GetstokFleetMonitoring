@@ -18,6 +18,34 @@ import "leaflet/dist/leaflet.css";
 import "leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.css";
 import "leaflet-defaulticon-compatibility";
 
+const Legend = () => {
+  return (
+    <div className="absolute top-4 left-4 bg-white p-4 rounded shadow-lg legend">
+      <h4 className="font-bold mb-2">Road Types Legend</h4>
+      <div className="flex items-center mb-1">
+        <div className="w-16 h-2 bg-blue-500 mr-2"></div>{" "}
+        {/* Line for Kelas III */}
+        <span>Kelas III</span>
+      </div>
+      <div className="flex items-center mb-1">
+        <div className="w-16 h-2 bg-green-500 mr-2"></div>{" "}
+        {/* Line for Kelas II */}
+        <span>Kelas II</span>
+      </div>
+      <div className="flex items-center mb-1">
+        <div className="w-16 h-2 bg-red-500 mr-2"></div>{" "}
+        {/* Line for Kelas I */}
+        <span>Kelas I</span>
+      </div>
+      <div className="flex items-center mb-1">
+        <div className="w-16 h-2 bg-purple-500 mr-2"></div>{" "}
+        {/* Line for Kelas I */}
+        <span>Kelas Khusus (Toll)</span>
+      </div>
+    </div>
+  );
+};
+
 // Default marker icon
 const defaultIcon = new L.Icon({
   iconUrl: require("leaflet/dist/images/marker-icon.png"), // Default marker icon
@@ -41,8 +69,12 @@ interface MapProps {
     id: string,
     newPosition: LatLngTuple
   ) => void;
-  onUpdateListOfImpassibleMarkers: (id: string, newPosition: LatLngTuple) => void;
-  polylineCoordinates: LatLngTuple[];
+  onUpdateListOfImpassibleMarkers: (
+    id: string,
+    newPosition: LatLngTuple
+  ) => void;
+  segments: any;
+  tollways: any;
 }
 
 const defaults = {
@@ -61,7 +93,8 @@ const Map = ({
   onUpdateMarkerPosition,
   onUpdateImpassibleMarkerPosition,
   onUpdateListOfImpassibleMarkers,
-  polylineCoordinates,
+  segments,
+  tollways,
 }: MapProps) => {
   return (
     <MapContainer
@@ -71,20 +104,20 @@ const Map = ({
       style={{ height: "100%", width: "100%" }}
     >
       <SearchField onAddMarker={onAddMarker} />
+      <Legend />
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      {polylineCoordinates.length > 0 && (
-        <Polyline positions={polylineCoordinates} color="blue" />
-      )}
       {markers.map((marker, index) => {
         // Create a custom icon with the default marker and a string overlay
         const customIcon = L.divIcon({
           className: "custom-marker",
           html: `  
                         <div style="position: relative;">  
-                            <img src="${defaultIcon.options.iconUrl}" style="width: 25px; height: 41px;" />  
+                            <img src="${
+                              defaultIcon.options.iconUrl
+                            }" style="width: 25px; height: 41px;" />  
                             <div style="  
                                 position: absolute;   
                                 top: 2px;   
@@ -130,7 +163,9 @@ const Map = ({
           className: "custom-marker",
           html: `  
                         <div style="position: relative;">  
-                            <img src="${defaultIcon.options.iconUrl}" style="width: 25px; height: 41px;" />  
+                            <img src="${
+                              defaultIcon.options.iconUrl
+                            }" style="width: 25px; height: 41px;" />  
                             <div style="  
                                 position: absolute;   
                                 top: 2px;   
@@ -185,7 +220,9 @@ const Map = ({
                 className: "custom-marker",
                 html: `    
                 <div style="position: relative;">    
-                    <img src="${defaultIcon.options.iconUrl}" style="width: 25px; height: 41px;" />    
+                    <img src="${
+                      defaultIcon.options.iconUrl
+                    }" style="width: 25px; height: 41px;" />    
                     <div style="    
                         position: absolute;     
                         top: 2px;     
@@ -220,6 +257,47 @@ const Map = ({
               );
             })}
           </React.Fragment>
+        );
+      })}
+
+      {segments.map((seg: any, index: any) => {
+        let color;
+        switch (seg.typeValue) {
+          case 3:
+            color = "blue"; // Street
+            break;
+          case 2:
+            color = "green"; // Road
+            break;
+          case 1:
+            color = "red"; // State Road
+            break;
+          default:
+            color = "gray"; // Default color
+        }
+        return (
+          <Polyline
+            key={index}
+            positions={seg.segment}
+            pathOptions={{ color }} // Set the color based on the waytype
+          />
+        );
+      })}
+
+      {tollways.map((seg: any, index: any) => {
+        let color;
+
+        switch (seg.tollwayValue) {
+          case 1:
+            color = "purple";
+            break;
+        }
+        return (
+          <Polyline
+            key={index}
+            positions={seg.segment}
+            pathOptions={{ color }} // Set the color based on the waytype
+          />
         );
       })}
       <MapEventHandler onMapRightClick={onMapRightClick} />
