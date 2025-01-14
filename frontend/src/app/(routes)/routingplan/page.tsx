@@ -10,7 +10,6 @@ interface Marker {
   position: LatLngTuple;
 }
 
-
 export default function Page() {
   const Map = useMemo(
     () =>
@@ -81,8 +80,7 @@ export default function Page() {
         {
           method: "POST",
           headers: {
-            Authorization:
-              process.env.NEXT_PUBLIC_API_ORS || "", // Get the API key from the environment variables
+            Authorization: process.env.NEXT_PUBLIC_API_ORS || "", // Get the API key from the environment variables
             "Content-Type": "application/json",
           },
           body: JSON.stringify(body),
@@ -110,22 +108,21 @@ export default function Page() {
       const tollwayss = data.routes[0].extras.tollways.values;
       console.log(tollwayss);
 
-      for(const waytype of waytypes){
+      for (const waytype of waytypes) {
         const startIdx = waytype[0];
         const endIdx = waytype[1];
         const typeValue = waytype[2];
         const segment = latLngs.slice(startIdx, endIdx + 1);
-        setSegments((prev: any) => [...prev, {segment, typeValue}]);
+        setSegments((prev: any) => [...prev, { segment, typeValue }]);
       }
 
-      for(const tollway of tollwayss){
+      for (const tollway of tollwayss) {
         const startIdx = tollway[0];
         const endIdx = tollway[1];
         const tollwayValue = tollway[2];
         const segment = latLngs.slice(startIdx, endIdx + 1);
-        setTollways((prev: any) => [...prev, {segment, tollwayValue}]);
+        setTollways((prev: any) => [...prev, { segment, tollwayValue }]);
       }
-
     } catch (error) {
       console.error("Error fetching directions:", error);
     }
@@ -159,7 +156,7 @@ export default function Page() {
       // Reassign IDs to the remaining markers
       return updatedMarkers.map((marker, index) => ({
         ...marker,
-        id: index, // Reassign ID based on the new index
+        id: `${Date.now()}-${index}`, // Reassign ID based on the new index (as a string)
       }));
     });
   };
@@ -171,7 +168,7 @@ export default function Page() {
       // Reassign IDs to the remaining markers
       return updatedMarkers.map((marker, index) => ({
         ...marker,
-        id: index, // Reassign ID based on the new index
+        id: `${Date.now()}-${index}`, // Reassign ID based on the new index (as a string)
       }));
     });
   };
@@ -350,8 +347,8 @@ export default function Page() {
                 <ul>
                   {markers.map((marker) => (
                     <li key={marker.id}>
-                      {marker.id.split("-")[1]}. Latitude: {marker.position[0]},
-                      Longitude: {marker.position[1]}
+                      {marker.id.split("-")[1]}. Latitude: {marker.position[0]}, Longitude:{" "}
+                      {marker.position[1]}
                     </li>
                   ))}
                 </ul>
