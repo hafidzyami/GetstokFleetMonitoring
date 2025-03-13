@@ -8,12 +8,12 @@ import {
   useMapEvent,
   Polyline,
   Polygon,
+  useMap,
 } from "react-leaflet";
 import { LatLngExpression, LatLngTuple } from "leaflet";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import SearchField from "./SearchField"; // Adjust the import path as necessary
 import L from "leaflet";
-
 import "leaflet/dist/leaflet.css";
 import "leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.css";
 import "leaflet-defaulticon-compatibility";
@@ -75,7 +75,94 @@ interface MapProps {
   ) => void;
   segments: any;
   tollways: any;
+  onMapRef?: (map: L.Map) => void;
+  routeGeometry?: string;
+  surfaceTypes?: string[];
 }
+
+const MapRefSetter: React.FC<{ onMapRef?: (map: L.Map) => void }> = ({ onMapRef }) => {
+  const map = useMap();
+  const hoverMarkerRef = useRef<L.Marker | null>(null);
+  
+  useEffect(() => {
+    if (onMapRef) {
+      onMapRef(map);
+    }
+    
+    // Setup event handler untuk hover marker
+    const handleHoverPoint = (event: CustomEvent) => {
+      // Hapus marker lama jika ada
+      if (hoverMarkerRef.current) {
+        hoverMarkerRef.current.remove();
+        hoverMarkerRef.current = null;
+      }
+      
+      // Buat marker baru jika ada point data
+      const point = event.detail;
+      if (point && point.lat && point.lng) {
+        const hoverIcon = L.divIcon({
+          className: "hover-marker",
+          html: `<div style="
+            width: 12px;
+            height: 12px;
+            background-color: #ff0000;
+            border: 2px solid white;
+            border-radius: 50%;
+            box-shadow: 0 0 4px rgba(0,0,0,0.5);
+          "></div>`,
+          iconSize: [12, 12],
+          iconAnchor: [6, 6],
+        });
+        
+        // Buat marker dengan tooltip
+        hoverMarkerRef.current = L.marker([point.lat, point.lng], {
+          icon: hoverIcon,
+          zIndexOffset: 1000,
+        }).addTo(map);
+        
+        // Tambahkan tooltip ke marker
+        const elevationText = point.elevation !== undefined ? 
+          `Elevation: ${point.elevation.toFixed(1)} m<br>` : '';
+          
+        hoverMarkerRef.current.bindTooltip(
+          `<div style="padding: 4px; font-size: 12px;">
+            ${elevationText}
+            Location: ${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}
+          </div>`,
+          { 
+            permanent: true, 
+            direction: 'top',
+            className: 'elevation-tooltip',
+            offset: [0, -8] 
+          }
+        ).openTooltip();
+      }
+    };
+    
+    // Event untuk hover data null/reset
+    const handleHoverReset = () => {
+      if (hoverMarkerRef.current) {
+        hoverMarkerRef.current.remove();
+        hoverMarkerRef.current = null;
+      }
+    };
+    
+    // Daftarkan event listener
+    document.addEventListener('elevation-hover', handleHoverPoint as EventListener);
+    document.addEventListener('elevation-hover-reset', handleHoverReset);
+    
+    return () => {
+      // Cleanup
+      document.removeEventListener('elevation-hover', handleHoverPoint as EventListener);
+      document.removeEventListener('elevation-hover-reset', handleHoverReset);
+      if (hoverMarkerRef.current) {
+        hoverMarkerRef.current.remove();
+      }
+    };
+  }, [map, onMapRef]);
+  
+  return null;
+};
 
 const defaults = {
   zoom: 19,
@@ -95,6 +182,9 @@ const Map = ({
   onUpdateListOfImpassibleMarkers,
   segments,
   tollways,
+  onMapRef,
+  routeGeometry,
+  surfaceTypes,
 }: MapProps) => {
   return (
     <MapContainer
@@ -105,6 +195,7 @@ const Map = ({
     >
       <SearchField onAddMarker={onAddMarker} />
       <Legend />
+      {onMapRef && <MapRefSetter onMapRef={onMapRef} />}
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

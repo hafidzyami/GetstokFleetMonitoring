@@ -1,0 +1,113 @@
+{
+  "bbox": [107.61045, -6.885474, 782.64, 107.614421, -6.884468, 789],
+  "routes": [
+    {
+      "summary": {
+        "distance": 458.2,
+        "duration": 70.3,
+        "ascent": 6.4,
+        "descent": 3.8
+      },
+      "segments": [
+        {
+          "distance": 458.2,
+          "duration": 70.3,
+          "steps": [
+            {
+              "distance": 458.2,
+              "duration": 70.3,
+              "type": 11,
+              "instruction": "Menuju ke arah timur di <b>Jalan Siliwangi</b>",
+              "name": "Jalan Siliwangi",
+              "way_points": [0, 20]
+            },
+            {
+              "distance": 0,
+              "duration": 0,
+              "type": 10,
+              "instruction": "Sampai di Jalan Siliwangi, tetap berada pada jalur kanan",
+              "name": "-",
+              "way_points": [20, 20]
+            }
+          ],
+          "ascent": 6.355499267578125,
+          "descent": 3.7969970703125
+        }
+      ],
+      "bbox": [107.61045, -6.885474, 782.64, 107.614421, -6.884468, 789],
+      "geometry": "|r_i@itxoSozwC?MwAHa@wA|@mCwTRi@?Ba@?LkA?BU?Dm@oKBU?Bo@?@M?Dy@?@U?Fu@?BS?BS?Fi@?Ls@?HG?LWvV",
+      "way_points": [0, 20],
+      "extras": {
+        "waycategory": {
+          "values": [[0, 20, 0]],
+          "summary": [{ "value": 0, "distance": 458.2, "amount": 100 }]
+        },
+        "surface": {
+          "values": [
+            [0, 4, 3],
+            [4, 6, 0],
+            [6, 20, 3]
+          ],
+          "summary": [
+            { "value": 3, "distance": 396, "amount": 86.42 },
+            { "value": 0, "distance": 62.2, "amount": 13.58 }
+          ]
+        },
+        "waytypes": {
+          "values": [
+            [0, 16, 1],
+            [16, 20, 2]
+          ],
+          "summary": [
+            { "value": 1, "distance": 381.8, "amount": 83.32 },
+            { "value": 2, "distance": 76.4, "amount": 16.68 }
+          ]
+        },
+        "suitability": {
+          "values": [
+            [0, 3, 4],
+            [3, 19, 3],
+            [19, 20, 4]
+          ],
+          "summary": [
+            { "value": 3, "distance": 329.4, "amount": 71.89 },
+            { "value": 4, "distance": 128.8, "amount": 28.11 }
+          ]
+        },
+        "tollways": {
+          "values": [[0, 20, 0]],
+          "summary": [{ "value": 0, "distance": 458.2, "amount": 100 }]
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "attribution": "openrouteservice.org | OpenStreetMap contributors",
+    "service": "routing",
+    "timestamp": 1741838252808,
+    "query": {
+      "coordinates": [
+        [107.61044437314727, -6.884646501268882],
+        [107.61434852052545, -6.885583830211659]
+      ],
+      "profile": "driving-car",
+      "profileName": "driving-car",
+      "format": "json",
+      "language": "id",
+      "instructions_format": "html",
+      "elevation": true,
+      "extra_info": [
+        "suitability",
+        "surface",
+        "waycategory",
+        "waytype",
+        "tollways"
+      ]
+    },
+    "engine": {
+      "version": "9.0.0",
+      "build_date": "2025-01-27T14:56:02Z",
+      "graph_date": "2025-01-28T09:38:16Z"
+    }
+  }
+}

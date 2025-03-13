@@ -1,9 +1,11 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { LatLngTuple } from "leaflet";
-import polyline from "@mapbox/polyline";
+import { getLatLngsForMap } from "@/app/utils/polylineDecoder";
+import ElevationProfile from "@/app/_components/ElevationProfile";
+import L from "leaflet";
 
 interface Marker {
   id: string;
@@ -30,9 +32,49 @@ export default function Page() {
   const [center, setCenter] = useState<LatLngTuple>([-6.8904, 107.6102]);
   const [directions, setDirections] = useState<any>(null);
   const [flagImpassible, setFlagImpassible] = useState<boolean>(false);
+  const [routeGeometry, setRouteGeometry] = useState<string>("");
+  const [surfaceTypes, setSurfaceTypes] = useState<string[]>([]);
+
+  const mapRef = useRef<L.Map | null>(null);
+  const hoverMarkerRef = useRef<L.Marker | null>(null);
+
+  // Tambahkan fungsi ini di dalam komponen Page
+  const handleProfileHover = (point: { lat: number; lng: number } | null) => {
+    if (mapRef.current) {
+      // Hapus marker lama jika ada
+      if (hoverMarkerRef.current) {
+        hoverMarkerRef.current.remove();
+        hoverMarkerRef.current = null;
+      }
+
+      // Buat marker baru jika ada point
+      if (point) {
+        const hoverIcon = L.divIcon({
+          className: "hover-marker",
+          html: `<div style="
+          width: 12px;
+          height: 12px;
+          background-color: #ff0000;
+          border: 2px solid white;
+          border-radius: 50%;
+          box-shadow: 0 0 4px rgba(0,0,0,0.5);
+        "></div>`,
+          iconSize: [12, 12],
+          iconAnchor: [6, 6],
+        });
+
+        hoverMarkerRef.current = L.marker([point.lat, point.lng], {
+          icon: hoverIcon,
+          zIndexOffset: 1000, // Pastikan marker ini tampil di atas marker lainnya
+        }).addTo(mapRef.current);
+      }
+    }
+  };
 
   const callApiForDirections = async () => {
     setSegments([]); // Reset the segments state to an empty array
+    setTollways([]); // Reset the tollways state to avoid duplication
+
     const coordinates = markers.map((marker) => [
       marker.position[1],
       marker.position[0],
@@ -48,6 +90,7 @@ export default function Page() {
         "tollways",
       ],
       geometry_simplify: "false",
+      elevation: true,
       instructions_format: "html",
       language: "id",
     };
@@ -97,17 +140,14 @@ export default function Page() {
       setDirections(data); // Save the JSON data to state
       console.log(data); // Optionally log the data to the console
 
-      //decode
-      const geometry = data.routes[0].geometry; // Get the geometry from the first route
-      const decoded = polyline.decode(geometry); // Decode the polyline
-      const latLngs = decoded.map(
-        (coord) => [coord[0], coord[1]] as LatLngTuple
-      );
+      // Simpan geometri rute untuk digunakan oleh komponen profil elevasi
+      setRouteGeometry(data.routes[0].geometry);
 
+      // Gunakan decoder kustom untuk peta
+      const latLngs = getLatLngsForMap(data.routes[0].geometry);
+
+      // Proses waytypes untuk segmen
       const waytypes = data.routes[0].extras.waytypes.values;
-      const tollwayss = data.routes[0].extras.tollways.values;
-      console.log(tollwayss);
-
       for (const waytype of waytypes) {
         const startIdx = waytype[0];
         const endIdx = waytype[1];
@@ -116,12 +156,63 @@ export default function Page() {
         setSegments((prev: any) => [...prev, { segment, typeValue }]);
       }
 
+      // Proses tollways
+      const tollwayss = data.routes[0].extras.tollways.values;
       for (const tollway of tollwayss) {
         const startIdx = tollway[0];
         const endIdx = tollway[1];
         const tollwayValue = tollway[2];
         const segment = latLngs.slice(startIdx, endIdx + 1);
         setTollways((prev: any) => [...prev, { segment, tollwayValue }]);
+      }
+
+      // Ekstrak informasi surface type jika ada
+      if (
+        data.routes[0].extras.surface &&
+        data.routes[0].extras.surface.values
+      ) {
+        const surfaces = data.routes[0].extras.surface.values;
+        const surfaceMapping: { [key: number]: string } = {
+          0: "Unknown",
+          1: "Paved",
+          2: "Unpaved",
+          3: "Asphalt",
+          4: "Concrete",
+          5: "Cobblestone",
+          6: "Metal",
+          7: "Wood",
+          8: "Compacted Gravel",
+          9: "Fine Gravel",
+          10: "Gravel",
+          11: "Dirt",
+          12: "Ground",
+          13: "Ice",
+          14: "Paving Stones",
+          15: "Sand",
+          16: "Woodchips",
+          17: "Grass",
+          18: "Grass Paver",
+        };
+
+        // Buat array dengan jenis permukaan untuk setiap titik
+        const surfaceTypesArray = Array(latLngs.length).fill("Unknown");
+
+        // Isi array berdasarkan segmen permukaan dari API
+        for (const surface of surfaces) {
+          const startIdx = surface[0];
+          const endIdx = surface[1];
+          const surfaceValue = surface[2];
+          const surfaceType = surfaceMapping[surfaceValue] || "Unknown";
+
+          // Isi semua titik dalam segmen dengan jenis permukaan yang sesuai
+          for (let i = startIdx; i <= endIdx; i++) {
+            if (i < surfaceTypesArray.length) {
+              surfaceTypesArray[i] = surfaceType;
+            }
+          }
+        }
+
+        setSurfaceTypes(surfaceTypesArray);
       }
     } catch (error) {
       console.error("Error fetching directions:", error);
@@ -234,10 +325,23 @@ export default function Page() {
           onUpdateMarkerPosition={updateMarkerPosition}
           onUpdateImpassibleMarkerPosition={updateImpassibleMarkerPosition}
           onUpdateListOfImpassibleMarkers={updateListOfImpassibleMarkers}
+          onMapRef={(map) => (mapRef.current = map)}
           segments={segments}
           tollways={tollways}
         />
       </div>
+      <div className="mt-5">
+
+      </div>
+      {routeGeometry && (
+          <div className="bg-white mx-auto w-[98%] mt-4">
+            <ElevationProfile
+              geometry={routeGeometry}
+              surfaceTypes={surfaceTypes}
+              onHover={handleProfileHover}
+            />
+          </div>
+        )}
       <div
         style={{
           display: "flex",
@@ -347,8 +451,8 @@ export default function Page() {
                 <ul>
                   {markers.map((marker) => (
                     <li key={marker.id}>
-                      {marker.id.split("-")[1]}. Latitude: {marker.position[0]}, Longitude:{" "}
-                      {marker.position[1]}
+                      {marker.id.split("-")[1]}. Latitude: {marker.position[0]},
+                      Longitude: {marker.position[1]}
                     </li>
                   ))}
                 </ul>
