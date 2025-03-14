@@ -28,7 +28,7 @@ The **Frontend** is built using [Next.js](https://nextjs.org/), a React framewor
 
 ---
 
-## Backend - Getstok Fleet Monitoring
+## Backend
 
 The backend for Getstok Fleet Monitoring is built with Go (Golang), using the GoFiber framework and GORM for database operations. It follows a clean n-tier architecture and provides RESTful API endpoints with authentication and role-based access control.
 
