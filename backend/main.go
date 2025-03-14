@@ -11,17 +11,18 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/swagger"
 	_ "github.com/hafidzyami/GetstokFleetMonitoring/backend/docs" // Import generated docs
+	"github.com/hafidzyami/GetstokFleetMonitoring/backend/model"
+	"github.com/hafidzyami/GetstokFleetMonitoring/backend/utils"
 
-	"github.com/hafidzyami/GetstokFleetMonitoring/backend/repository"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/config"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/controller"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/middleware"
+	"github.com/hafidzyami/GetstokFleetMonitoring/backend/repository"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/service"
 )
 
-
 // @host localhost:3000
-// @BasePath /api
+// @BasePath /api/v1
 // @schemes http
 func main() {
 	// Load environment variables
@@ -32,6 +33,9 @@ func main() {
 
 	// Initialize repositories
 	userRepo := repository.NewUserRepository()
+
+	// Set user repository in utils package
+	utils.SetUserRepository(userRepo)
 
 	// Initialize services
 	authService := service.NewAuthService(userRepo)
@@ -50,12 +54,19 @@ func main() {
 				code = e.Code
 			}
 
-			// Return JSON error message
-			return c.Status(code).JSON(fiber.Map{
-				"message": err.Error(),
-			})
+			// Return JSON error message menggunakan format standar
+			return c.Status(code).JSON(model.SimpleErrorResponse(
+				code,
+				err.Error(),
+			))
 		},
 	})
+
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "*",
+		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
+		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
+	}))
 
 	// Middleware
 	app.Use(logger.New())  // Logger middleware
@@ -66,15 +77,16 @@ func main() {
 	app.Get("/swagger/*", swagger.HandlerDefault)
 
 	// Routes
-	api := app.Group("/api")
+	api := app.Group("/api/v1")
 
 	// Auth routes
 	auth := api.Group("/auth")
-	auth.Post("/register", authController.Register)
+	auth.Post("/register", middleware.RoleAuthorization("management"),authController.Register)
 	auth.Post("/login", authController.Login)
 
 	// Protected routes
 	api.Get("/profile", middleware.Protected(), authController.GetProfile)
+	api.Put("/profile/password", middleware.Protected(), authController.UpdatePassword)
 
 	// Get port from environment variables
 	port := os.Getenv("PORT")

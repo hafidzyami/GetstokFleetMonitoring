@@ -1,11 +1,47 @@
-basePath: /api
+basePath: /api/v1
 definitions:
-  model.AuthResponse:
+  model.BaseResponse:
     properties:
-      token:
+      apiVersion:
         type: string
-      user:
-        $ref: '#/definitions/model.User'
+      context:
+        type: string
+      data: {}
+      error:
+        $ref: '#/definitions/model.ErrorData'
+      id:
+        type: string
+      method:
+        type: string
+      params: {}
+    type: object
+  model.ErrorData:
+    properties:
+      code:
+        type: integer
+      errors:
+        items:
+          $ref: '#/definitions/model.ErrorInfo'
+        type: array
+      message:
+        type: string
+    type: object
+  model.ErrorInfo:
+    properties:
+      domain:
+        type: string
+      extendedHelp:
+        type: string
+      location:
+        type: string
+      locationType:
+        type: string
+      message:
+        type: string
+      reason:
+        type: string
+      sendReport:
+        type: string
     type: object
   model.LoginRequest:
     properties:
@@ -24,44 +60,23 @@ definitions:
         type: string
       name:
         type: string
-      password:
-        minLength: 6
-        type: string
       role:
         type: string
     required:
     - email
     - name
-    - password
     - role
     type: object
-  model.User:
+  model.UpdatePasswordRequest:
     properties:
-      created_at:
-        type: string
-      email:
-        type: string
-      id:
-        type: integer
-      name:
-        type: string
-      password:
+      new_password:
         minLength: 6
         type: string
-      role:
-        type: string
-      updated_at:
+      old_password:
         type: string
     required:
-    - email
-    - name
-    - password
-    - role
-    type: object
-  model.UserResponse:
-    properties:
-      user:
-        $ref: '#/definitions/model.User'
+    - new_password
+    - old_password
     type: object
 host: localhost:3000
 info:
@@ -85,19 +100,15 @@ paths:
         "200":
           description: Successfully authenticated
           schema:
-            $ref: '#/definitions/model.AuthResponse'
+            $ref: '#/definitions/model.BaseResponse'
         "400":
           description: Bad request
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/model.BaseResponse'
         "401":
           description: Unauthorized
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/model.BaseResponse'
       summary: Login a user
       tags:
       - auth
@@ -107,6 +118,12 @@ paths:
       - application/json
       description: Register a new user with the provided information
       parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
       - description: Register request
         in: body
         name: request
@@ -119,13 +136,13 @@ paths:
         "201":
           description: Successfully registered user
           schema:
-            $ref: '#/definitions/model.AuthResponse'
+            $ref: '#/definitions/model.BaseResponse'
         "400":
           description: Bad request
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
       summary: Register a new user
       tags:
       - auth
@@ -147,22 +164,56 @@ paths:
         "200":
           description: User profile
           schema:
-            $ref: '#/definitions/model.UserResponse'
+            $ref: '#/definitions/model.BaseResponse'
         "401":
           description: Unauthorized
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/model.BaseResponse'
         "404":
           description: Not found
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/model.BaseResponse'
       security:
       - BearerAuth: []
       summary: Get user profile
+      tags:
+      - profile
+  /profile/password:
+    put:
+      consumes:
+      - application/json
+      description: Update the password of the authenticated user
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Update password request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.UpdatePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success message
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Update user password
       tags:
       - profile
 schemes:

@@ -43,25 +43,19 @@ const docTemplate = `{
                     "200": {
                         "description": "Successfully authenticated",
                         "schema": {
-                            "$ref": "#/definitions/model.AuthResponse"
+                            "$ref": "#/definitions/model.BaseResponse"
                         }
                     },
                     "400": {
                         "description": "Bad request",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/model.BaseResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/model.BaseResponse"
                         }
                     }
                 }
@@ -69,6 +63,11 @@ const docTemplate = `{
         },
         "/auth/register": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Register a new user with the provided information",
                 "consumes": [
                     "application/json"
@@ -81,6 +80,14 @@ const docTemplate = `{
                 ],
                 "summary": "Register a new user",
                 "parameters": [
+                    {
+                        "type": "string",
+                        "default": "Bearer \u003ctoken\u003e",
+                        "description": "Bearer token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
                     {
                         "description": "Register request",
                         "name": "request",
@@ -95,16 +102,13 @@ const docTemplate = `{
                     "201": {
                         "description": "Successfully registered user",
                         "schema": {
-                            "$ref": "#/definitions/model.AuthResponse"
+                            "$ref": "#/definitions/model.BaseResponse"
                         }
                     },
                     "400": {
                         "description": "Bad request",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/model.BaseResponse"
                         }
                     }
                 }
@@ -142,25 +146,78 @@ const docTemplate = `{
                     "200": {
                         "description": "User profile",
                         "schema": {
-                            "$ref": "#/definitions/model.UserResponse"
+                            "$ref": "#/definitions/model.BaseResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/model.BaseResponse"
                         }
                     },
                     "404": {
                         "description": "Not found",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/profile/password": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update the password of the authenticated user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "profile"
+                ],
+                "summary": "Update user password",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "default": "Bearer \u003ctoken\u003e",
+                        "description": "Bearer token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "Update password request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.UpdatePasswordRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success message",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
                         }
                     }
                 }
@@ -168,14 +225,68 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "model.AuthResponse": {
+        "model.BaseResponse": {
             "type": "object",
             "properties": {
-                "token": {
+                "apiVersion": {
                     "type": "string"
                 },
-                "user": {
-                    "$ref": "#/definitions/model.User"
+                "context": {
+                    "type": "string"
+                },
+                "data": {},
+                "error": {
+                    "$ref": "#/definitions/model.ErrorData"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "method": {
+                    "type": "string"
+                },
+                "params": {}
+            }
+        },
+        "model.ErrorData": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "errors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.ErrorInfo"
+                    }
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.ErrorInfo": {
+            "type": "object",
+            "properties": {
+                "domain": {
+                    "type": "string"
+                },
+                "extendedHelp": {
+                    "type": "string"
+                },
+                "location": {
+                    "type": "string"
+                },
+                "locationType": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "sendReport": {
+                    "type": "string"
                 }
             }
         },
@@ -200,7 +311,6 @@ const docTemplate = `{
             "required": [
                 "email",
                 "name",
-                "password",
                 "role"
             ],
             "properties": {
@@ -210,53 +320,24 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
-                "password": {
-                    "type": "string",
-                    "minLength": 6
-                },
                 "role": {
                     "type": "string"
                 }
             }
         },
-        "model.User": {
+        "model.UpdatePasswordRequest": {
             "type": "object",
             "required": [
-                "email",
-                "name",
-                "password",
-                "role"
+                "new_password",
+                "old_password"
             ],
             "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "password": {
+                "new_password": {
                     "type": "string",
                     "minLength": 6
                 },
-                "role": {
+                "old_password": {
                     "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "model.UserResponse": {
-            "type": "object",
-            "properties": {
-                "user": {
-                    "$ref": "#/definitions/model.User"
                 }
             }
         }
@@ -267,7 +348,7 @@ const docTemplate = `{
 var SwaggerInfo = &swag.Spec{
 	Version:          "",
 	Host:             "localhost:3000",
-	BasePath:         "/api",
+	BasePath:         "/api/v1",
 	Schemes:          []string{"http"},
 	Title:            "",
 	Description:      "",

@@ -6,10 +6,8 @@ services:
     container_name: getstok_postgres
     ports:
       - "5433:5432"
-    environment:
-      - POSTGRES_USER=ybandung
-      - POSTGRES_PASSWORD=ybandung
-      - POSTGRES_DB=getstok
+    env_file:
+      - .env.db
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: always
@@ -20,20 +18,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-
-  # Opsional: Jika ingin UI admin PostgreSQL
-  # pgadmin:
-  #   image: dpage/pgadmin4
-  #   container_name: auth_pgadmin
-  #   environment:
-  #     - PGADMIN_DEFAULT_EMAIL=admin@example.com
-  #     - PGADMIN_DEFAULT_PASSWORD=admin
-  #   ports:
-  #     - "5050:80"
-  #   depends_on:
-  #     - postgres
-  #   networks:
-  #     - auth_network
 
 volumes:
   postgres_data:
