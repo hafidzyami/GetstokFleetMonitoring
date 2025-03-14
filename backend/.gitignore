@@ -1,0 +1,64 @@
+# Kredensial dan file konfigurasi sensitif
+.env
+.env.*
+!.env.example
+secrets/
+
+# File biner dan build artifacts
+/bin/
+/build/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+main
+app
+tmp/
+
+# Direktori dependensi
+/vendor/
+/Godeps/
+
+# Workspace Go
+go.work
+
+# File log
+*.log
+logs/
+
+# Cache dan file direktori IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+.directory
+.Trash-*
+__debug_bin
+__debug_bin.*
+.air.toml
+
+# File dan folder Docker
+.docker/
+docker-compose.override.yml
+
+# File database dan volume data
+*.db
+*.sqlite
+*.sqlite3
+postgres-data/
+
+# File swagger yang digenerate otomatis
+/docs/docs.go
+/docs/swagger.json
+/docs/swagger.yaml
+
+# File cache
+.cache/
+
+# Coverage dan testing files
+coverage.txt
+profile.out
