@@ -57,19 +57,12 @@ func (s *authService) Register(req model.RegisterRequest) (*model.AuthResponse, 
 		return nil, err
 	}
 
-	// Generate token
-	token, err := utils.GenerateToken(user)
-	if err != nil {
-		return nil, err
-	}
-
 	// Clean up password before returning user
 	user.Password = ""
 
 	// Return auth response
 	return &model.AuthResponse{
-		Token: token,
-		User:  user,
+		User: user,
 	}, nil
 }
 

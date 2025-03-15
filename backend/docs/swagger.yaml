@@ -78,7 +78,7 @@ definitions:
     - new_password
     - old_password
     type: object
-host: localhost:3000
+host: localhost:8080
 info:
   contact: {}
 paths:

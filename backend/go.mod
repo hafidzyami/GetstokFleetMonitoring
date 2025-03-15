@@ -1,6 +1,6 @@
 module github.com/hafidzyami/GetstokFleetMonitoring/backend
 
-go 1.22.3
+go 1.22
 
 require (
 	github.com/KyleBanks/depth v1.2.1 // indirect

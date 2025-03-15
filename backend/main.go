@@ -21,7 +21,7 @@ import (
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/service"
 )
 
-// @host localhost:3000
+// @host localhost:8080
 // @BasePath /api/v1
 // @schemes http
 func main() {
@@ -91,7 +91,7 @@ func main() {
 	// Get port from environment variables
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "3000"
+		port = "8080"
 	}
 
 	// Start server

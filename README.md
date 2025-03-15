@@ -28,20 +28,19 @@ The **Frontend** is built using [Next.js](https://nextjs.org/), a React framewor
 
 ---
 
-## Backend
+# Backend - Getstok Fleet Monitoring
 
 The backend for Getstok Fleet Monitoring is built with Go (Golang), using the GoFiber framework and GORM for database operations. It follows a clean n-tier architecture and provides RESTful API endpoints with authentication and role-based access control.
 
-### Features
+## Features
 
 - **Authentication System**: Secure JWT-based authentication with roles (management, planner, driver)
 - **RESTful API**: Clean API design following Google JSON Style Guide
 - **Documentation**: Integrated Swagger API documentation
 - **Database**: PostgreSQL integration with GORM
 - **Docker Support**: Containerized development and production environments
-- **Hot Reload**: Development environment with automatic reloading
 
-### Tech Stack
+## Tech Stack
 
 - **Language**: Go 1.20+
 - **Framework**: GoFiber v2
@@ -50,7 +49,7 @@ The backend for Getstok Fleet Monitoring is built with Go (Golang), using the Go
 - **Documentation**: Swagger/OpenAPI
 - **Containerization**: Docker & Docker Compose
 
-### Project Structure
+## Project Structure
 
 ```
 backend/
@@ -67,36 +66,34 @@ backend/
 ├── .env.example       # Example environment variables
 ├── .env.db.example    # Example database environment variables
 ├── Dockerfile         # Multi-stage build for dev and prod
-├── docker-compose.yml # Base Docker Compose configuration
-├── docker-compose.dev.yml # Development overrides
-├── docker-compose.prod.yml # Production overrides
+├── docker-compose.yml # Docker Compose configuration
 ├── go.mod             # Go modules
 ├── go.sum             # Dependencies lockfile
 └── main.go            # Application entry point
 ```
 
-### Environment Setup
+## Environment Setup
 
-#### Prerequisites
+### Prerequisites
 
 - Go 1.20 or higher
 - Docker and Docker Compose
 - PostgreSQL (if not using Docker)
 
-#### Environment Variables
+### Environment Variables
 
 Two environment files are required:
 
 1. `.env` - Application configuration:
 ```
 DB_HOST=postgres
-DB_PORT=port
+DB_PORT=5432
 DB_USER=username
 DB_PASSWORD=password
 DB_NAME=getstok
 DB_DRIVER=postgres
 JWT_SECRET=your_secret_key
-PORT=3000
+PORT=8080
 ```
 
 2. `.env.db` - Database configuration:
@@ -112,44 +109,29 @@ cp .env.example .env
 cp .env.db.example .env.db
 ```
 
-### Docker Setup
+## Docker Setup
 
-#### Development Environment
-
-The development environment includes hot-reload for faster development cycles:
+### Running with Docker
 
 ```bash
-# Build and run development environment
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+# Build and run containers
+docker-compose up --build
 
 # Run in background
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+docker-compose up -d
 
 # View logs
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml logs -f api
+docker-compose logs -f api
 ```
 
-#### Production Environment
+### Stopping Containers
 
 ```bash
-# Build and run production-ready containers
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
-
-# View logs
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs -f api
+# Stop and remove containers
+docker-compose down
 ```
 
-#### Stopping Containers
-
-```bash
-# Stop development environment
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml down
-
-# Stop production environment
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml down
-```
-
-### Local Setup (Without Docker)
+## Local Setup (Without Docker)
 
 If you prefer to run the application locally:
 
@@ -163,37 +145,34 @@ go mod tidy
 
 # Run the application
 go run main.go
-
-# For hot-reload development (requires air: go install github.com/cosmtrek/air@latest)
-air
 ```
 
-### API Documentation
+## API Documentation
 
 The API documentation is available through Swagger UI when the application is running:
 
-- Development: http://localhost:3000/swagger/index.html
+- Local: http://localhost:8080/swagger/index.html
 - Production: https://your-api-domain.com/swagger/index.html
 
-### Authentication
+## Authentication
 
 The API uses JWT tokens for authentication. Most endpoints require authentication and some are restricted by role.
 
-#### Available Roles
+### Available Roles
 
 - `management`: Can register users and access all features
 - `planner`: Can plan routes and manage fleet operations
 - `driver`: Can view assigned routes and update status
 
-#### Authentication Flow
+### Authentication Flow
 
 1. Register (Management only): `POST /api/auth/register`
 2. Login: `POST /api/auth/login`
 3. Use the returned token in the Authorization header: `Bearer <token>`
 
-### Development
+## Development
 
-#### Generating Swagger Documentation
+### Generating Swagger Documentation
 
 ```bash
 # Install swag if not already installed
@@ -203,9 +182,17 @@ go install github.com/swaggo/swag/cmd/swag@latest
 swag init -g main.go --output docs
 ```
 
-#### Database Migrations
+### Database Migrations
 
 Database migrations are handled automatically by GORM when the application starts.
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ---
 
