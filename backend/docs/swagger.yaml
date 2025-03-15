@@ -54,6 +54,19 @@ definitions:
     - email
     - password
     type: object
+  model.NotificationRequest:
+    properties:
+      message:
+        type: string
+      targetRoles:
+        items:
+          type: string
+        type: array
+      title:
+        type: string
+      url:
+        type: string
+    type: object
   model.RegisterRequest:
     properties:
       email:
@@ -66,6 +79,20 @@ definitions:
     - email
     - name
     - role
+    type: object
+  model.SubscriptionRequest:
+    properties:
+      auth:
+        type: string
+      endpoint:
+        type: string
+      p256dh:
+        type: string
+    type: object
+  model.UnsubscribeRequest:
+    properties:
+      endpoint:
+        type: string
     type: object
   model.UpdatePasswordRequest:
     properties:
@@ -216,6 +243,151 @@ paths:
       summary: Update user password
       tags:
       - profile
+  /push/send:
+    post:
+      consumes:
+      - application/json
+      description: Send notifications to specified roles
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Notification request with title, message, optional URL, and target
+          roles
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.NotificationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success response with count of sent notifications
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "403":
+          description: Forbidden - only management can send notifications
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      summary: Send push notifications
+      tags:
+      - push
+  /push/subscribe:
+    post:
+      consumes:
+      - application/json
+      description: Register a new push notification subscription
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Subscription info
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.SubscriptionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success response
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "403":
+          description: Forbidden - role not authorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      summary: Subscribe to push notifications
+      tags:
+      - push
+  /push/unsubscribe:
+    post:
+      consumes:
+      - application/json
+      description: Remove a push notification subscription
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Unsubscribe request with endpoint
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.UnsubscribeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success response
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      summary: Unsubscribe from push notifications
+      tags:
+      - push
+  /push/vapid-key:
+    get:
+      consumes:
+      - application/json
+      description: Get VAPID public key for push notification subscription
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success with public key
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      summary: Get VAPID public key
+      tags:
+      - push
 schemes:
 - http
 swagger: "2.0"

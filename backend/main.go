@@ -33,15 +33,18 @@ func main() {
 
 	// Initialize repositories
 	userRepo := repository.NewUserRepository()
+	pushRepo := repository.NewPushRepository()
 
 	// Set user repository in utils package
 	utils.SetUserRepository(userRepo)
 
 	// Initialize services
 	authService := service.NewAuthService(userRepo)
+	pushService := service.NewPushService(pushRepo)
 
 	// Initialize controllers
 	authController := controller.NewAuthController(authService)
+	pushController := controller.NewPushController(pushService)
 
 	// Initialize Fiber app
 	app := fiber.New(fiber.Config{
@@ -87,6 +90,13 @@ func main() {
 	// Protected routes
 	api.Get("/profile", middleware.Protected(), authController.GetProfile)
 	api.Put("/profile/password", middleware.Protected(), authController.UpdatePassword)
+
+	// Push notification routes
+	push := api.Group("/push")
+	push.Get("/vapid-key", pushController.GetVapidKey)
+	push.Post("/subscribe", middleware.Protected(), pushController.Subscribe)
+	push.Post("/unsubscribe", middleware.Protected(), pushController.Unsubscribe)
+	push.Post("/send", middleware.Protected(), pushController.Send)
 
 	// Get port from environment variables
 	port := os.Getenv("PORT")
