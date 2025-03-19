@@ -104,6 +104,9 @@ func main() {
 		port = "8080"
 	}
 
-	// Start server
+	// Start server HTTP
 	log.Fatal(app.Listen(fmt.Sprintf(":%s", port)))
+
+	// Start server HTTPS
+	// log.Fatal(app.ListenTLS(fmt.Sprintf(":%s", port), "./cert/cert.pem", "./cert/key.pem"))
 }

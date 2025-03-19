@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "./contexts/AuthContext";
+import { NotificationProvider } from "./contexts/NotificationContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,10 +26,42 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        {/* Meta tags untuk iOS PWA */}
+        <meta name="application-name" content="Getstok Fleet" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="Getstok Fleet" />
+        <meta name="format-detection" content="telephone=no" />
+        <meta name="mobile-web-app-capable" content="yes" />
+
+        {/* Ikon untuk iOS */}
+        <link rel="apple-touch-icon" href="https://192.168.0.139:3000/pwa-icon.png" />
+        <link
+          rel="pwa-icon"
+          sizes="152x152"
+          href="https://192.168.0.139:3000/pwa-icon.png"
+        />
+        <link
+          rel="pwa-icon"
+          sizes="180x180"
+          href="https://192.168.0.139:3000/pwa-icon.png"
+        />
+        <link
+          rel="pwa-icon"
+          sizes="167x167"
+          href="https://192.168.0.139:3000/pwa-icon.png"
+        />
+
+        {/* Splash screen untuk iOS */}
+        <link rel="apple-touch-startup-image" href="https://192.168.0.139:3000/pwa-icon.png" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <NotificationProvider>{children}</NotificationProvider>
+        </AuthProvider>
       </body>
     </html>
   );

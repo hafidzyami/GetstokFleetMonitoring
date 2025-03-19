@@ -8,6 +8,7 @@ import (
 type PushRepository interface {
 	SaveSubscription(subscription *model.PushSubscription) error
 	GetSubscriptionsByRole(roles []string) ([]model.PushSubscription, error)
+	GetSubscriptionsByUserIDs(userIDs []uint) ([]model.PushSubscription, error)
 	DeleteSubscription(endpoint string) error
 }
 
@@ -46,6 +47,20 @@ func (r *pushRepository) GetSubscriptionsByRole(roles []string) ([]model.PushSub
 	return subscriptions, err
 }
 
+func (r *pushRepository) GetSubscriptionsByUserIDs(userIDs []uint) ([]model.PushSubscription, error) {
+	var subscriptions []model.PushSubscription
+	
+	// Jika userIDs kosong, kembalikan array kosong
+	if len(userIDs) == 0 {
+		return subscriptions, nil
+	}
+	
+	// Filter berdasarkan user_id
+	err := config.DB.Where("user_id IN ?", userIDs).Find(&subscriptions).Error
+	return subscriptions, err
+}
+
 func (r *pushRepository) DeleteSubscription(endpoint string) error {
 	return config.DB.Where("endpoint = ?", endpoint).Delete(&model.PushSubscription{}).Error
 }
+

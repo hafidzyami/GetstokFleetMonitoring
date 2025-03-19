@@ -11,15 +11,42 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: '#000000',
     icons: [
       {
-        src: '/pwaicon.png',
+        src: '/pwa-icon.png', // Gunakan path relatif
         sizes: '192x192',
         type: 'image/png',
+        purpose: 'maskable'
       },
       {
-        src: '/pwaicon.png',
+        src: '/pwa-icon.png', // Gunakan path relatif
         sizes: '512x512',
         type: 'image/png',
+        purpose: 'maskable'
       },
-    ],
+      // Tambahkan ikon untuk iOS
+      {
+        src: '/pwa-icon.png',
+        sizes: '180x180',
+        type: 'image/png',
+        purpose: 'any'
+      },
+      {
+        src: '/pwa-icon.png',
+        sizes: '167x167',
+        type: 'image/png', 
+        purpose: 'any'
+      },
+      {
+        src: '/pwa-icon.png',
+        sizes: '152x152',
+        type: 'image/png',
+        purpose: 'any'
+      },
+      {
+        src: '/pwa-icon.png',
+        sizes: '120x120',
+        type: 'image/png',
+        purpose: 'any'
+      }
+    ]
   }
 }

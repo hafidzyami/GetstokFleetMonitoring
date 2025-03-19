@@ -225,7 +225,7 @@ const docTemplate = `{
         },
         "/push/send": {
             "post": {
-                "description": "Send notifications to specified roles",
+                "description": "Send notifications to specified roles and/or users",
                 "consumes": [
                     "application/json"
                 ],
@@ -238,14 +238,7 @@ const docTemplate = `{
                 "summary": "Send push notifications",
                 "parameters": [
                     {
-                        "type": "string",
-                        "description": "Bearer token",
-                        "name": "Authorization",
-                        "in": "header",
-                        "required": true
-                    },
-                    {
-                        "description": "Notification request with title, message, optional URL, and target roles",
+                        "description": "Notification request with title, message, optional URL, target roles, and target user IDs",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -302,13 +295,6 @@ const docTemplate = `{
                 ],
                 "summary": "Subscribe to push notifications",
                 "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Bearer token",
-                        "name": "Authorization",
-                        "in": "header",
-                        "required": true
-                    },
                     {
                         "description": "Subscription info",
                         "name": "request",
@@ -367,13 +353,6 @@ const docTemplate = `{
                 ],
                 "summary": "Unsubscribe from push notifications",
                 "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Bearer token",
-                        "name": "Authorization",
-                        "in": "header",
-                        "required": true
-                    },
                     {
                         "description": "Unsubscribe request with endpoint",
                         "name": "request",
@@ -534,6 +513,12 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "string"
+                    }
+                },
+                "targetUserIDs": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
                     }
                 },
                 "title": {

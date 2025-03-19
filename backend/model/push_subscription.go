@@ -1,8 +1,8 @@
 package model
 
 import (
-	"time"
 	"gorm.io/gorm"
+	"time"
 )
 
 type PushSubscription struct {
@@ -33,4 +33,5 @@ type NotificationRequest struct {
 	Message     string   `json:"message"`
 	URL         string   `json:"url"`
 	TargetRoles []string `json:"targetRoles"`
+	TargetUserIDs []uint `json:"targetUserIDs"`
 }

@@ -62,3 +62,4 @@ postgres-data/
 # Coverage dan testing files
 coverage.txt
 profile.out
+certificates
