@@ -41,14 +41,14 @@ const nextConfig = {
   },
   
   // Rewrites configuration for API proxy
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: 'http://192.168.0.139:8080/api/:path*' // Proxy to your API server
-      }
-    ]
-  }
+  // async rewrites() {
+  //   return [
+  //     {
+  //       source: '/api/:path*',
+  //       destination: 'http://192.168.18.13:8080/api/:path*' // Proxy to your API server
+  //     }
+  //   ]
+  // }
 }
 
 module.exports = nextConfig
