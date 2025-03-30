@@ -41,14 +41,18 @@ const nextConfig = {
   },
   
   // Rewrites configuration for API proxy
-  // async rewrites() {
-  //   return [
-  //     {
-  //       source: '/api/:path*',
-  //       destination: 'http://192.168.18.13:8080/api/:path*' // Proxy to your API server
-  //     }
-  //   ]
-  // }
+  async rewrites() {
+    return [
+      {
+        source: '/api/notification/v1/:path*',
+        destination: 'http://192.168.18.13:8081/api/v1/:path*' // Make sure this is the correct host/port
+      },
+      {
+        source: '/api/:path*',
+        destination: 'http://192.168.18.13:8080/api/:path*' 
+      }
+    ]
+  }
 }
 
 module.exports = nextConfig

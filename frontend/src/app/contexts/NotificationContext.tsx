@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { api } from '../utils/api';
+import { notificationApi } from '../utils/api';
 
 // Tipe untuk subscription yang kita gunakan dalam context
 interface PushSubscriptionData {
@@ -67,7 +67,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
           
           // Fetch VAPID public key
           try {
-            const response = await api.get('/push/vapid-key');
+            const response = await notificationApi.get('/push/vapid-key');
             setVapidPublicKey(response.data.publicKey);
           } catch (error) {
             console.error('Error fetching VAPID key:', error);
@@ -130,7 +130,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
       const subscriptionJSON = JSON.parse(JSON.stringify(pushSubscription));
       
       // Send subscription to server
-      await api.post('/push/subscribe', {
+      await notificationApi.post('/push/subscribe', {
         endpoint: subscriptionJSON.endpoint,
         p256dh: subscriptionJSON.keys.p256dh,
         auth: subscriptionJSON.keys.auth
@@ -160,7 +160,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
       await subscription.unsubscribe();
       
       // Send unsubscribe request to server
-      await api.post('/push/unsubscribe', {
+      await notificationApi.post('/push/unsubscribe', {
         endpoint: subscription.endpoint
       });
 
@@ -186,7 +186,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     try {
       setIsLoading(true);
       
-      await api.post('/push/send', {
+      await notificationApi.post('/push/send', {
         title,
         message,
         url,
