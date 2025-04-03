@@ -1,5 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Enable React's strict mode for development
+  reactStrictMode: true,
+  // Enable SWC minification for better performance
+  swcMinify: true,
+  // Enable experimental features
+  output: 'standalone', // Use standalone output for better performance
   // Headers configuration
   async headers() {
     return [

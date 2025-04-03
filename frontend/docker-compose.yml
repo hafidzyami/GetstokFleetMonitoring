@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nextjs-frontend
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      # Add other environment variables your application needs here
+      # - API_URL=https://api.example.com
+
+    # For development purposes, uncomment these lines to use volumes
+    # volumes:
+    #   - ./:/app
+    #   - /app/node_modules
+    #   - /app/.next
+    #   - ./src:/app/src
+
+  # Development configuration
+  frontend-dev:
+    build:
+      context: .
+      target: deps # Use the deps stage
+    command: npm run dev
+    container_name: nextjs-frontend-dev
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./:/app
+      - /app/node_modules
+      - /app/.next
+      # Ensure source code changes are reflected immediately
+      - ./src:/app/src
+    # Enable hot reloading
+    stdin_open: true
+    tty: true
