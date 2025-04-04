@@ -1,0 +1,88 @@
+version: '3.8'
+
+# Docker Compose file untuk root repository
+# Mengatur semua services dari satu file
+
+name: getstok-fleet-monitoring
+
+services:
+  # Frontend service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: getstok-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+      env_file:
+      - ./frontend/.env
+    networks:
+      - getstok-network
+    depends_on:
+      - backend
+      - notification-service
+    environment:
+      - NODE_ENV=production
+
+  # Backend service dengan PostgreSQL
+  postgres:
+    image: postgres:16-alpine
+    container_name: getstok_postgres
+    ports:
+      - "5433:5432"
+    env_file:
+      - ./backend/.env.db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+    networks:
+      - getstok-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ybandung"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: getstok_api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file:
+      - ./backend/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - getstok-network
+
+  # Notification service
+  notification-service:
+    build:
+      context: ./notification_service
+      dockerfile: Dockerfile
+    container_name: getstok-notification
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    env_file:
+      - ./notification_service/.env
+    environment:
+      - DB_HOST=postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - getstok-network
+
+networks:
+  getstok-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
