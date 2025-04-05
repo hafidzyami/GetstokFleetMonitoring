@@ -3,15 +3,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { notificationApi } from '../utils/api';
 
-// Tipe untuk subscription yang kita gunakan dalam context
-interface PushSubscriptionData {
-  endpoint: string;
-  keys: {
-    p256dh: string;
-    auth: string;
-  };
-}
-
 // Tipe untuk context
 interface NotificationContextType {
   isSupported: boolean;

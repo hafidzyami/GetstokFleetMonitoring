@@ -26,6 +26,8 @@ export default function Login() {
     await login(formData.email, formData.password);
   };
 
+  const isDevelopment = process.env.NODE_ENV === 'development';
+
   return (
     <div>
       <Image
@@ -46,7 +48,10 @@ export default function Login() {
             Login
           </h1>
           <p className="text-[#989898] text-sm sm:text-base">
-            Selamat datang kembali!
+            Selamat datang kembali! 
+          </p>
+          <p>
+            {isDevelopment ? "Development" : "Production"}
           </p>
         </div>
 

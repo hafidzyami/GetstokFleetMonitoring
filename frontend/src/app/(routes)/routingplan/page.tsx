@@ -30,13 +30,81 @@ export default function Page() {
     Marker[][]
   >([]);
   const [center, setCenter] = useState<LatLngTuple>([-6.8904, 107.6102]);
-  const [directions, setDirections] = useState<any>(null);
   const [flagImpassible, setFlagImpassible] = useState<boolean>(false);
   const [routeGeometry, setRouteGeometry] = useState<string>("");
   const [surfaceTypes, setSurfaceTypes] = useState<string[]>([]);
-
   const mapRef = useRef<L.Map | null>(null);
   const hoverMarkerRef = useRef<L.Marker | null>(null);
+
+  const [isLocationLoading, setIsLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+
+  const requestUserLocation = () => {
+    setIsLocationLoading(true);
+    setLocationError(null);
+
+    // Check if geolocation is available in the browser
+    if ("geolocation" in navigator) {
+      console.log("Requesting location permission...");
+
+      navigator.geolocation.getCurrentPosition(
+        // Success callback
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          // Update center state with user's coordinates
+          setCenter([latitude, longitude]);
+          setIsLocationLoading(false);
+          console.log("User location set:", latitude, longitude);
+        },
+        // Error callback
+        (error) => {
+          setIsLocationLoading(false);
+
+          let errorMessage = "";
+
+          // Handle different error types
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              errorMessage =
+                "Location permission denied. Please enable location access to use this feature.";
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMessage = "Location information is unavailable.";
+              break;
+            case error.TIMEOUT:
+              errorMessage = "Location request timed out.";
+              break;
+            default:
+              errorMessage = "An unknown error occurred.";
+          }
+
+          // Set error state
+          setLocationError(errorMessage);
+
+          // Show alert
+          alert("Location Error: " + errorMessage);
+
+          console.error("Error getting user location:", error.message);
+        },
+        // Options
+        {
+          enableHighAccuracy: true, // Request high accuracy
+          timeout: 10000, // Time limit for request (10 seconds)
+          maximumAge: 0, // Don't use cached position
+        }
+      );
+    } else {
+      const errorMessage = "Geolocation is not supported by this browser";
+      setIsLocationLoading(false);
+      setLocationError(errorMessage);
+      alert("Location Error: " + errorMessage);
+      console.log(errorMessage);
+    }
+  };
+
+  useEffect(() => {
+    requestUserLocation();
+  }, []);
 
   // Tambahkan fungsi ini di dalam komponen Page
   const handleProfileHover = (point: { lat: number; lng: number } | null) => {
@@ -137,8 +205,6 @@ export default function Page() {
       }
 
       const data = await response.json();
-      setDirections(data); // Save the JSON data to state
-      console.log(data); // Optionally log the data to the console
 
       // Simpan geometri rute untuk digunakan oleh komponen profil elevasi
       setRouteGeometry(data.routes[0].geometry);
@@ -330,18 +396,93 @@ export default function Page() {
           tollways={tollways}
         />
       </div>
-      <div className="mt-5">
 
+      {/* Fixed position button at bottom right */}
+      <div className="fixed bottom-4 right-4 z-50">
+        <button
+          onClick={requestUserLocation}
+          disabled={isLocationLoading}
+          className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-full shadow-lg flex items-center transition-all duration-300"
+        >
+          {isLocationLoading ? (
+            <>
+              <svg
+                className="animate-spin -ml-1 mr-2 h-5 w-5 text-white"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                ></circle>
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                ></path>
+              </svg>
+              <span>Loading...</span>
+            </>
+          ) : center[0] !== -6.8904 && center[1] !== 107.6102 ? (
+            <>
+              <svg
+                className="-ml-1 mr-2 h-5 w-5"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+              <span>Location Set</span>
+            </>
+          ) : (
+            <>
+              <svg
+                className="-ml-1 mr-2 h-5 w-5"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                />
+              </svg>
+              <span>Use My Location</span>
+            </>
+          )}
+        </button>
       </div>
+      <div className="mt-5"></div>
       {routeGeometry && (
-          <div className="bg-white mx-auto w-[98%] mt-4">
-            <ElevationProfile
-              geometry={routeGeometry}
-              surfaceTypes={surfaceTypes}
-              onHover={handleProfileHover}
-            />
-          </div>
-        )}
+        <div className="bg-white mx-auto w-[98%] mt-4">
+          <ElevationProfile
+            geometry={routeGeometry}
+            surfaceTypes={surfaceTypes}
+            onHover={handleProfileHover}
+          />
+        </div>
+      )}
       <div
         style={{
           display: "flex",

@@ -1,9 +1,16 @@
 // src/app/contexts/AuthContext.tsx
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import { api } from "../utils/api";
+import { log } from "console";
 
 // Define user type
 export type User = {
@@ -46,6 +53,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+
+  // Logout function
+  const logout = useCallback(() => {
+    // Clear localStorage
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+
+    // Reset state
+    setToken(null);
+    setUser(null);
+
+    // Redirect to login
+    router.push("/login");
+  }, [router]);
 
   // Check if user is logged in on initial load
   // Check if user is logged in on initial load
@@ -100,7 +121,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     };
 
     initAuth();
-  }, []);
+  }, [router, logout]);
 
   // Login function
   const login = async (email: string, password: string) => {
@@ -143,20 +164,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     } finally {
       setLoading(false);
     }
-  };
-
-  // Logout function
-  const logout = () => {
-    // Clear localStorage
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-
-    // Reset state
-    setToken(null);
-    setUser(null);
-
-    // Redirect to login
-    router.push("/login");
   };
 
   // Context value

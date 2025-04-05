@@ -1,4 +1,18 @@
 /** @type {import('next').NextConfig} */
+
+// Deteksi environment
+const isDevelopment = process.env.NODE_ENV === 'development';
+
+// Tentukan host berdasarkan environment
+const apiHost = isDevelopment 
+  ? 'http://getstokfms.com:8080' 
+  : 'http://getstok_api:8080';
+
+const notificationHost = isDevelopment 
+  ? 'http://getstokfms.com:8081' 
+  : 'http://getstok-notification:8081';
+
+  
 const nextConfig = {
   // Enable React's strict mode for development
   reactStrictMode: true,
@@ -9,6 +23,7 @@ const nextConfig = {
     outputFileTracingRoot: undefined, // penting untuk termasuk semua node_modules
     outputFileTracingExcludes: {},
   },
+
   // Headers configuration
   async headers() {
     return [
@@ -54,11 +69,11 @@ const nextConfig = {
     return [
       {
         source: '/api/notification/v1/:path*',
-        destination: 'http://getstok-notification:8081/api/v1/:path*' // Nama container notification service
+        destination: `${notificationHost}/api/v1/:path*` // Nama container notification service
       },
       {
         source: '/api/:path*',
-        destination: 'http://getstok_api:8080/api/:path*' // Nama container backend
+        destination: `${apiHost}/api/:path*` // API service
       }
     ]
   }

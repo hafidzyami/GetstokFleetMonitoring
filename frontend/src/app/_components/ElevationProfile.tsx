@@ -208,7 +208,6 @@ const ElevationProfile: React.FC<ElevationProfileProps> = ({
       if (!svgRef.current || !containerRef.current) return;
 
       const svgRect = svgRef.current.getBoundingClientRect();
-      const containerRect = containerRef.current.getBoundingClientRect();
 
       // Periksa apakah mouse berada di dalam area grafik aktual
       const chartStartX = svgRect.left + 40; // Perkiraan offset untuk sumbu Y
@@ -289,8 +288,6 @@ const ElevationProfile: React.FC<ElevationProfileProps> = ({
 
   // Close the path to create a filled area
   const closedPathData = `${pathData} L${width},${height} L0,${height} Z`;
-
-  const padding = { left: 40, right: 10, top: 20, bottom: 30 };
 
   return (
     <div

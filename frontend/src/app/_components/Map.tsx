@@ -11,7 +11,7 @@ import {
   useMap,
 } from "react-leaflet";
 import { LatLngExpression, LatLngTuple } from "leaflet";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef  } from "react";
 import SearchField from "./SearchField"; // Adjust the import path as necessary
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -76,8 +76,8 @@ interface MapProps {
   segments: any;
   tollways: any;
   onMapRef?: (map: L.Map) => void;
-  routeGeometry?: string;
-  surfaceTypes?: string[];
+  // routeGeometry?: string;
+  // surfaceTypes?: string[];
 }
 
 const MapRefSetter: React.FC<{ onMapRef?: (map: L.Map) => void }> = ({ onMapRef }) => {
@@ -183,8 +183,8 @@ const Map = ({
   segments,
   tollways,
   onMapRef,
-  routeGeometry,
-  surfaceTypes,
+  // routeGeometry,
+  // surfaceTypes,
 }: MapProps) => {
   return (
     <MapContainer
@@ -200,7 +200,7 @@ const Map = ({
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      {markers.map((marker, index) => {
+      {markers.map((marker, _) => {
         // Create a custom icon with the default marker and a string overlay
         const customIcon = L.divIcon({
           className: "custom-marker",
@@ -248,7 +248,7 @@ const Map = ({
           />
         );
       })}
-      {impassableMarkers.map((marker, index) => {
+      {impassableMarkers.map((marker, _) => {
         // Create a custom icon with the default marker and a string overlay
         const customIcon = L.divIcon({
           className: "custom-marker",
