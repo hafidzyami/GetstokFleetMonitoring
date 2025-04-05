@@ -10,7 +10,6 @@ import React, {
 } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "../utils/api";
-import { log } from "console";
 
 // Define user type
 export type User = {

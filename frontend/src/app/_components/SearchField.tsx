@@ -16,7 +16,7 @@ const SearchField = ({ onAddMarker }: SearchFieldProps) => {
     // Create provider and search control inside useEffect
     const provider = new OpenStreetMapProvider();
 
-    // @ts-ignore
+    // @ts-expect-error
     const searchControl = new GeoSearchControl({
       provider: provider,
       style: "bar",

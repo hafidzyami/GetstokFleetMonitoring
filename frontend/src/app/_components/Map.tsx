@@ -200,7 +200,7 @@ const Map = ({
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      {markers.map((marker, _) => {
+      {markers.map((marker) => {
         // Create a custom icon with the default marker and a string overlay
         const customIcon = L.divIcon({
           className: "custom-marker",
@@ -248,7 +248,7 @@ const Map = ({
           />
         );
       })}
-      {impassableMarkers.map((marker, _) => {
+      {impassableMarkers.map((marker) => {
         // Create a custom icon with the default marker and a string overlay
         const customIcon = L.divIcon({
           className: "custom-marker",

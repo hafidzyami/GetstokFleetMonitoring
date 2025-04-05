@@ -37,11 +37,9 @@ export default function Page() {
   const hoverMarkerRef = useRef<L.Marker | null>(null);
 
   const [isLocationLoading, setIsLocationLoading] = useState(false);
-  const [locationError, setLocationError] = useState<string | null>(null);
 
   const requestUserLocation = () => {
     setIsLocationLoading(true);
-    setLocationError(null);
 
     // Check if geolocation is available in the browser
     if ("geolocation" in navigator) {
@@ -78,9 +76,6 @@ export default function Page() {
               errorMessage = "An unknown error occurred.";
           }
 
-          // Set error state
-          setLocationError(errorMessage);
-
           // Show alert
           alert("Location Error: " + errorMessage);
 
@@ -96,7 +91,6 @@ export default function Page() {
     } else {
       const errorMessage = "Geolocation is not supported by this browser";
       setIsLocationLoading(false);
-      setLocationError(errorMessage);
       alert("Location Error: " + errorMessage);
       console.log(errorMessage);
     }
