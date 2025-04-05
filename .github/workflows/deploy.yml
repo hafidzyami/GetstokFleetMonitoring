@@ -9,6 +9,38 @@ on:
   workflow_dispatch:
 
 jobs:
+  lint:
+    name: Lint Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '20'
+        cache: 'npm'
+        
+    - name: Lint Frontend
+      run: |
+        cd frontend
+        npm ci
+        npm run lint
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.24' # Adjust
+    
+    - name: Lint Backend (Go)
+      uses: golangci/golangci-lint-action@v3
+      with:
+        version: latest
+        working-directory: ./backend
+        args: --timeout=5m  # Sesuaikan timeout jika diperlukan
+
   deploy:
     runs-on: ubuntu-latest
     
@@ -76,7 +108,7 @@ jobs:
             
             # Build and start containers
             echo "Building and starting containers..."
-            docker-compose build
+            docker-compose build --no-cache
             docker-compose up -d
             
             # Clean up unused Docker resources
