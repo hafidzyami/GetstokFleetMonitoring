@@ -16,7 +16,7 @@ const SearchField = ({ onAddMarker }: SearchFieldProps) => {
     // Create provider and search control inside useEffect
     const provider = new OpenStreetMapProvider();
 
-    // @ts-expect-error
+    // @ts-expect-error GeoSearchControl has incompatible types with the current leaflet-geosearch typings
     const searchControl = new GeoSearchControl({
       provider: provider,
       style: "bar",
