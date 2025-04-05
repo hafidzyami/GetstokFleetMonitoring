@@ -16,7 +16,7 @@ COPY . .
 ENV NODE_ENV=production
 
 # Expose the port
-EXPOSE ${PORT_NOTIFCATION_SERVICE:-8081}
+EXPOSE ${PORT_NOTIFICATION_SERVICE:-8081}
 
 # Set non-root user for security
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup

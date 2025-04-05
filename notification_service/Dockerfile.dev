@@ -13,7 +13,7 @@ RUN npm install
 ENV NODE_ENV=development
 
 # Expose the port
-EXPOSE ${PORT_NOTIFCATION_SERVICE:-8081}
+EXPOSE ${PORT_NOTIFICATION_SERVICE:-8081}
 
 # Start the application in development mode directly with node
 CMD ["node", "main.js"]
