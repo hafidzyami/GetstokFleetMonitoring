@@ -80,7 +80,7 @@ const successResponse = (method, data) => ({
  *       500:
  *         description: Server error
  */
-app.get('/api/v1/push/vapid-key', (req, res) => {
+app.get('/api/notification/v1/push/vapid-key', (req, res) => {
   res.json(successResponse('push.getVapidKey', {
     publicKey: process.env.VAPID_PUBLIC_KEY
   }));
@@ -125,7 +125,7 @@ app.get('/api/v1/push/vapid-key', (req, res) => {
  *       500:
  *         description: Server error
  */
-app.post('/api/v1/push/subscribe', protected, async (req, res) => {
+app.post('/api/notification/v1/push/subscribe', protected, async (req, res) => {
   try {
     // Validate request
     const { endpoint, p256dh, auth } = req.body;
@@ -184,7 +184,7 @@ app.post('/api/v1/push/subscribe', protected, async (req, res) => {
  *       500:
  *         description: Server error
  */
-app.post('/api/v1/push/unsubscribe', protected, async (req, res) => {
+app.post('/api/notification/v1/push/unsubscribe', protected, async (req, res) => {
   try {
     // Validate request
     const { endpoint } = req.body;
@@ -252,7 +252,7 @@ app.post('/api/v1/push/unsubscribe', protected, async (req, res) => {
  *       500:
  *         description: Server error
  */
-app.post('/api/v1/push/send', protected, roleAuthorization(['management']), async (req, res) => {
+app.post('/api/notification/v1/push/send', protected, roleAuthorization(['management']), async (req, res) => {
   try {
     // Validate request
     const { title, message, url, targetRoles, targetUserIDs } = req.body;

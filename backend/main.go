@@ -12,6 +12,7 @@ import (
 	"github.com/gofiber/swagger"
 	_ "github.com/hafidzyami/GetstokFleetMonitoring/backend/docs" // Import generated docs
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/model"
+	"github.com/hafidzyami/GetstokFleetMonitoring/backend/seed"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/utils"
 
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/config"
@@ -30,6 +31,9 @@ func main() {
 
 	// Connect to database
 	config.ConnectDB()
+
+	// Seed
+	seed.SeedUsers(config.DB)
 
 	// Initialize repositories
 	userRepo := repository.NewUserRepository()
