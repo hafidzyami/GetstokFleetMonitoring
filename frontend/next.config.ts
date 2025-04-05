@@ -54,11 +54,11 @@ const nextConfig = {
     return [
       {
         source: '/api/notification/v1/:path*',
-        destination: 'http://192.168.18.13:8081/api/v1/:path*' // Make sure this is the correct host/port
+        destination: 'http://getstok-notification:8081/api/v1/:path*' // Nama container notification service
       },
       {
         source: '/api/:path*',
-        destination: 'http://192.168.18.13:8080/api/:path*' 
+        destination: 'http://getstok_api:8080/api/:path*' // Nama container backend
       }
     ]
   }
