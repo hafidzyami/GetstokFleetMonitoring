@@ -22,6 +22,8 @@ COPY public ./public
 COPY next.config.ts .
 COPY tsconfig.json* jsconfig.json* ./
 COPY .env* ./
+COPY tailwind.config.ts ./
+COPY postcss.config.mjs ./
 
 # Next.js collects anonymous telemetry data about general usage.
 # Learn more here: https://nextjs.org/telemetry
@@ -45,6 +47,8 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 COPY --from=builder /app/public ./public
+COPY --from=builder /app/tailwind.config.ts ./
+COPY --from=builder /app/postcss.config.mjs ./
 
 # Automatically leverage output traces to reduce image size
 # https://nextjs.org/docs/advanced-features/output-file-tracing
