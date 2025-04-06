@@ -89,7 +89,7 @@ jobs:
               echo "Creating project directory..."
               mkdir -p ~/GetstokFleetMonitoring-staging
               cd ~/GetstokFleetMonitoring-staging
-              git clone -b staging https://github.com/${{ github.repository_owner }}/GetstokFleetMonitoring.git .
+              git clone -b staging https://github.com/hafidzyami/GetstokFleetMonitoring.git .
             else
               cd ~/GetstokFleetMonitoring-staging
               
