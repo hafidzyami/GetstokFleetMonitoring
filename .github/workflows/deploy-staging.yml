@@ -1,0 +1,152 @@
+name: Deploy to Staging EC2
+
+on:
+  push:
+    branches: [ staging ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - mqtt_broker/**
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Lint Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: 'frontend/package-lock.json'
+        
+    - name: Lint Frontend
+      run: |
+        cd frontend
+        npm ci
+        npm run lint
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.24'
+    
+    - name: Lint Backend (Go)
+      uses: golangci/golangci-lint-action@v3
+      with:
+        version: latest
+        working-directory: ./backend
+        args: --timeout=5m
+
+  deploy:
+    name: Deploy to Staging EC2
+    runs-on: ubuntu-latest
+    needs: lint
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ap-southeast-1 
+        
+    - name: Set up SSH
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.STAGING_SSH_KEY }}" > ~/.ssh/ec2_staging.pem
+        chmod 600 ~/.ssh/ec2_staging.pem
+        
+    - name: Deploy to Staging EC2
+      run: |
+        ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_staging.pem ec2-user@${{ secrets.STAGING_EC2_HOST }} '
+          # Log directory
+          mkdir -p ~/deploy-logs
+          
+          # Log file
+          LOG_FILE=~/deploy-logs/deploy-staging-$(date +%Y-%m-%d-%H-%M-%S).log
+          
+          # Start logging
+          {
+            echo "=== Staging Deployment started at $(date) ==="
+            
+            # Navigate or create project directory
+            if [ ! -d ~/GetstokFleetMonitoring-staging ]; then
+              echo "Creating project directory..."
+              mkdir -p ~/GetstokFleetMonitoring-staging
+              cd ~/GetstokFleetMonitoring-staging
+              git clone -b staging https://github.com/hafidzyami/GetstokFleetMonitoring.git .
+            else
+              cd ~/GetstokFleetMonitoring-staging
+              
+              # Pull latest changes
+              echo "Pulling latest changes..."
+              git pull origin staging
+            fi
+            
+            # Pastikan semua file .env ada
+            if [ -f backend/.env.example ] && [ ! -f backend/.env ]; then
+              echo "Creating backend/.env from backend/.env.example"
+              cp backend/.env.example backend/.env
+              
+              # Ubah konfigurasi untuk staging jika perlu
+              sed -i "s/NODE_ENV=production/NODE_ENV=production/" backend/.env
+              sed -i "s/APP_ENV=production/APP_ENV=staging/" backend/.env
+            fi
+            
+            if [ -f backend/.env.db.example ] && [ ! -f backend/.env.db ]; then
+              echo "Creating backend/.env.db from backend/.env.db.example"
+              cp backend/.env.db.example backend/.env.db
+            fi
+            
+            if [ -f notification_service/.env.example ] && [ ! -f notification_service/.env ]; then
+              echo "Creating notification_service/.env from notification_service/.env.example"
+              cp notification_service/.env.example notification_service/.env
+            fi
+            
+            if [ -f frontend/.env.example ] && [ ! -f frontend/.env ]; then
+              echo "Creating frontend/.env from frontend/.env.example"
+              cp frontend/.env.example frontend/.env
+              
+              # Ubah API endpoint untuk staging jika perlu
+              sed -i "s/NEXT_PUBLIC_API_URL=.*/NEXT_PUBLIC_API_URL=https:\/\/staging-api.getstokfms.com/" frontend/.env
+            fi
+            
+            # Buat atau update docker-compose untuk staging
+            if [ ! -f docker-compose.staging.yml ]; then
+              echo "Creating docker-compose.staging.yml..."
+              cp docker-compose.yml docker-compose.staging.yml
+              # Ubah port atau konfigurasi lain jika diperlukan
+              sed -i "s/container_name: getstok-frontend/container_name: getstok-frontend-staging/" docker-compose.staging.yml
+              sed -i "s/container_name: getstok-backend/container_name: getstok-backend-staging/" docker-compose.staging.yml
+              sed -i "s/container_name: getstok-notification/container_name: getstok-notification-staging/" docker-compose.staging.yml
+              sed -i "s/container_name: getstok-db/container_name: getstok-db-staging/" docker-compose.staging.yml
+            fi
+            
+            # Stop all containers
+            echo "Stopping existing containers..."
+            docker-compose -f docker-compose.staging.yml down
+            
+            # Build and start containers
+            echo "Building and starting containers..."
+            docker-compose -f docker-compose.staging.yml build --no-cache
+            docker-compose -f docker-compose.staging.yml up -d
+            
+            # Clean up unused Docker resources
+            echo "Cleaning up..."
+            docker system prune -f
+            
+            echo "=== Staging Deployment completed at $(date) ==="
+          } 2>&1 | tee -a "$LOG_FILE"
+          
+          # Display result
+          echo "Staging Deployment completed. Log saved to $LOG_FILE"
+        '
