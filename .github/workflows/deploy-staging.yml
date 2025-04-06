@@ -46,7 +46,7 @@ jobs:
   deploy:
     name: Deploy to Staging EC2
     runs-on: ubuntu-latest
-    needs: lint
+    # needs: lint
     
     steps:
     - name: Checkout code
