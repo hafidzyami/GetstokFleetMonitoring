@@ -25,30 +25,33 @@ export default function ProtectedLayout({
   }
 
   return user ? (
-    <div className="min-h-screen flex flex-col">
-      {/* Header dengan logout button */}
-      <header className="bg-white shadow-sm py-2 px-4">
-        <div className="container mx-auto flex justify-between items-center">
-          <div>
-            {user && (
-              <p className="text-gray-700">
-                Selamat datang, <span className="font-semibold">{user.name}</span>
-              </p>
-            )}
-          </div>
-          <button
-            onClick={logout}
-            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md text-sm transition-colors"
-          >
-            Logout
-          </button>
-        </div>
-      </header>
+    // <div className="min-h-screen flex flex-col">
+    //   {/* Header dengan logout button */}
+    //   <header className="bg-white shadow-sm py-2 px-4">
+    //     <div className="container mx-auto flex justify-between items-center">
+    //       <div>
+    //         {user && (
+    //           <p className="text-gray-700">
+    //             Selamat datang, <span className="font-semibold">{user.name}</span>
+    //           </p>
+    //         )}
+    //       </div>
+    //       <button
+    //         onClick={logout}
+    //         className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md text-sm transition-colors"
+    //       >
+    //         Logout
+    //       </button>
+    //     </div>
+    //   </header>
       
-      {/* Content */}
-      <div className="flex-grow">
-        {children}
-      </div>
+    //   {/* Content */}
+    //   <div className="flex-grow">
+    //     {children}
+    //   </div>
+    // </div>
+    <div>
+      {children}
     </div>
   ) : null;
 }

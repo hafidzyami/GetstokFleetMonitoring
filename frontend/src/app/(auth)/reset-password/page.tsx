@@ -36,7 +36,7 @@ const GantiPasswordPage = () => {
 
   const onSubmit = (data: FormValues) => {
     console.log("Password Baru:", data.password);
-    router.push("/pengemudi/kuitansi");
+    router.push("/driver/receipt");
   };
 
   return (

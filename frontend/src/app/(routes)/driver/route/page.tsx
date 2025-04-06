@@ -141,7 +141,7 @@ const RutePage = () => {
               <p className="text-[#009EFF] text-xs sm:text-base">{riwayat.platNomor}</p>
             </div>
             <button
-              onClick={() => route.push("/pengemudi/rute/1")}
+              onClick={() => route.push("/driver/route/1")}
               className="flex gap-1 bg-[#009EFF] px-3 py-1 rounded-[8px] justify-center items-center text-white font-semibold text-sm cursor-pointer sm:text-base"
             >
               Detail

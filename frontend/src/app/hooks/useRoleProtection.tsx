@@ -14,11 +14,11 @@ export function useRoleProtection(allowedRoles: string[]) {
       if (!allowedRoles.includes(user.role)) {
         // Redirect based on role
         if (user.role === "management") {
-          router.push("/management");
+          router.push("/management/dashboard");
         } else if (user.role === "planner") {
-          router.push("/planner");
+          router.push("/planner/route-plan");
         } else if (user.role === "driver") {
-          router.push("/driver");
+          router.push("/driver/route");
         } else {
           router.push("/");
         }

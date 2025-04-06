@@ -304,7 +304,7 @@ const DaftarUserPage = () => {
 
             <div className=" flex gap-3 items-center justify-center mt-3">
               <button
-                onClick={() => route.push("/manajemen/dashboard")}
+                onClick={() => route.push("/management/dashboard")}
                 className="border-[#008EE6] text-[#008EE6] border flex-1 w-full py-2 rounded-[8px]  font-semibold"
               >
                 Dashboard

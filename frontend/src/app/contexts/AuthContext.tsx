@@ -97,11 +97,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             if (currentPath === "/login" || currentPath === "/") {
               const role = userData.role;
               if (role === "management") {
-                router.push("/management");
+                router.push("/management/dashboard");
               } else if (role === "planner") {
-                router.push("/planner");
+                router.push("/planner/route-plan");
               } else if (role === "driver") {
-                router.push("/driver");
+                router.push("/driver/route");
               }
             }
           } catch (apiError) {
@@ -149,11 +149,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       // Handle redirect berdasarkan role
       const role = userData.role;
       if (role === "management") {
-        router.push("/management");
+        router.push("/management/dashboard");
       } else if (role === "planner") {
-        router.push("/planner");
+        router.push("/planner/route-plan");
       } else if (role === "driver") {
-        router.push("/driver");
+        router.push("/driver/route");
       } else {
         // Fallback jika role tidak dikenal
         router.push("/");
