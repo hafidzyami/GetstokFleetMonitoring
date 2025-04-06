@@ -66,6 +66,62 @@ const LayoutManajemen: React.FC<LayoutManajemenProps> = ({ children }) => {
     unsubscribe 
   } = useNotification();
 
+  useEffect(() => {
+    if (isOpen === null) return;
+    const chartElement = document.querySelector("#sales-chart");
+    if (!chartElement) return;
+
+    const initChart = async () => {
+      const ApexChartsLib = await import("apexcharts");
+
+      if (chartRef.current) {
+        chartRef.current.destroy();
+      }
+
+      const options = {
+        chart: {
+          type: "line",
+          height: 200,
+        },
+        series: [
+          {
+            name: "Penjualan",
+            data: [30, 40, 35, 50, 49, 60, 70, 91, 125],
+          },
+        ],
+        xaxis: {
+          categories: [
+            "Jan",
+            "Feb",
+            "Mar",
+            "Apr",
+            "Mei",
+            "Jun",
+            "Jul",
+            "Agu",
+            "Sep",
+          ],
+        },
+        colors: ["#009EFF"],
+        stroke: {
+          curve: "smooth",
+        },
+      };
+
+      chartRef.current = new ApexChartsLib.default(chartElement, options);
+      chartRef.current.render();
+    };
+
+    initChart();
+
+    return () => {
+      if (chartRef.current) {
+        chartRef.current.destroy();
+        chartRef.current = null;
+      }
+    };
+  }, [isOpen]);
+
   // State untuk menyimpan data notifikasi yang diterima
   const [notifications, setNotifications] = useState<Notification[]>([]);
   // State untuk menampilkan dropdown notifikasi
@@ -151,62 +207,6 @@ const LayoutManajemen: React.FC<LayoutManajemenProps> = ({ children }) => {
       </div>
     );
   }
-
-  useEffect(() => {
-    if (isOpen === null) return;
-    const chartElement = document.querySelector("#sales-chart");
-    if (!chartElement) return;
-
-    const initChart = async () => {
-      const ApexChartsLib = await import("apexcharts");
-
-      if (chartRef.current) {
-        chartRef.current.destroy();
-      }
-
-      const options = {
-        chart: {
-          type: "line",
-          height: 200,
-        },
-        series: [
-          {
-            name: "Penjualan",
-            data: [30, 40, 35, 50, 49, 60, 70, 91, 125],
-          },
-        ],
-        xaxis: {
-          categories: [
-            "Jan",
-            "Feb",
-            "Mar",
-            "Apr",
-            "Mei",
-            "Jun",
-            "Jul",
-            "Agu",
-            "Sep",
-          ],
-        },
-        colors: ["#009EFF"],
-        stroke: {
-          curve: "smooth",
-        },
-      };
-
-      chartRef.current = new ApexChartsLib.default(chartElement, options);
-      chartRef.current.render();
-    };
-
-    initChart();
-
-    return () => {
-      if (chartRef.current) {
-        chartRef.current.destroy();
-        chartRef.current = null;
-      }
-    };
-  }, [isOpen]);
 
   return (
     <div className="flex relative">
