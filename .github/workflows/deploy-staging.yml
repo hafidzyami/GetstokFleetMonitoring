@@ -46,7 +46,7 @@ jobs:
   deploy:
     name: Deploy to Staging EC2
     runs-on: ubuntu-latest
-    # needs: lint
+    # Deploy akan tetap berjalan meskipun lint check gagal
     
     steps:
     - name: Checkout code
@@ -84,19 +84,30 @@ jobs:
               sudo yum install -y git
             fi
             
-            # Navigate or create project directory
-            if [ ! -d ~/GetstokFleetMonitoring-staging ]; then
-              echo "Creating project directory..."
-              mkdir -p ~/GetstokFleetMonitoring-staging
-              cd ~/GetstokFleetMonitoring-staging
-              git clone -b staging https://github.com/hafidzyami/GetstokFleetMonitoring.git .
-            else
-              cd ~/GetstokFleetMonitoring-staging
-              
-              # Pull latest changes
-              echo "Pulling latest changes..."
-              git pull origin staging
+            # Install Docker and Docker Compose if not available
+            if ! command -v docker &> /dev/null; then
+              echo "Docker not found. Installing Docker..."
+              sudo yum install -y docker
+              sudo systemctl start docker
+              sudo systemctl enable docker
+              sudo usermod -a -G docker ec2-user
             fi
+            
+            if ! command -v docker-compose &> /dev/null; then
+              echo "Docker Compose not found. Installing Docker Compose..."
+              sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+              sudo chmod +x /usr/local/bin/docker-compose
+            fi
+            
+            # Reset staging directory
+            echo "Clearing and recreating project directory..."
+            rm -rf ~/GetstokFleetMonitoring-staging
+            mkdir -p ~/GetstokFleetMonitoring-staging
+            cd ~/GetstokFleetMonitoring-staging
+            
+            # Clone repository
+            echo "Cloning repository..."
+            git clone -b staging https://github.com/hafidzyami/GetstokFleetMonitoring.git .
             
             # Pastikan semua file .env ada
             if [ -f backend/.env.example ] && [ ! -f backend/.env ]; then
@@ -126,17 +137,16 @@ jobs:
               sed -i "s/NEXT_PUBLIC_API_URL=.*/NEXT_PUBLIC_API_URL=https:\/\/staging-api.getstokfms.com/" frontend/.env
             fi
             
-            # Pastikan docker-compose tersedia
-            if ! command -v docker-compose &> /dev/null; then
-              echo "Docker Compose not found. Installing Docker Compose..."
-              sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-              sudo chmod +x /usr/local/bin/docker-compose
-            fi
-            
             # Pastikan Docker berjalan
             if ! systemctl is-active --quiet docker; then
               echo "Starting Docker service..."
               sudo systemctl start docker
+            fi
+            
+            # Cek apakah file docker-compose.yml ada
+            if [ ! -f docker-compose.yml ]; then
+              echo "ERROR: docker-compose.yml not found in repository"
+              exit 1
             fi
             
             # Stop all containers
