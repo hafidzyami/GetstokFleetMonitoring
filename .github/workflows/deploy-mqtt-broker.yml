@@ -1,0 +1,106 @@
+name: Deploy MQTT Broker to EC2
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'mqtt/**'
+      - 'docker-compose.yml'
+      - 'setup.sh'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy MQTT Broker to EC2
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ap-southeast-1
+        
+    - name: Set up SSH
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2.pem
+        chmod 600 ~/.ssh/ec2.pem
+        
+    - name: Deploy MQTT Broker to EC2
+      run: |
+        ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2.pem ec2-user@${{ secrets.EC2_HOST }} '
+          # Log directory
+          mkdir -p ~/deploy-logs
+          
+          # Log file
+          LOG_FILE=~/deploy-logs/mqtt-deploy-$(date +%Y-%m-%d-%H-%M-%S).log
+          
+          # Start logging
+          {
+            echo "=== MQTT Broker Deployment started at $(date) ==="
+            
+            # Buat direktori jika belum ada
+            mkdir -p ~/mqtt_broker
+            
+            # Backup konfigurasi existing jika ada
+            if [ -d ~/mqtt_broker/mqtt/config ]; then
+              echo "Backing up existing configuration..."
+              cp -r ~/mqtt_broker/mqtt/config ~/mqtt_broker/mqtt/config.bak
+            fi
+            
+            # Navigate to project directory
+            cd ~/mqtt_broker
+            
+            # Clone atau Pull repositori (tergantung apakah direktori sudah ada)
+            if [ -d .git ]; then
+              echo "Pulling latest changes..."
+              git pull origin main
+            else
+              echo "Cloning repository..."
+              # Asumsi repository diclone ke direktori baru, copy seluruh konten
+              git clone https://github.com/YOUR_USERNAME/mqtt_broker.git temp
+              cp -r temp/. .
+              rm -rf temp
+            fi
+            
+            # Restore konfigurasi backup jika perlu
+            if [ -d ~/mqtt_broker/mqtt/config.bak ]; then
+              echo "Restoring configuration from backup..."
+              cp -r ~/mqtt_broker/mqtt/config.bak/* ~/mqtt_broker/mqtt/config/
+              rm -rf ~/mqtt_broker/mqtt/config.bak
+            fi
+            
+            # Buat direktori yang diperlukan
+            echo "Creating required directories..."
+            mkdir -p mqtt/data mqtt/log
+            chmod -R 777 mqtt/data mqtt/log
+            
+            # Stop existing container if running
+            if docker ps | grep -q mqtt-broker; then
+              echo "Stopping existing MQTT broker container..."
+              docker-compose down
+            fi
+            
+            # Jalankan dengan Docker Compose
+            echo "Starting MQTT broker..."
+            docker-compose up -d
+            
+            # Verifikasi broker berjalan
+            echo "Verifying MQTT broker status..."
+            docker ps | grep mqtt-broker
+            
+            # Clean up unused Docker resources
+            echo "Cleaning up..."
+            docker system prune -f --volumes
+            
+            echo "=== MQTT Broker Deployment completed at $(date) ==="
+          } 2>&1 | tee -a "$LOG_FILE"
+          
+          # Display result
+          echo "MQTT Broker deployment completed. Log saved to $LOG_FILE"
+        '
