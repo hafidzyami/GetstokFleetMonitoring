@@ -38,7 +38,6 @@ const LayoutPengemudi = ({ children }: { children: React.ReactNode }) => {
     isSupported, 
     isSubscribed, 
     isLoading: isNotificationLoading, 
-    error: notificationError, 
     subscribe, 
     unsubscribe 
   } = useNotification();

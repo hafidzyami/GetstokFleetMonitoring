@@ -22,7 +22,6 @@ const Marker = dynamic(
 // Fix Leaflet icon issue - wrapped in useEffect to ensure it only runs on client-side
 const fixLeafletIcon = () => {
   import("leaflet").then((L) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     delete (L.Icon.Default.prototype as any)._getIconUrl;
     L.Icon.Default.mergeOptions({
       iconRetinaUrl:

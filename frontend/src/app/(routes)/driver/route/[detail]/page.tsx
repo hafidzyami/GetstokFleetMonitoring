@@ -33,7 +33,6 @@ const DetailRutePage = () => {
     
     // Setup Leaflet icons only on client side
     if (typeof window !== "undefined") {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const L = require("leaflet");
       delete (L.Icon.Default.prototype as { _getIconUrl?: unknown })._getIconUrl;
       L.Icon.Default.mergeOptions({

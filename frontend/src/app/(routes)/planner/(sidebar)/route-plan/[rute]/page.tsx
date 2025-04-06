@@ -30,7 +30,6 @@ const RutePage = () => {
   const route = useRouter();
 
   useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const L = require("leaflet");
     const customIcon = L.icon({
       iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png", // pastikan file ini ada di /public/icons/

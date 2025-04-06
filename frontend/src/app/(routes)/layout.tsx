@@ -9,6 +9,7 @@ export default function ProtectedLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // const { user, loading, logout } = useAuth();
   const { user, loading, logout } = useAuth();
   const router = useRouter();
 

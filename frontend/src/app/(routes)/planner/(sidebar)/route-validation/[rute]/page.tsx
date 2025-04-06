@@ -32,7 +32,6 @@ const RuteValidasiPage = () => {
   const [icon, setIcon] = useState<L.Icon | null>(null);
 
   useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const L = require("leaflet");
     setIcon(
       L.icon({

@@ -207,9 +207,9 @@ const LayoutPlanner = ({ children }: { children: React.ReactNode }) => {
 
         <div className="w-full h-fit">
           <div className="mt-[68px] text-[#545454] text-2xl font-semibold flex justify-between w-full mb-[43px] px-6">
-            {currentPath.includes("/buat-rute") && "Membuat Rute"}
-            {currentPath.includes("/riwayat-rute") && "Riwayat Rute"}
-            {currentPath.includes("/validasi-rute") && "Validasi Rute"}
+            {currentPath.includes("/route-plan") && "Membuat Rute"}
+            {currentPath.includes("/route-history") && "Riwayat Rute"}
+            {currentPath.includes("/route-validation") && "Validasi Rute"}
             <div className="flex items-center gap-4">
               {/* Notification Bell - Desktop */}
               <button 

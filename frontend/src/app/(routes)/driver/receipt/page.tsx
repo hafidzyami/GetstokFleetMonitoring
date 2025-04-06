@@ -37,7 +37,7 @@ const KuitansiPage = () => {
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
-    } catch (err) {
+    } catch (err : any) {
       console.error("Error accessing camera:", err.name, err.message);
     }
   };
@@ -278,10 +278,12 @@ const KuitansiPage = () => {
               </label>
               {previewImage && (
                 <div className="flex flex-col items-center mt-4">
-                  <img
+                  <Image
                     src={previewImage}
                     alt="Preview"
                     className="w-full h-auto rounded-md"
+                    width={200}
+                    height={200}
                   />
                   <div className="flex gap-2 mt-2"></div>
                 </div>
