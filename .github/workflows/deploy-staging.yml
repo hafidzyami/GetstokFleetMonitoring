@@ -78,12 +78,18 @@ jobs:
           {
             echo "=== Staging Deployment started at $(date) ==="
             
+            # Install git if not available
+            if ! command -v git &> /dev/null; then
+              echo "Git not found. Installing git..."
+              sudo yum install -y git
+            fi
+            
             # Navigate or create project directory
             if [ ! -d ~/GetstokFleetMonitoring-staging ]; then
               echo "Creating project directory..."
               mkdir -p ~/GetstokFleetMonitoring-staging
               cd ~/GetstokFleetMonitoring-staging
-              git clone -b staging https://github.com/hafidzyami/GetstokFleetMonitoring.git .
+              git clone -b staging https://github.com/${{ github.repository_owner }}/GetstokFleetMonitoring.git .
             else
               cd ~/GetstokFleetMonitoring-staging
               
@@ -120,25 +126,27 @@ jobs:
               sed -i "s/NEXT_PUBLIC_API_URL=.*/NEXT_PUBLIC_API_URL=https:\/\/staging-api.getstokfms.com/" frontend/.env
             fi
             
-            # Buat atau update docker-compose untuk staging
-            if [ ! -f docker-compose.staging.yml ]; then
-              echo "Creating docker-compose.staging.yml..."
-              cp docker-compose.yml docker-compose.staging.yml
-              # Ubah port atau konfigurasi lain jika diperlukan
-              sed -i "s/container_name: getstok-frontend/container_name: getstok-frontend-staging/" docker-compose.staging.yml
-              sed -i "s/container_name: getstok-backend/container_name: getstok-backend-staging/" docker-compose.staging.yml
-              sed -i "s/container_name: getstok-notification/container_name: getstok-notification-staging/" docker-compose.staging.yml
-              sed -i "s/container_name: getstok-db/container_name: getstok-db-staging/" docker-compose.staging.yml
+            # Pastikan docker-compose tersedia
+            if ! command -v docker-compose &> /dev/null; then
+              echo "Docker Compose not found. Installing Docker Compose..."
+              sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+              sudo chmod +x /usr/local/bin/docker-compose
+            fi
+            
+            # Pastikan Docker berjalan
+            if ! systemctl is-active --quiet docker; then
+              echo "Starting Docker service..."
+              sudo systemctl start docker
             fi
             
             # Stop all containers
             echo "Stopping existing containers..."
-            docker-compose -f docker-compose.staging.yml down
+            docker-compose down || true
             
             # Build and start containers
             echo "Building and starting containers..."
-            docker-compose -f docker-compose.staging.yml build --no-cache
-            docker-compose -f docker-compose.staging.yml up -d
+            docker-compose build --no-cache
+            docker-compose up -d
             
             # Clean up unused Docker resources
             echo "Cleaning up..."
