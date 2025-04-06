@@ -47,6 +47,7 @@ const Login = () => {
             height={50}
           />
           <h1 className="text-2xl text-[#009EFF] font-semibold">Masuk</h1>
+          <p>{process.env.NODE_ENV}</p>
           <h2 className="text-[#707070] font-light">
             Selamat datang kembali
           </h2>
