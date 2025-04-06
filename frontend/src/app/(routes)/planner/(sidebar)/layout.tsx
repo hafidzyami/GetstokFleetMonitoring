@@ -31,13 +31,14 @@ interface Notification {
 }
 
 const LayoutPlanner = ({ children }: { children: React.ReactNode }) => {
+  const currentPath = usePathname();
+  const route = useRouter();
   const { loading } = useRoleProtection(["planner"]);
   const { user, logout } = useAuth();
   const { 
     isSupported, 
     isSubscribed, 
     isLoading: isNotificationLoading, 
-    error: notificationError, 
     subscribe, 
     unsubscribe 
   } = useNotification();
@@ -164,10 +165,6 @@ const LayoutPlanner = ({ children }: { children: React.ReactNode }) => {
       href: "/routingplan",
     }
   ];
-
-  const currentPath = usePathname();
-  const route = useRouter();
-
   return (
     <div className="flex flex-col h-screen w-full">
       <GlobalStyle />

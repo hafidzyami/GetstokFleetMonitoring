@@ -50,10 +50,10 @@ const aktivitas = [
 ];
 
 const LayoutManajemen: React.FC<LayoutManajemenProps> = ({ children }) => {
-  const [isOpen, setIsOpen] = React.useState<number | null>(null);
-  const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const route = useRouter();
   const curretnPath = usePathname();
+  const [isOpen, setIsOpen] = React.useState<number | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const chartRef = React.useRef<ApexCharts | null>(null);
 
   const { loading } = useRoleProtection(["management"]);
@@ -62,7 +62,6 @@ const LayoutManajemen: React.FC<LayoutManajemenProps> = ({ children }) => {
     isSupported, 
     isSubscribed, 
     isLoading: isNotificationLoading, 
-    error: notificationError, 
     subscribe, 
     unsubscribe 
   } = useNotification();

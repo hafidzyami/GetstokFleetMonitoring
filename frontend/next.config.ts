@@ -18,11 +18,8 @@ const nextConfig = {
   reactStrictMode: true,
   // Enable experimental features
   output: 'standalone', // Use standalone output for better performance
-  experimental: {
-    // Termasuk folder node_modules yang dibutuhkan oleh build output
-    outputFileTracingRoot: undefined, // penting untuk termasuk semua node_modules
-    outputFileTracingExcludes: {},
-  },
+  outputFileTracingRoot: undefined, // penting untuk termasuk semua node_modules
+  outputFileTracingExcludes: {},
 
   // Headers configuration
   async headers() {

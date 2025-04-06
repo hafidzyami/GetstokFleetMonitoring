@@ -64,7 +64,7 @@ jobs:
         mkdir -p ~/.ssh
         echo "${{ secrets.STAGING_SSH_KEY }}" > ~/.ssh/ec2_staging.pem
         chmod 600 ~/.ssh/ec2_staging.pem
-        
+
     - name: Deploy to Staging EC2
       run: |
         ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_staging.pem ec2-user@${{ secrets.STAGING_EC2_HOST }} '
@@ -99,15 +99,21 @@ jobs:
               sudo chmod +x /usr/local/bin/docker-compose
             fi
             
-            # Reset staging directory
-            echo "Clearing and recreating project directory..."
-            rm -rf ~/GetstokFleetMonitoring-staging
-            mkdir -p ~/GetstokFleetMonitoring-staging
-            cd ~/GetstokFleetMonitoring-staging
-            
-            # Clone repository
-            echo "Cloning repository..."
-            git clone -b staging https://github.com/hafidzyami/GetstokFleetMonitoring.git .
+            # Update repository dengan git pull alih-alih rm dan clone
+            echo "Updating repository with git pull..."
+            if [ -d ~/GetstokFleetMonitoring-staging ]; then
+              cd ~/GetstokFleetMonitoring-staging
+              # Periksa apakah ada perubahan lokal dan reset jika perlu
+              git status --porcelain | grep -q . && git reset --hard
+              git checkout staging
+              git pull origin staging
+            else
+              # Jika direktori tidak ada, buat dan clone
+              echo "Directory not found, creating and cloning repository..."
+              mkdir -p ~/GetstokFleetMonitoring-staging
+              cd ~/GetstokFleetMonitoring-staging
+              git clone -b staging https://github.com/hafidzyami/GetstokFleetMonitoring.git .
+            fi
             
             # Pastikan semua file .env ada
             if [ -f backend/.env.example ] && [ ! -f backend/.env ]; then

@@ -32,6 +32,8 @@ interface Notification {
 }
 
 const LayoutPengemudi = ({ children }: { children: React.ReactNode }) => {
+  const currentPath = usePathname();
+  const route = useRouter();
   const { loading } = useRoleProtection(["driver"]);
   const { user, logout } = useAuth();
   const { 
@@ -159,9 +161,6 @@ const LayoutPengemudi = ({ children }: { children: React.ReactNode }) => {
       },
     },
   ];
-
-  const currentPath = usePathname();
-  const route = useRouter();
 
   return (
     <div className="flex flex-col h-screen w-full">
