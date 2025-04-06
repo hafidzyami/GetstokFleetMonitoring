@@ -1,235 +1,36 @@
-# Tugas Akhir - Getstok Fleet Monitoring
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-Welcome to the **Getstok Fleet Monitoring** repository! This repository contains three main components: **Frontend**, **Backend**, and **Firmware**, each designed to work together seamlessly. Below are the details of each component.
+## Getting Started
 
----
-
-## Table of Contents
-- [Frontend](#frontend)
-- [Backend](#backend)
-- [Firmware](#firmware)
-- [Setup](#setup)
-  - [Frontend Setup](#frontend-setup)
-  - [Backend Setup](#backend-setup)
-  - [Firmware Setup](#firmware-setup)
-- [License](#license)
-- [Contributing](#contributing)
-
----
-
-## Frontend
-
-The **Frontend** is built using [Next.js](https://nextjs.org/), a React framework for server-rendered and statically generated web applications.
-
-### Features
-- Modern UI built with React and Next.js.
-- Server-side rendering and API routes for efficient data fetching.
-- Optimized performance and SEO.
-
----
-
-# Backend - Getstok Fleet Monitoring
-
-The backend for Getstok Fleet Monitoring is built with Go (Golang), using the GoFiber framework and GORM for database operations. It follows a clean n-tier architecture and provides RESTful API endpoints with authentication and role-based access control.
-
-## Features
-
-- **Authentication System**: Secure JWT-based authentication with roles (management, planner, driver)
-- **RESTful API**: Clean API design following Google JSON Style Guide
-- **Documentation**: Integrated Swagger API documentation
-- **Database**: PostgreSQL integration with GORM
-- **Docker Support**: Containerized development and production environments
-
-## Tech Stack
-
-- **Language**: Go 1.20+
-- **Framework**: GoFiber v2
-- **ORM**: GORM with PostgreSQL driver
-- **Authentication**: JWT (JSON Web Tokens)
-- **Documentation**: Swagger/OpenAPI
-- **Containerization**: Docker & Docker Compose
-
-## Project Structure
-
-```
-backend/
-├── config/            # Configuration and database setup
-├── controller/        # HTTP request handlers
-├── docs/              # Swagger documentation
-├── middleware/        # Middleware components (auth, logging, etc.)
-├── model/             # Data models and DTOs
-├── repository/        # Database access layer
-├── service/           # Business logic
-├── util/              # Utility functions
-├── .env               # Environment variables (not in git)
-├── .env.db            # Database environment variables (not in git)
-├── .env.example       # Example environment variables
-├── .env.db.example    # Example database environment variables
-├── Dockerfile         # Multi-stage build for dev and prod
-├── docker-compose.yml # Docker Compose configuration
-├── go.mod             # Go modules
-├── go.sum             # Dependencies lockfile
-└── main.go            # Application entry point
-```
-
-## Environment Setup
-
-### Prerequisites
-
-- Go 1.20 or higher
-- Docker and Docker Compose
-- PostgreSQL (if not using Docker)
-
-### Environment Variables
-
-Two environment files are required:
-
-1. `.env` - Application configuration:
-```
-DB_HOST=postgres
-DB_PORT=5432
-DB_USER=username
-DB_PASSWORD=password
-DB_NAME=getstok
-DB_DRIVER=postgres
-JWT_SECRET=your_secret_key
-PORT=8080
-```
-
-2. `.env.db` - Database configuration:
-```
-POSTGRES_USER=username
-POSTGRES_PASSWORD=password
-POSTGRES_DB=getstok
-```
-
-Copy the example files and adjust as needed:
-```bash
-cp .env.example .env
-cp .env.db.example .env.db
-```
-
-## Docker Setup
-
-### Running with Docker
+First, run the development server:
 
 ```bash
-# Build and run containers
-docker-compose up --build
-
-# Run in background
-docker-compose up -d
-
-# View logs
-docker-compose logs -f api
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
 ```
 
-### Stopping Containers
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-```bash
-# Stop and remove containers
-docker-compose down
-```
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-## Local Setup (Without Docker)
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-If you prefer to run the application locally:
+## Learn More
 
-1. Ensure PostgreSQL is running and accessible
-2. Configure `.env` with your database connection details
-3. Run the application:
+To learn more about Next.js, take a look at the following resources:
 
-```bash
-# Get dependencies
-go mod tidy
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-# Run the application
-go run main.go
-```
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## API Documentation
+## Deploy on Vercel
 
-The API documentation is available through Swagger UI when the application is running:
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
-- Local: http://localhost:8080/swagger/index.html
-- Production: https://your-api-domain.com/swagger/index.html
-
-## Authentication
-
-The API uses JWT tokens for authentication. Most endpoints require authentication and some are restricted by role.
-
-### Available Roles
-
-- `management`: Can register users and access all features
-- `planner`: Can plan routes and manage fleet operations
-- `driver`: Can view assigned routes and update status
-
-### Authentication Flow
-
-1. Register (Management only): `POST /api/auth/register`
-2. Login: `POST /api/auth/login`
-3. Use the returned token in the Authorization header: `Bearer <token>`
-
-## Development
-
-### Generating Swagger Documentation
-
-```bash
-# Install swag if not already installed
-go install github.com/swaggo/swag/cmd/swag@latest
-
-# Generate documentation
-swag init -g main.go --output docs
-```
-
-### Database Migrations
-
-Database migrations are handled automatically by GORM when the application starts.
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
----
-
-## Firmware
-
-The **Firmware** is written in **C++** to control hardware devices efficiently.
-
-### Features
-- Optimized for resource-constrained environments.
-- Compatible with a variety of microcontrollers.
-- Includes communication protocols for interacting with the backend.
-
-
----
-
-## Setup
-
-
-```yaml
-frontend:
-  steps:
-    - navigate: "cd frontend"
-    - install_dependencies: "npm install"
-    - run_development_server: "npm run dev"
-    - open_browser: "http://localhost:3000"
-
-backend:
-  steps:
-    - navigate: "cd backend"
-    - initialize_modules: "go mod tidy"
-    - run_application: "go run cmd/main.go"
-    - api_url: "http://localhost:8080"
-
-firmware:
-  steps:
-    - navigate: "cd firmware"
-    - open_project: "Open the project in PlatformIO"
-    - build_project: "Use the 'Build' button in PlatformIO"
-    - upload_firmware: "Use the 'Upload' button to flash the microcontroller"
-
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
