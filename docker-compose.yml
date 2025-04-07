@@ -54,9 +54,13 @@ services:
       - "8080:8080"
     env_file:
       - ./backend/.env
+    environment:
+      - MQTT_BROKER_URL=tcp://getstok-mqtt:1883
     depends_on:
       postgres:
         condition: service_healthy
+      mqtt-broker:
+        condition: service_started
     networks:
       - getstok-network
 
@@ -76,6 +80,18 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - getstok-network
+
+  # MQTT Broker service
+  mqtt-broker:
+    build:
+      context: ./mqtt_broker  # Menggunakan context dari direktori mqtt_broker
+    container_name: getstok-mqtt
+    restart: unless-stopped
+    ports:
+      - "1883:1883"  # MQTT default port
+      - "9001:9001"  # WebSockets port
     networks:
       - getstok-network
 

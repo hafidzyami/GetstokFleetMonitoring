@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -20,6 +22,8 @@ import (
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/middleware"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/repository"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/service"
+
+	"github.com/hafidzyami/GetstokFleetMonitoring/backend/mqtt"
 )
 
 // @host localhost:8080
@@ -37,18 +41,15 @@ func main() {
 
 	// Initialize repositories
 	userRepo := repository.NewUserRepository()
-	pushRepo := repository.NewPushRepository()
 
 	// Set user repository in utils package
 	utils.SetUserRepository(userRepo)
 
 	// Initialize services
 	authService := service.NewAuthService(userRepo)
-	pushService := service.NewPushService(pushRepo)
 
 	// Initialize controllers
 	authController := controller.NewAuthController(authService)
-	pushController := controller.NewPushController(pushService)
 
 	// Initialize Fiber app
 	app := fiber.New(fiber.Config{
@@ -88,24 +89,34 @@ func main() {
 
 	// Auth routes
 	auth := api.Group("/auth")
-	auth.Post("/register", middleware.RoleAuthorization("management"),authController.Register)
+	auth.Post("/register", middleware.RoleAuthorization("management"), authController.Register)
 	auth.Post("/login", authController.Login)
 
 	// Protected routes
 	api.Get("/profile", middleware.Protected(), authController.GetProfile)
 	api.Put("/profile/password", middleware.Protected(), authController.UpdatePassword)
 
-	// Push notification routes
-	push := api.Group("/push")
-	push.Get("/vapid-key", pushController.GetVapidKey)
-	push.Post("/subscribe", middleware.Protected(), pushController.Subscribe)
-	push.Post("/unsubscribe", middleware.Protected(), pushController.Unsubscribe)
-	push.Post("/send", middleware.Protected(), pushController.Send)
-
 	// Get port from environment variables
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
+	}
+
+	// Mulai MQTT client
+	mqttClient := mqtt.StartMQTTClient()
+	if mqttClient != nil {
+		log.Println("MQTT client started successfully")
+
+		// Setup graceful shutdown
+		go func() {
+			quit := make(chan os.Signal, 1)
+			signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+			<-quit
+			log.Println("Shutting down MQTT client...")
+			mqttClient.Disconnect()
+		}()
+	} else {
+		log.Println("Failed to start MQTT client")
 	}
 
 	// Start server HTTP
