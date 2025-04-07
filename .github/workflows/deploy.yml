@@ -108,16 +108,41 @@ jobs:
             # Stop all containers
             echo "Stopping existing containers..."
             docker-compose down
+
+             # Aggressive cleanup before building (remove all unused resources)
+            echo "Performing aggressive Docker cleanup before building..."
+            # Remove all stopped containers
+            docker container prune -f
+            # Remove all dangling images
+            docker image prune -f
+            # Remove unused volumes
+            docker volume prune -f
+            # Remove unused networks
+            docker network prune -f
+            # Remove all unused images (not just dangling ones)
+            docker image prune -a -f
             
             # Build and start containers
             echo "Building and starting containers..."
             export COMPOSE_BAKE=true
             docker-compose build --no-cache
             docker-compose up -d
+
+             # Thorough cleanup after deployment
+            echo "Performing thorough cleanup after deployment..."
+            # Keep only images used by running containers
+            docker image prune -a -f
+            # Clean entire system
+            docker system prune -a -f --volumes
             
-            # Clean up unused Docker resources
-            echo "Cleaning up..."
-            docker system prune -f
+            # Cleanup old logs (keep only the most recent 10)
+            echo "Cleaning up old deployment logs..."
+            cd ~/deploy-logs
+            ls -t | tail -n +11 | xargs -r rm
+            
+            # Check disk space after deployment
+            echo "Disk usage after deployment:"
+            df -h /
             
             echo "=== Deployment completed at $(date) ==="
           } 2>&1 | tee -a "$LOG_FILE"
