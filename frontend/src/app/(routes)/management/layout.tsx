@@ -318,7 +318,7 @@ const LayoutManajemen: React.FC<LayoutManajemenProps> = ({ children }) => {
             <button
               onClick={() => {
                 setIsOpen(null);
-                route.push("/management/userList");
+                route.push("/management/user-list");
               }}
               className="flex gap-2 items-center bg-[#009EFF] text-white py-2 px-4 md:py-3 md:px-6 text-xs md:text-base font-medium rounded-[8px]"
             >
