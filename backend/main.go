@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	ws "github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
@@ -16,6 +17,7 @@ import (
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/model"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/seed"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/utils"
+	"github.com/hafidzyami/GetstokFleetMonitoring/backend/websocket"
 
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/config"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/controller"
@@ -48,6 +50,9 @@ func main() {
 	utils.SetUserRepository(userRepo)
 	mqtt.SetTruckRepository(truckRepo)
 	mqtt.SetTruckHistoryRepository(truckHistoryRepo)
+
+	// Websocket
+	websocket.InitHub()
 
 	// Initialize services
 	authService := service.NewAuthService(userRepo)
@@ -91,6 +96,19 @@ func main() {
 
 	// Swagger route
 	app.Get("/swagger/*", swagger.HandlerDefault)
+
+	// Websocket Middleware
+	app.Use("/ws", func(c *fiber.Ctx) error {
+		// IsWebSocketUpgrade returns true if the client requested upgrade to the WebSocket protocol
+		if ws.IsWebSocketUpgrade(c) {
+			c.Locals("allowed", true)
+			return c.Next()
+		}
+		return fiber.ErrUpgradeRequired
+	})
+
+	// WebSocket endpoint
+	app.Get("/ws", ws.New(websocket.WebsocketHandler))
 
 	// Routes
 	api := app.Group("/api/v1")
