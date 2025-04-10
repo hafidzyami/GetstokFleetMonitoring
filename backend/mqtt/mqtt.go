@@ -1,4 +1,3 @@
-// backend/mqtt/mqtt.go
 package mqtt
 
 import (
@@ -9,6 +8,8 @@ import (
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/hafidzyami/GetstokFleetMonitoring/backend/model"
+	"github.com/hafidzyami/GetstokFleetMonitoring/backend/repository"
 )
 
 // Definisi topik
@@ -36,6 +37,19 @@ type MQTTClient struct {
 	client mqtt.Client
 }
 
+var truckRepo repository.TruckRepository
+var truckHistoryRepo repository.TruckHistoryRepository
+
+// SetTruckRepository sets the truck repository for MQTT handlers
+func SetTruckRepository(repo repository.TruckRepository) {
+	truckRepo = repo
+}
+
+// SetTruckHistoryRepository sets the truck history repository for MQTT handlers
+func SetTruckHistoryRepository(repo repository.TruckHistoryRepository) {
+	truckHistoryRepo = repo
+}
+
 // NewMQTTClient membuat client MQTT baru
 func NewMQTTClient(brokerURL string, clientID string) *MQTTClient {
 	// Opsi client MQTT
@@ -55,7 +69,7 @@ func NewMQTTClient(brokerURL string, clientID string) *MQTTClient {
 		})
 
 	client := mqtt.NewClient(opts)
-	
+
 	return &MQTTClient{
 		client: client,
 	}
@@ -71,10 +85,11 @@ func (mc *MQTTClient) Connect() error {
 
 // Subscribe berlangganan ke topik MQTT
 func (mc *MQTTClient) Subscribe() {
+	// mqtt/mqtt.go - modifikasi handler posisi dan fuel
 	// Handler untuk data posisi
 	positionHandler := func(client mqtt.Client, msg mqtt.Message) {
 		topic := msg.Topic()
-		
+
 		// Ekstrak mac_id dari topik (format: getstokfms/{mac_id}/position)
 		parts := strings.Split(topic, "/")
 		if len(parts) < 3 {
@@ -82,22 +97,91 @@ func (mc *MQTTClient) Subscribe() {
 			return
 		}
 		macID := parts[1]
-		
+
 		// Parse JSON
 		var positionData PositionData
 		if err := json.Unmarshal(msg.Payload(), &positionData); err != nil {
 			log.Printf("Failed to parse position data: %v", err)
 			return
 		}
-		
-		log.Printf("Received position data for device %s: Timestamp=%s, Lat=%f, Lng=%f", 
+
+		log.Printf("Received position data for device %s: Timestamp=%s, Lat=%f, Lng=%f",
 			macID, positionData.Timestamp, positionData.Latitude, positionData.Longitude)
+
+		// Save data to database if repository is set
+		if truckRepo != nil && truckHistoryRepo != nil {
+			// Parse timestamp
+			positionTime, err := time.Parse(time.RFC3339, positionData.Timestamp)
+			if err != nil {
+				log.Printf("Failed to parse position timestamp: %v", err)
+				positionTime = time.Now() // Use current time if parsing fails
+			}
+
+			var truckID uint
+
+			// Try to find existing truck
+			truck, err := truckRepo.FindByMacID(macID)
+			if err != nil {
+				// Create new truck if not found
+				truck = &model.Truck{
+					MacID:        macID,
+					Latitude:     positionData.Latitude,
+					Longitude:    positionData.Longitude,
+					LastPosition: positionTime,
+					CreatedAt:    time.Now(),
+					UpdatedAt:    time.Now(),
+				}
+				if err := truckRepo.Create(truck); err != nil {
+					log.Printf("Failed to create truck record: %v", err)
+					return
+				} else {
+					log.Printf("Created new truck record for macID %s", macID)
+				}
+
+				// Get truck ID for the newly created truck
+				newTruck, err := truckRepo.FindByMacID(macID)
+				if err != nil {
+					log.Printf("Failed to get truck ID after creation: %v", err)
+					return
+				}
+				truckID = newTruck.ID
+			} else {
+				// Update existing truck's current position
+				truck.Latitude = positionData.Latitude
+				truck.Longitude = positionData.Longitude
+				truck.LastPosition = positionTime
+				truck.UpdatedAt = time.Now()
+
+				if err := truckRepo.Update(truck); err != nil {
+					log.Printf("Failed to update truck position: %v", err)
+					return
+				}
+
+				truckID = truck.ID
+			}
+
+			// Save position history
+			positionHistory := &model.TruckPositionHistory{
+				TruckID:   truckID,
+				MacID:     macID,
+				Latitude:  positionData.Latitude,
+				Longitude: positionData.Longitude,
+				Timestamp: positionTime,
+				CreatedAt: time.Now(),
+			}
+
+			if err := truckHistoryRepo.CreatePositionHistory(positionHistory); err != nil {
+				log.Printf("Failed to save position history: %v", err)
+			} else {
+				log.Printf("Saved position history for truck %s", macID)
+			}
+		}
 	}
-	
+
 	// Handler untuk data bahan bakar
 	fuelHandler := func(client mqtt.Client, msg mqtt.Message) {
 		topic := msg.Topic()
-		
+
 		// Ekstrak mac_id dari topik (format: getstokfms/{mac_id}/fuel)
 		parts := strings.Split(topic, "/")
 		if len(parts) < 3 {
@@ -105,25 +189,91 @@ func (mc *MQTTClient) Subscribe() {
 			return
 		}
 		macID := parts[1]
-		
+
 		// Parse JSON
 		var fuelData FuelData
 		if err := json.Unmarshal(msg.Payload(), &fuelData); err != nil {
 			log.Printf("Failed to parse fuel data: %v", err)
 			return
 		}
-		
-		log.Printf("Received fuel data for device %s: Timestamp=%s, Fuel=%f%%", 
+
+		log.Printf("Received fuel data for device %s: Timestamp=%s, Fuel=%f%%",
 			macID, fuelData.Timestamp, fuelData.Fuel)
+
+		// Save data to database if repository is set
+		if truckRepo != nil && truckHistoryRepo != nil {
+			// Parse timestamp
+			fuelTime, err := time.Parse(time.RFC3339, fuelData.Timestamp)
+			if err != nil {
+				log.Printf("Failed to parse fuel timestamp: %v", err)
+				fuelTime = time.Now() // Use current time if parsing fails
+			}
+
+			var truckID uint
+
+			// Try to find existing truck
+			truck, err := truckRepo.FindByMacID(macID)
+			if err != nil {
+				// Create new truck if not found
+				truck = &model.Truck{
+					MacID:     macID,
+					Fuel:      fuelData.Fuel,
+					LastFuel:  fuelTime,
+					CreatedAt: time.Now(),
+					UpdatedAt: time.Now(),
+				}
+				if err := truckRepo.Create(truck); err != nil {
+					log.Printf("Failed to create truck record: %v", err)
+					return
+				} else {
+					log.Printf("Created new truck record for macID %s", macID)
+				}
+
+				// Get truck ID for the newly created truck
+				newTruck, err := truckRepo.FindByMacID(macID)
+				if err != nil {
+					log.Printf("Failed to get truck ID after creation: %v", err)
+					return
+				}
+				truckID = newTruck.ID
+			} else {
+				// Update existing truck's current fuel
+				truck.Fuel = fuelData.Fuel
+				truck.LastFuel = fuelTime
+				truck.UpdatedAt = time.Now()
+
+				if err := truckRepo.Update(truck); err != nil {
+					log.Printf("Failed to update truck fuel: %v", err)
+					return
+				}
+
+				truckID = truck.ID
+			}
+
+			// Save fuel history
+			fuelHistory := &model.TruckFuelHistory{
+				TruckID:   truckID,
+				MacID:     macID,
+				Fuel:      fuelData.Fuel,
+				Timestamp: fuelTime,
+				CreatedAt: time.Now(),
+			}
+
+			if err := truckHistoryRepo.CreateFuelHistory(fuelHistory); err != nil {
+				log.Printf("Failed to save fuel history: %v", err)
+			} else {
+				log.Printf("Saved fuel history for truck %s", macID)
+			}
+		}
 	}
-	
+
 	// Subscribe ke topik posisi
 	if token := mc.client.Subscribe(TopicPositionPrefix, QOS, positionHandler); token.Wait() && token.Error() != nil {
 		log.Printf("Error subscribing to position topic: %v", token.Error())
 	} else {
 		log.Printf("Subscribed to topic: %s", TopicPositionPrefix)
 	}
-	
+
 	// Subscribe ke topik bahan bakar
 	if token := mc.client.Subscribe(TopicFuelPrefix, QOS, fuelHandler); token.Wait() && token.Error() != nil {
 		log.Printf("Error subscribing to fuel topic: %v", token.Error())
@@ -138,7 +288,7 @@ func (mc *MQTTClient) Disconnect() {
 	if token := mc.client.Unsubscribe(TopicPositionPrefix, TopicFuelPrefix); token.Wait() && token.Error() != nil {
 		log.Printf("Error unsubscribing: %v", token.Error())
 	}
-	
+
 	mc.client.Disconnect(250)
 	log.Println("Disconnected from MQTT broker")
 }
@@ -150,23 +300,23 @@ func StartMQTTClient() *MQTTClient {
 	if brokerURL == "" {
 		brokerURL = "tcp://mqtt-broker:1883"
 	}
-	
+
 	clientID := os.Getenv("MQTT_CLIENT_ID")
 	if clientID == "" {
 		clientID = "getstok-fms-client"
 	}
-	
+
 	// Buat client
 	mqttClient := NewMQTTClient(brokerURL, clientID)
-	
+
 	// Hubungkan ke broker
 	if err := mqttClient.Connect(); err != nil {
 		log.Printf("Failed to connect to MQTT broker: %v", err)
 		return nil
 	}
-	
+
 	// Subscribe ke topik
 	mqttClient.Subscribe()
-	
+
 	return mqttClient
 }

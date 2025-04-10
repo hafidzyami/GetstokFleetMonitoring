@@ -41,15 +41,23 @@ func main() {
 
 	// Initialize repositories
 	userRepo := repository.NewUserRepository()
+	truckRepo := repository.NewTruckRepository()
+	truckHistoryRepo := repository.NewTruckHistoryRepository()
 
-	// Set user repository in utils package
+	// Set user repository in utils and mqtt package
 	utils.SetUserRepository(userRepo)
+	mqtt.SetTruckRepository(truckRepo)
+	mqtt.SetTruckHistoryRepository(truckHistoryRepo)
 
 	// Initialize services
 	authService := service.NewAuthService(userRepo)
+	truckService := service.NewTruckService(truckRepo)
+	truckHistoryService := service.NewTruckHistoryService(truckHistoryRepo)
 
 	// Initialize controllers
 	authController := controller.NewAuthController(authService)
+	truckController := controller.NewTruckController(truckService)
+	truckHistoryController := controller.NewTruckHistoryController(truckHistoryService)
 
 	// Initialize Fiber app
 	app := fiber.New(fiber.Config{
@@ -91,6 +99,16 @@ func main() {
 	auth := api.Group("/auth")
 	auth.Post("/register", middleware.RoleAuthorization("management"), authController.Register)
 	auth.Post("/login", authController.Login)
+
+	// Add truck routes
+	trucks := api.Group("/trucks")
+	trucks.Use(middleware.Protected())
+	trucks.Get("/", truckController.GetAllTrucks)
+	trucks.Get("/:macID", truckController.GetTruckByMacID)
+	trucks.Put("/:macID", truckController.UpdateTruckInfo)
+	// Add truck history routes
+	trucks.Get("/:truckID/positions", truckHistoryController.GetPositionHistory)
+	trucks.Get("/:truckID/fuel", truckHistoryController.GetFuelHistory)
 
 	// Protected routes
 	api.Get("/profile", middleware.Protected(), authController.GetProfile)
