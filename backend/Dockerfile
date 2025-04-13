@@ -20,7 +20,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
 # Final stage untuk production
 FROM alpine:latest
 
-RUN apk --no-cache add ca-certificates
+# Add timezone support and set Asia/Jakarta timezone
+RUN apk --no-cache add ca-certificates tzdata
+ENV TZ=Asia/Jakarta
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 WORKDIR /root/
 
