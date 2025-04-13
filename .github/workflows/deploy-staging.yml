@@ -184,7 +184,17 @@ jobs:
             # Build and start containers
             echo "Building and starting containers..."
             export COMPOSE_BAKE=true
-            docker-compose build --no-cache
+            echo "Buiding MQTT Broker..."
+            docker-compose build mqtt-broker --no-cache
+            echo "Buiding Postgres..."
+            docker-compose build postgres --no-cache
+            echo "Buiding Notification Service..."
+            docker-compose build notification-service --no-cache
+            echo "Buiding Backend..."
+            docker-compose build backend --no-cache
+            echo "Buiding Frontend..."
+            docker-compose build frontend --no-cache
+            echo "Composing up..."
             docker-compose up -d
             
             # Thorough cleanup after deployment

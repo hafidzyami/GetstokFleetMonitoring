@@ -41,7 +41,7 @@ func ConnectDB() {
 	log.Println("Database connection established")
 
 	// Perform migrations
-	err = DB.AutoMigrate(&model.User{})
+	err = DB.AutoMigrate(&model.User{}, &model.Truck{}, &model.TruckPositionHistory{}, &model.TruckFuelHistory{})
 	if err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}

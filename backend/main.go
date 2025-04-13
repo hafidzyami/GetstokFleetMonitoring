@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	ws "github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
@@ -16,6 +17,7 @@ import (
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/model"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/seed"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/utils"
+	"github.com/hafidzyami/GetstokFleetMonitoring/backend/websocket"
 
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/config"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/controller"
@@ -41,15 +43,26 @@ func main() {
 
 	// Initialize repositories
 	userRepo := repository.NewUserRepository()
+	truckRepo := repository.NewTruckRepository()
+	truckHistoryRepo := repository.NewTruckHistoryRepository()
 
-	// Set user repository in utils package
+	// Set user repository in utils and mqtt package
 	utils.SetUserRepository(userRepo)
+	mqtt.SetTruckRepository(truckRepo)
+	mqtt.SetTruckHistoryRepository(truckHistoryRepo)
+
+	// Websocket
+	websocket.InitHub()
 
 	// Initialize services
 	authService := service.NewAuthService(userRepo)
+	truckService := service.NewTruckService(truckRepo)
+	truckHistoryService := service.NewTruckHistoryService(truckHistoryRepo)
 
 	// Initialize controllers
 	authController := controller.NewAuthController(authService)
+	truckController := controller.NewTruckController(truckService)
+	truckHistoryController := controller.NewTruckHistoryController(truckHistoryService)
 
 	// Initialize Fiber app
 	app := fiber.New(fiber.Config{
@@ -84,6 +97,19 @@ func main() {
 	// Swagger route
 	app.Get("/swagger/*", swagger.HandlerDefault)
 
+	// Websocket Middleware
+	app.Use("/ws", func(c *fiber.Ctx) error {
+		// IsWebSocketUpgrade returns true if the client requested upgrade to the WebSocket protocol
+		if ws.IsWebSocketUpgrade(c) {
+			c.Locals("allowed", true)
+			return c.Next()
+		}
+		return fiber.ErrUpgradeRequired
+	})
+
+	// WebSocket endpoint
+	app.Get("/ws", ws.New(websocket.WebsocketHandler))
+
 	// Routes
 	api := app.Group("/api/v1")
 
@@ -91,6 +117,16 @@ func main() {
 	auth := api.Group("/auth")
 	auth.Post("/register", middleware.RoleAuthorization("management"), authController.Register)
 	auth.Post("/login", authController.Login)
+
+	// Add truck routes
+	trucks := api.Group("/trucks")
+	trucks.Use(middleware.Protected())
+	trucks.Get("/", truckController.GetAllTrucks)
+	trucks.Get("/:macID", truckController.GetTruckByMacID)
+	trucks.Put("/:macID", truckController.UpdateTruckInfo)
+	// Add truck history routes
+	trucks.Get("/:truckID/positions", truckHistoryController.GetPositionHistory)
+	trucks.Get("/:truckID/fuel", truckHistoryController.GetFuelHistory)
 
 	// Protected routes
 	api.Get("/profile", middleware.Protected(), authController.GetProfile)

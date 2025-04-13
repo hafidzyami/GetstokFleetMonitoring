@@ -9,6 +9,9 @@ import (
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/hafidzyami/GetstokFleetMonitoring/backend/model"
+	"github.com/hafidzyami/GetstokFleetMonitoring/backend/repository"
+	"github.com/hafidzyami/GetstokFleetMonitoring/backend/websocket"
 )
 
 // Definisi topik
@@ -31,9 +34,40 @@ type FuelData struct {
 	Fuel      float64 `json:"fuel"`
 }
 
+// Struct untuk data yang dikirim ke frontend
+type RealtimePositionUpdate struct {
+	Type      string  `json:"type"`
+	MacID     string  `json:"mac_id"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+	Timestamp string  `json:"timestamp"`
+}
+
+type RealtimeFuelUpdate struct {
+	Type      string  `json:"type"`
+	MacID     string  `json:"mac_id"`
+	Fuel      float64 `json:"fuel"`
+	Timestamp string  `json:"timestamp"`
+}
+
 // MQTTClient adalah client MQTT sederhana
 type MQTTClient struct {
 	client mqtt.Client
+}
+
+var (
+	truckRepo repository.TruckRepository
+	truckHistoryRepo repository.TruckHistoryRepository
+)
+
+// SetTruckRepository sets the truck repository for MQTT handlers
+func SetTruckRepository(repo repository.TruckRepository) {
+	truckRepo = repo
+}
+
+// SetTruckHistoryRepository sets the truck history repository for MQTT handlers
+func SetTruckHistoryRepository(repo repository.TruckHistoryRepository) {
+	truckHistoryRepo = repo
 }
 
 // NewMQTTClient membuat client MQTT baru
@@ -92,6 +126,110 @@ func (mc *MQTTClient) Subscribe() {
 		
 		log.Printf("Received position data for device %s: Timestamp=%s, Lat=%f, Lng=%f", 
 			macID, positionData.Timestamp, positionData.Latitude, positionData.Longitude)
+			
+		// Save data to database if repository is set
+		if truckRepo != nil && truckHistoryRepo != nil {
+			// Parse timestamp
+			loc, _ := time.LoadLocation("Asia/Jakarta")
+			positionTime, err := time.Parse("2006-01-02 15:04:05.000 -0700", positionData.Timestamp)
+			if err != nil {
+				// Coba format alternatif jika format pertama gagal
+				positionTime, err = time.Parse(time.RFC3339, positionData.Timestamp)
+				if err != nil {
+					log.Printf("Failed to parse position timestamp: %v", err)
+					positionTime = time.Now().In(loc)
+				} else {
+					// Konversi ke zona waktu WIB jika parsing berhasil
+					positionTime = positionTime.In(loc)
+				}
+			} else {
+				// Pastikan menggunakan zona waktu WIB
+				positionTime = positionTime.In(loc)
+			}
+			
+			var truckID uint
+			
+			// Try to find existing truck
+			truck, err := truckRepo.FindByMacID(macID)
+			if err != nil {
+				// Create new truck if not found
+				truck = &model.Truck{
+					MacID:        macID,
+					Latitude:     positionData.Latitude,
+					Longitude:    positionData.Longitude,
+					LastPosition: positionTime,
+					CreatedAt:    time.Now(),
+					UpdatedAt:    time.Now(),
+				}
+				if err := truckRepo.Create(truck); err != nil {
+					log.Printf("Failed to create truck record: %v", err)
+					return
+				} else {
+					log.Printf("Created new truck record for macID %s", macID)
+				}
+				
+				// Get truck ID for the newly created truck
+				newTruck, err := truckRepo.FindByMacID(macID)
+				if err != nil {
+					log.Printf("Failed to get truck ID after creation: %v", err)
+					return
+				}
+				truckID = newTruck.ID
+			} else {
+				// Update existing truck's current position
+				truck.Latitude = positionData.Latitude
+				truck.Longitude = positionData.Longitude
+				truck.LastPosition = positionTime
+				truck.UpdatedAt = time.Now()
+				
+				if err := truckRepo.Update(truck); err != nil {
+					log.Printf("Failed to update truck position: %v", err)
+					return
+				}
+				
+				truckID = truck.ID
+			}
+			
+			// Save position history
+			positionHistory := &model.TruckPositionHistory{
+				TruckID:   truckID,
+				MacID:     macID,
+				Latitude:  positionData.Latitude,
+				Longitude: positionData.Longitude,
+				Timestamp: positionTime,
+				CreatedAt: time.Now(),
+			}
+			
+			if err := truckHistoryRepo.CreatePositionHistory(positionHistory); err != nil {
+				log.Printf("Failed to save position history: %v", err)
+			} else {
+				log.Printf("Saved position history for truck %s", macID)
+			}
+		}
+		
+		// Kirim update ke semua client WebSocket
+		wsHub := websocket.GetHub()
+		if wsHub != nil {
+			// Buat pesan realtime
+			update := RealtimePositionUpdate{
+				Type:      "position",
+				MacID:     macID,
+				Latitude:  positionData.Latitude,
+				Longitude: positionData.Longitude,
+				Timestamp: positionData.Timestamp,
+			}
+			
+			// Marshal ke JSON
+			jsonData, err := json.Marshal(update)
+			if err != nil {
+				log.Printf("Error marshaling position update: %v", err)
+				return
+			}
+			
+			// Broadcast ke semua client
+			wsHub.Broadcast(jsonData)
+			log.Printf("Broadcasted position update to %d clients", wsHub.GetClientCount())
+		}
 	}
 	
 	// Handler untuk data bahan bakar
@@ -115,6 +253,106 @@ func (mc *MQTTClient) Subscribe() {
 		
 		log.Printf("Received fuel data for device %s: Timestamp=%s, Fuel=%f%%", 
 			macID, fuelData.Timestamp, fuelData.Fuel)
+		
+		// Save data to database if repository is set
+		if truckRepo != nil && truckHistoryRepo != nil {
+			// Parse timestamp
+			loc, _ := time.LoadLocation("Asia/Jakarta")
+			fuelTime, err := time.Parse("2006-01-02 15:04:05.000 -0700", fuelData.Timestamp)
+			if err != nil {
+				// Coba format alternatif jika format pertama gagal
+				fuelTime, err = time.Parse(time.RFC3339, fuelData.Timestamp)
+				if err != nil {
+					log.Printf("Failed to parse fuel timestamp: %v", err)
+					fuelTime = time.Now().In(loc)
+				} else {
+					// Konversi ke zona waktu WIB jika parsing berhasil
+					fuelTime = fuelTime.In(loc)
+				}
+			} else {
+				// Pastikan menggunakan zona waktu WIB
+				fuelTime = fuelTime.In(loc)
+			}
+			
+			var truckID uint
+			
+			// Try to find existing truck
+			truck, err := truckRepo.FindByMacID(macID)
+			if err != nil {
+				// Create new truck if not found
+				truck = &model.Truck{
+					MacID:     macID,
+					Fuel:      fuelData.Fuel,
+					LastFuel:  fuelTime,
+					CreatedAt: time.Now(),
+					UpdatedAt: time.Now(),
+				}
+				if err := truckRepo.Create(truck); err != nil {
+					log.Printf("Failed to create truck record: %v", err)
+					return
+				} else {
+					log.Printf("Created new truck record for macID %s", macID)
+				}
+				
+				// Get truck ID for the newly created truck
+				newTruck, err := truckRepo.FindByMacID(macID)
+				if err != nil {
+					log.Printf("Failed to get truck ID after creation: %v", err)
+					return
+				}
+				truckID = newTruck.ID
+			} else {
+				// Update existing truck's current fuel
+				truck.Fuel = fuelData.Fuel
+				truck.LastFuel = fuelTime
+				truck.UpdatedAt = time.Now()
+				
+				if err := truckRepo.Update(truck); err != nil {
+					log.Printf("Failed to update truck fuel: %v", err)
+					return
+				}
+				
+				truckID = truck.ID
+			}
+			
+			// Save fuel history
+			fuelHistory := &model.TruckFuelHistory{
+				TruckID:   truckID,
+				MacID:     macID,
+				Fuel:      fuelData.Fuel,
+				Timestamp: fuelTime,
+				CreatedAt: time.Now(),
+			}
+			
+			if err := truckHistoryRepo.CreateFuelHistory(fuelHistory); err != nil {
+				log.Printf("Failed to save fuel history: %v", err)
+			} else {
+				log.Printf("Saved fuel history for truck %s", macID)
+			}
+		}
+		
+		// Kirim update ke semua client WebSocket
+		wsHub := websocket.GetHub()
+		if wsHub != nil {
+			// Buat pesan realtime
+			update := RealtimeFuelUpdate{
+				Type:      "fuel",
+				MacID:     macID,
+				Fuel:      fuelData.Fuel,
+				Timestamp: fuelData.Timestamp,
+			}
+			
+			// Marshal ke JSON
+			jsonData, err := json.Marshal(update)
+			if err != nil {
+				log.Printf("Error marshaling fuel update: %v", err)
+				return
+			}
+			
+			// Broadcast ke semua client
+			wsHub.Broadcast(jsonData)
+			log.Printf("Broadcasted fuel update to %d clients", wsHub.GetClientCount())
+		}
 	}
 	
 	// Subscribe ke topik posisi

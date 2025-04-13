@@ -54,23 +54,6 @@ definitions:
     - email
     - password
     type: object
-  model.NotificationRequest:
-    properties:
-      message:
-        type: string
-      targetRoles:
-        items:
-          type: string
-        type: array
-      targetUserIDs:
-        items:
-          type: integer
-        type: array
-      title:
-        type: string
-      url:
-        type: string
-    type: object
   model.RegisterRequest:
     properties:
       email:
@@ -84,18 +67,11 @@ definitions:
     - name
     - role
     type: object
-  model.SubscriptionRequest:
+  model.TruckUpdateRequest:
     properties:
-      auth:
+      plate_number:
         type: string
-      endpoint:
-        type: string
-      p256dh:
-        type: string
-    type: object
-  model.UnsubscribeRequest:
-    properties:
-      endpoint:
+      type:
         type: string
     type: object
   model.UpdatePasswordRequest:
@@ -247,136 +223,199 @@ paths:
       summary: Update user password
       tags:
       - profile
-  /push/send:
-    post:
-      consumes:
-      - application/json
-      description: Send notifications to specified roles and/or users
-      parameters:
-      - description: Notification request with title, message, optional URL, target
-          roles, and target user IDs
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/model.NotificationRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Success response with count of sent notifications
-          schema:
-            $ref: '#/definitions/model.BaseResponse'
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/model.BaseResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/model.BaseResponse'
-        "403":
-          description: Forbidden - only management can send notifications
-          schema:
-            $ref: '#/definitions/model.BaseResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/model.BaseResponse'
-      summary: Send push notifications
-      tags:
-      - push
-  /push/subscribe:
-    post:
-      consumes:
-      - application/json
-      description: Register a new push notification subscription
-      parameters:
-      - description: Subscription info
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/model.SubscriptionRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Success response
-          schema:
-            $ref: '#/definitions/model.BaseResponse'
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/model.BaseResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/model.BaseResponse'
-        "403":
-          description: Forbidden - role not authorized
-          schema:
-            $ref: '#/definitions/model.BaseResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/model.BaseResponse'
-      summary: Subscribe to push notifications
-      tags:
-      - push
-  /push/unsubscribe:
-    post:
-      consumes:
-      - application/json
-      description: Remove a push notification subscription
-      parameters:
-      - description: Unsubscribe request with endpoint
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/model.UnsubscribeRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Success response
-          schema:
-            $ref: '#/definitions/model.BaseResponse'
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/model.BaseResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/model.BaseResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/model.BaseResponse'
-      summary: Unsubscribe from push notifications
-      tags:
-      - push
-  /push/vapid-key:
+  /trucks:
     get:
       consumes:
       - application/json
-      description: Get VAPID public key for push notification subscription
+      description: Get all truck data with latest position and fuel
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
       produces:
       - application/json
       responses:
         "200":
-          description: Success with public key
+          description: Trucks data
           schema:
             $ref: '#/definitions/model.BaseResponse'
-        "500":
-          description: Server error
+        "401":
+          description: Unauthorized
           schema:
             $ref: '#/definitions/model.BaseResponse'
-      summary: Get VAPID public key
+      security:
+      - BearerAuth: []
+      summary: Get all trucks
       tags:
-      - push
+      - trucks
+  /trucks/{macID}:
+    get:
+      consumes:
+      - application/json
+      description: Get truck data by MAC ID
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: MAC ID of the truck
+        in: path
+        name: macID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Truck data
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get truck by MacID
+      tags:
+      - trucks
+    put:
+      consumes:
+      - application/json
+      description: Update truck plate number and type
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: MAC ID of the truck
+        in: path
+        name: macID
+        required: true
+        type: string
+      - description: Truck update information
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.TruckUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success message
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Update truck information
+      tags:
+      - trucks
+  /trucks/{truckID}/fuel:
+    get:
+      consumes:
+      - application/json
+      description: Get historical fuel data for a truck
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Truck ID
+        in: path
+        name: truckID
+        required: true
+        type: integer
+      - description: Limit results (default 100)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Fuel history
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get truck fuel history
+      tags:
+      - trucks
+  /trucks/{truckID}/positions:
+    get:
+      consumes:
+      - application/json
+      description: Get historical position data for a truck
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Truck ID
+        in: path
+        name: truckID
+        required: true
+        type: integer
+      - description: Limit results (default 100)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Position history
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get truck position history
+      tags:
+      - trucks
 schemes:
 - http
 swagger: "2.0"
