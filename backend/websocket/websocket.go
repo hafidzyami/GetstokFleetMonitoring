@@ -1,17 +1,21 @@
-// backend/websocket/websocket.go
+// Update your websocket/websocket.go file to include these improvements
+
 package websocket
 
 import (
     "log"
     "sync"
+    "time"
 
     ws "github.com/gofiber/contrib/websocket"
 )
 
 // Client represents a WebSocket client connection
 type Client struct {
-    Conn *ws.Conn
-    Mu   sync.Mutex
+    Conn      *ws.Conn
+    Mu        sync.Mutex
+    Send      chan []byte   // Channel for outbound messages
+    LastPing  time.Time     // Track last ping time
 }
 
 // Hub maintains the set of active clients
@@ -29,37 +33,61 @@ func NewHub() *Hub {
         clients:    make(map[*Client]bool),
         register:   make(chan *Client),
         unregister: make(chan *Client),
-        broadcast:  make(chan []byte),
+        broadcast:  make(chan []byte, 256), // Buffered channel
     }
 }
 
 // Run starts the Hub
 func (h *Hub) Run() {
+    log.Println("Starting WebSocket hub")
+    
+    // Start a ticker to check for stale connections
+    ticker := time.NewTicker(30 * time.Second)
+    defer ticker.Stop()
+    
     for {
         select {
         case client := <-h.register:
             h.mu.Lock()
+            client.LastPing = time.Now() // Set initial ping time
             h.clients[client] = true
             h.mu.Unlock()
             log.Println("New client connected, total clients:", len(h.clients))
+            
         case client := <-h.unregister:
             h.mu.Lock()
             if _, ok := h.clients[client]; ok {
                 delete(h.clients, client)
-                client.Conn.Close()
+                close(client.Send)
             }
             h.mu.Unlock()
             log.Println("Client disconnected, total clients:", len(h.clients))
+            
         case message := <-h.broadcast:
             h.mu.Lock()
             for client := range h.clients {
-                client.Mu.Lock()
-                if err := client.Conn.WriteMessage(ws.TextMessage, message); err != nil {
-                    log.Println("Error writing to client:", err)
-                    client.Conn.Close()
+                select {
+                case client.Send <- message:
+                    // Message sent to client's send channel
+                default:
+                    // Client's send buffer is full, assume it's dead
+                    close(client.Send)
                     delete(h.clients, client)
                 }
-                client.Mu.Unlock()
+            }
+            h.mu.Unlock()
+            
+        case <-ticker.C:
+            // Check for stale connections
+            now := time.Now()
+            h.mu.Lock()
+            for client := range h.clients {
+                if now.Sub(client.LastPing) > 2*time.Minute {
+                    log.Println("Closing stale connection (no ping for 2 minutes)")
+                    client.Conn.Close()
+                    delete(h.clients, client)
+                    close(client.Send)
+                }
             }
             h.mu.Unlock()
         }
@@ -68,7 +96,25 @@ func (h *Hub) Run() {
 
 // Register registers a new client
 func (h *Hub) Register(client *Client) {
+    // Initialize the send channel if not already done
+    if client.Send == nil {
+        client.Send = make(chan []byte, 256)
+    }
     h.register <- client
+    
+    // Start a goroutine to pump messages from the hub to the client
+    go func() {
+        for message := range client.Send {
+            client.Mu.Lock()
+            err := client.Conn.WriteMessage(ws.TextMessage, message)
+            client.Mu.Unlock()
+            
+            if err != nil {
+                log.Printf("Error writing to client: %v", err)
+                break
+            }
+        }
+    }()
 }
 
 // Unregister removes a client
@@ -79,6 +125,35 @@ func (h *Hub) Unregister(client *Client) {
 // Broadcast sends a message to all clients
 func (h *Hub) Broadcast(message []byte) {
     h.broadcast <- message
+}
+
+// UpdateClientPing updates the last ping time for a client
+func (h *Hub) UpdateClientPing(client *Client) {
+    h.mu.Lock()
+    defer h.mu.Unlock()
+    
+    if _, ok := h.clients[client]; ok {
+        client.LastPing = time.Now()
+    }
+}
+
+// BroadcastToClient sends a message to a specific client
+func (h *Hub) BroadcastToClient(client *Client, message []byte) bool {
+    h.mu.Lock()
+    defer h.mu.Unlock()
+    
+    if _, ok := h.clients[client]; !ok {
+        return false
+    }
+    
+    select {
+    case client.Send <- message:
+        return true
+    default:
+        close(client.Send)
+        delete(h.clients, client)
+        return false
+    }
 }
 
 // GetClientCount returns the number of connected clients
@@ -105,39 +180,4 @@ func InitHub() {
 // GetHub returns the global hub instance
 func GetHub() *Hub {
     return WSHub
-}
-
-// WebsocketHandler handles WebSocket connections
-func WebsocketHandler(c *ws.Conn) {
-    // Register client
-    client := &Client{Conn: c}
-    GetHub().Register(client)
-    
-    // Handle disconnect
-    defer func() {
-        GetHub().Unregister(client)
-    }()
-    
-    // Keep connection alive and handle incoming messages if needed
-    var (
-        mt  int
-        msg []byte
-        err error
-    )
-    
-    for {
-        if mt, msg, err = c.ReadMessage(); err != nil {
-            log.Println("Read error:", err)
-            break
-        }
-        
-        // Handle client messages if needed
-        log.Printf("Received message from client: %s", msg)
-        
-        // Just to keep the connection alive
-        if err = c.WriteMessage(mt, msg); err != nil {
-            log.Println("Write error:", err)
-            break
-        }
-    }
 }
