@@ -216,7 +216,7 @@ export default function Page() {
       const latLngs = getLatLngsForMap(data.routes[0].geometry);
 
       // Proses waytypes untuk segmen
-      const waytypes = data.routes[0].extras.waytypes.values;
+      const waytypes = data.routes[0].extras.waytype.values;
       for (const waytype of waytypes) {
         const startIdx = waytype[0];
         const endIdx = waytype[1];

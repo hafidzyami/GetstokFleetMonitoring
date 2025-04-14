@@ -35,7 +35,8 @@
     ".next/types/**/*.ts",
     "src/app/_components/Map.tsx",
     "src/app/(routes)/planner/(sidebar)/layout.tsx",
-    "src/app/(routes)/management/dashboard/page.jsx"
+    "src/app/(routes)/management/dashboard/page.jsx", 
+    "src/app/(routes)/routingplan/page.tsx"
   ],
   "exclude": [
     "node_modules"

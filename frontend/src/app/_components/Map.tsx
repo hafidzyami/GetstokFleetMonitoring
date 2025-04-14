@@ -17,6 +17,8 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.css";
 import "leaflet-defaulticon-compatibility";
+import markerIcon from 'leaflet/dist/images/marker-icon.png';
+import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 
 const Legend = () => {
   return (
@@ -48,11 +50,11 @@ const Legend = () => {
 
 // Default marker icon
 const defaultIcon = new L.Icon({
-  iconUrl: require("leaflet/dist/images/marker-icon.png"), // Default marker icon
+  iconUrl: markerIcon,
   iconSize: [25, 41], // Size of the icon
   iconAnchor: [12, 41], // Anchor point of the icon
   popupAnchor: [1, -34], // Popup anchor point
-  shadowUrl: require("leaflet/dist/images/marker-shadow.png"), // Shadow image
+  shadowUrl: markerShadow,
   shadowSize: [41, 41], // Size of the shadow
 });
 
