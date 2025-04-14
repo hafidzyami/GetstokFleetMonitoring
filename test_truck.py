@@ -17,7 +17,7 @@ logging.basicConfig(
 logger = logging.getLogger("Truck-Simulator")
 
 # Default MQTT broker settings
-DEFAULT_BROKER = "tcp://mqtt.eclipseprojects.io"
+DEFAULT_BROKER = "staging.getstokfms.com"
 DEFAULT_PORT = 1883
 DEFAULT_TOPIC_PREFIX = "getstokfms"
 

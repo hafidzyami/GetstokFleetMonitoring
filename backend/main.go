@@ -60,11 +60,13 @@ func main() {
 	authService := service.NewAuthService(userRepo)
 	truckService := service.NewTruckService(truckRepo)
 	truckHistoryService := service.NewTruckHistoryService(truckHistoryRepo)
+	routingSerivce := service.NewRoutingService()
 
 	// Initialize controllers
 	authController := controller.NewAuthController(authService)
 	truckController := controller.NewTruckController(truckService)
 	truckHistoryController := controller.NewTruckHistoryController(truckHistoryService)
+	routingController := controller.NewRoutingController(routingSerivce)
 
 	// Initialize Fiber app
 	app := fiber.New(fiber.Config{
@@ -194,6 +196,10 @@ func main() {
 	// Add truck history routes
 	trucks.Get("/:truckID/positions", truckHistoryController.GetPositionHistory)
 	trucks.Get("/:truckID/fuel", truckHistoryController.GetFuelHistory)
+
+	// Routing routes
+	routing := api.Group("/routing")
+	routing.Post("/directions", routingController.GetDirections)
 
 	// Protected routes
 	api.Get("/profile", middleware.Protected(), authController.GetProfile)

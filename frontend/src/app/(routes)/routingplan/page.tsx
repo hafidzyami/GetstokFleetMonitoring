@@ -180,17 +180,26 @@ export default function Page() {
     }
 
     try {
-      const response = await fetch(
-        "https://api.openrouteservice.org/v2/directions/driving-hgv/json",
-        {
-          method: "POST",
-          headers: {
-            Authorization: process.env.NEXT_PUBLIC_API_ORS || "", // Get the API key from the environment variables
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(body),
-        }
-      );
+      // const response = await fetch(
+      //   "https://api.openrouteservice.org/v2/directions/driving-hgv/json",
+      //   {
+      //     method: "POST",
+      //     headers: {
+      //       Authorization: process.env.NEXT_PUBLIC_API_ORS || "", // Get the API key from the environment variables
+      //       "Content-Type": "application/json",
+      //     },
+      //     body: JSON.stringify(body),
+      //   }
+      // );
+
+      const response = await fetch("/api/v1/routing/directions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify(body),
+      });
 
       if (!response.ok) {
         const message = await response.json();

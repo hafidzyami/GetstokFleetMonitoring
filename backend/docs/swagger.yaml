@@ -67,6 +67,30 @@ definitions:
     - name
     - role
     type: object
+  model.RoutingRequest:
+    properties:
+      coordinates:
+        items:
+          items:
+            type: number
+          type: array
+        type: array
+      elevation:
+        type: boolean
+      extra_info:
+        items:
+          type: string
+        type: array
+      geometry_simplify:
+        type: string
+      instructions_format:
+        type: string
+      language:
+        type: string
+      options:
+        additionalProperties: true
+        type: object
+    type: object
   model.TruckUpdateRequest:
     properties:
       plate_number:
@@ -223,6 +247,43 @@ paths:
       summary: Update user password
       tags:
       - profile
+  /routing/directions:
+    post:
+      consumes:
+      - application/json
+      description: Proxy API call to OpenRouteService to get directions
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Routing request parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.RoutingRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Directions data
+          schema: {}
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get directions from OpenRouteService
+      tags:
+      - routing
   /trucks:
     get:
       consumes:
