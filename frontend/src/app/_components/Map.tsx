@@ -18,6 +18,12 @@ import "leaflet/dist/leaflet.css";
 import "leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.css";
 import "leaflet-defaulticon-compatibility";
 
+interface Marker {
+  id: string;
+  position: LatLngTuple;
+  address?: string;
+}
+
 const calculatePolygonCenter = (positions: LatLngTuple[]): LatLngTuple => {
   if (positions.length === 0) return [0, 0];
 
@@ -104,6 +110,7 @@ interface MapProps {
   onMapRef?: (map: L.Map) => void;
   // routeGeometry?: string;
   // surfaceTypes?: string[];
+  children?: React.ReactNode;
 }
 
 const MapRefSetter: React.FC<{ onMapRef?: (map: L.Map) => void }> = ({
@@ -337,11 +344,10 @@ MapProps) => {
 
       {listOfImpassibleMarkers.map((impassibleItem, index) => {
         // Determine if we're using the old format (array) or new format (object with markers property)
-        const isNewFormat =
-          !Array.isArray(impassibleItem) && impassibleItem.markers;
+        const isNewFormat = !Array.isArray(impassibleItem);
         const markersToRender = isNewFormat
-          ? impassibleItem.markers
-          : impassibleItem;
+          ? (impassibleItem as { markers: Marker[] }).markers
+          : impassibleItem as Marker[];
 
         // Use a different color for permanent areas in the new format
         const polygonOptions =
@@ -351,7 +357,7 @@ MapProps) => {
 
         // Calculate center of polygon for the center marker
         const centerPosition = calculatePolygonCenter(
-          markersToRender.map((marker) => marker.position)
+          markersToRender.map((marker : Marker) => marker.position)
         );
 
         // Create a custom center icon showing the area number

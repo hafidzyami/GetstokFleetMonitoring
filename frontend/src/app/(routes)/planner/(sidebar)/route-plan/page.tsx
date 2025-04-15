@@ -17,6 +17,26 @@ interface Marker {
   address?: string;
 }
 
+interface AvoidanceInfo {
+  markers: Marker[];
+  reason: string;
+  isPermanent: boolean;
+  photo: string | null;
+  photoData: string | null;
+  timestamp: string;
+}
+
+// Define segment types
+interface MapSegment {
+  segment: LatLngTuple[];
+  typeValue: number;
+}
+
+interface TollwaySegment {
+  segment: LatLngTuple[];
+  tollwayValue: number;
+}
+
 const BuatRutePage = () => {
   const router = useRouter();
 
@@ -32,12 +52,10 @@ const BuatRutePage = () => {
 
   // States for map and routing
   const [markers, setMarkers] = useState<Marker[]>([]);
-  const [segments, setSegments] = useState<any>([]);
-  const [tollways, setTollways] = useState<any>([]);
+  const [segments, setSegments] = useState<MapSegment[]>([]);
+  const [tollways, setTollways] = useState<TollwaySegment[]>([]);
   const [impassibleMarkers, setImpassibleMarkers] = useState<Marker[]>([]);
-  const [listOfImpassibleMarkers, setListOfImpassibleMarkers] = useState<
-    Marker[][]
-  >([]);
+  const [listOfImpassibleMarkers, setListOfImpassibleMarkers] = useState<(Marker[] | AvoidanceInfo)[]>([]);
   const [center, setCenter] = useState<LatLngTuple>([-6.8904, 107.6102]);
   const [flagImpassible, setFlagImpassible] = useState<boolean>(false);
   const [routeGeometry, setRouteGeometry] = useState<string>("");
@@ -62,7 +80,7 @@ const BuatRutePage = () => {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = (e) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
       setAvoidancePhoto(file);
@@ -275,10 +293,15 @@ const BuatRutePage = () => {
     };
 
     if (listOfImpassibleMarkers.length > 0) {
-      const impassibleCoordinates = listOfImpassibleMarkers.flatMap((group) => {
+      const impassibleCoordinates = listOfImpassibleMarkers.flatMap((avoidance) => {
         // Check if we're dealing with the new format or old format
-        const markers = group.markers || group;
-        return markers.map((marker) => [marker.position[1], marker.position[0]]);
+        if (Array.isArray(avoidance)) {
+          // Old format (just an array of markers)
+          return avoidance.map((marker) => [marker.position[1], marker.position[0]]);
+        } else {
+          // New format (object with markers property)
+          return avoidance.markers.map((marker) => [marker.position[1], marker.position[0]]);
+        }
       });
   
       if (impassibleCoordinates.length >= 3) {
@@ -317,8 +340,8 @@ const BuatRutePage = () => {
         const startIdx = waytype[0];
         const endIdx = waytype[1];
         const typeValue = waytype[2];
-        const segment = latLngs.slice(startIdx, endIdx + 1);
-        setSegments((prev: any) => [...prev, { segment, typeValue }]);
+        const segment = latLngs.slice(startIdx, endIdx + 1) as LatLngTuple[];
+        setSegments((prev : MapSegment[]) => [...prev, { segment, typeValue }]);
       }
 
       // Process tollways
@@ -327,8 +350,8 @@ const BuatRutePage = () => {
         const startIdx = tollway[0];
         const endIdx = tollway[1];
         const tollwayValue = tollway[2];
-        const segment = latLngs.slice(startIdx, endIdx + 1);
-        setTollways((prev: any) => [...prev, { segment, tollwayValue }]);
+        const segment = latLngs.slice(startIdx, endIdx + 1) as LatLngTuple[];
+        setTollways((prev : TollwaySegment[]) => [...prev, { segment, tollwayValue }]);
       }
 
       // Extract surface type information
@@ -489,19 +512,21 @@ const BuatRutePage = () => {
 
   const updateListOfImpassibleMarkers = (id: string, newPosition: LatLngTuple) => {
     setListOfImpassibleMarkers((prev) =>
-      prev.map((group) => {
+      prev.map((avoidanceInfo) => {
         // Check if we're dealing with the new format or old format
-        if (group.markers) {
+        if (Array.isArray(avoidanceInfo)) {
+          // Old format (just an array of markers)
+          return avoidanceInfo.map((marker) =>
+            marker.id === id ? { ...marker, position: newPosition } : marker
+          );
+        } else {
+          // New format (object with markers property)
           return {
-            ...group,
-            markers: group.markers.map((marker) =>
+            ...avoidanceInfo,
+            markers: avoidanceInfo.markers.map((marker) =>
               marker.id === id ? { ...marker, position: newPosition } : marker
             )
           };
-        } else {
-          return group.map((marker) =>
-            marker.id === id ? { ...marker, position: newPosition } : marker
-          );
         }
       })
     );
@@ -518,7 +543,7 @@ const BuatRutePage = () => {
       return;
     }
 
-    const avoidanceInfo = {
+    const avoidanceInfo: AvoidanceInfo = {
       markers: [...impassibleMarkers],
       reason: avoidanceReason,
       isPermanent: isPermanent,
@@ -528,7 +553,7 @@ const BuatRutePage = () => {
     };
 
     // Add to the list of impassible markers with the additional info
-    setListOfImpassibleMarkers((prev) => [...prev, avoidanceInfo]);
+    setListOfImpassibleMarkers((prev) => [...prev, avoidanceInfo as (Marker[] | AvoidanceInfo)]);
 
     // Reset form
     setImpassibleMarkers([]);
@@ -1030,61 +1055,69 @@ const BuatRutePage = () => {
               </div>
             ) : (
               <div className="max-h-60 overflow-y-auto">
-                {listOfImpassibleMarkers.map((polygon, polygonIndex) => (
-                  <div
-                    key={polygonIndex}
-                    className="mb-3 pb-2 border-b border-gray-200"
-                  >
-                    <div className="flex justify-between items-center mb-1">
-                      <h3 className="font-semibold text-sm">
-                        Area {polygonIndex + 1}
-                      </h3>
-                      <button
-                        onClick={() => removeImpassiblePolygon(polygonIndex)}
-                        className="text-red-500 hover:text-red-700 p-1"
-                        type="button"
-                      >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-5 w-5"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
+                {listOfImpassibleMarkers.map((avoidanceInfo, polygonIndex) => {
+                  // Check if we're dealing with the new format or old format
+                  const isNewFormat = !Array.isArray(avoidanceInfo);
+                  const markersArray = isNewFormat 
+                    ? (avoidanceInfo as AvoidanceInfo).markers 
+                    : avoidanceInfo as Marker[];
+                  
+                  return (
+                    <div
+                      key={polygonIndex}
+                      className="mb-3 pb-2 border-b border-gray-200"
+                    >
+                      <div className="flex justify-between items-center mb-1">
+                        <h3 className="font-semibold text-sm">
+                          Area {polygonIndex + 1}
+                        </h3>
+                        <button
+                          onClick={() => removeImpassiblePolygon(polygonIndex)}
+                          className="text-red-500 hover:text-red-700 p-1"
+                          type="button"
                         >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                          />
-                        </svg>
-                      </button>
-                    </div>
-                    <div className="text-xs ml-1 mb-1">
-                      <div className="text-gray-700 font-medium">
-                        {polygon.reason ? `Alasan: ${polygon.reason}` : ""}
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-5 w-5"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                            />
+                          </svg>
+                        </button>
                       </div>
-                      <div className="text-gray-500 flex items-center gap-1">
-                        <span>
-                          {polygon.markers
-                            ? polygon.markers.length
-                            : polygon.length}{" "}
-                          titik
-                        </span>
-                        {polygon.isPermanent && (
-                          <span className="bg-red-100 text-red-800 text-xs font-medium px-2 py-0.5 rounded">
-                            Permanen
-                          </span>
+                      <div className="text-xs ml-1 mb-1">
+                        {isNewFormat && (
+                          <div className="text-gray-700 font-medium">
+                            {(avoidanceInfo as AvoidanceInfo).reason ? 
+                              `Alasan: ${(avoidanceInfo as AvoidanceInfo).reason}` : ""}
+                          </div>
                         )}
-                        {polygon.photo && (
-                          <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-0.5 rounded">
-                            Dengan Foto
+                        <div className="text-gray-500 flex items-center gap-1">
+                          <span>
+                            {markersArray.length} titik
                           </span>
-                        )}
+                          {isNewFormat && (avoidanceInfo as AvoidanceInfo).isPermanent && (
+                            <span className="bg-red-100 text-red-800 text-xs font-medium px-2 py-0.5 rounded">
+                              Permanen
+                            </span>
+                          )}
+                          {isNewFormat && (avoidanceInfo as AvoidanceInfo).photo && (
+                            <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-0.5 rounded">
+                              Dengan Foto
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

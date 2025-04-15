@@ -4,9 +4,25 @@ import "boxicons/css/boxicons.min.css";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
+// Define TypeScript interfaces
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  created_at: string;
+}
+
+interface ApiResponse<T> {
+  data?: T;
+  error?: {
+    message: string;
+  };
+}
+
 const UserManagementPage = () => {
-  const [users, setUsers] = useState([]);
-  const [filteredUsers, setFilteredUsers] = useState([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRole, setSelectedRole] = useState("");
   const [isOpen, setIsOpen] = useState({
@@ -20,7 +36,7 @@ const UserManagementPage = () => {
     email: "",
     role: "planner",
   });
-  const [selectedUser, setSelectedUser] = useState(null);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
@@ -48,7 +64,7 @@ const UserManagementPage = () => {
         },
       });
       
-      const result = await response.json();
+      const result = await response.json() as ApiResponse<User[]>;
       
       if (response.ok) {
         setUsers(result.data || []);
@@ -57,7 +73,7 @@ const UserManagementPage = () => {
         console.error("Failed to fetch users:", result.error?.message);
       }
     } catch (error) {
-      console.error("Error fetching users:", error);
+      console.error("Error fetching users:", error instanceof Error ? error.message : "Unknown error");
     }
     setIsLoading(false);
   };
@@ -101,7 +117,7 @@ const UserManagementPage = () => {
         }),
       });
       
-      const result = await response.json();
+      const result = await response.json() as ApiResponse<User>;
       
       if (response.ok) {
         // Close input modal and show success modal
@@ -119,8 +135,8 @@ const UserManagementPage = () => {
         alert(`Failed to add user: ${result.error?.message || "Unknown error"}`);
       }
     } catch (error) {
-      console.error("Error adding user:", error);
-      alert(`Error adding user: ${error.message}`);
+      console.error("Error adding user:", error instanceof Error ? error.message : "Unknown error");
+      alert(`Error adding user: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   };
 
@@ -141,7 +157,7 @@ const UserManagementPage = () => {
         }),
       });
       
-      const result = await response.json();
+      const result = await response.json() as ApiResponse<any>;
       
       if (response.ok) {
         alert("Password reset successful. Default password is 'password123'");
@@ -151,8 +167,8 @@ const UserManagementPage = () => {
         alert(`Failed to reset password: ${result.error?.message || "Unknown error"}`);
       }
     } catch (error) {
-      console.error("Error resetting password:", error);
-      alert(`Error resetting password: ${error.message}`);
+      console.error("Error resetting password:", error instanceof Error ? error.message : "Unknown error");
+      alert(`Error resetting password: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   };
 
@@ -163,7 +179,7 @@ const UserManagementPage = () => {
   };
 
   // Function to capitalize first letter for display
-  const capitalizeFirstLetter = (string) => {
+  const capitalizeFirstLetter = (string: string) => {
     return string.charAt(0).toUpperCase() + string.slice(1);
   };
 
