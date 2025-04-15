@@ -1,4 +1,4 @@
-name: Build and Deploy to EC2
+name: Build and Deploy to Production EC2
 
 on:
   push:
@@ -6,6 +6,8 @@ on:
     paths-ignore:
       - '**.md'
       - 'docs/**'
+      - mqtt_broker/**
+      - .github/workflows/deploy-staging.yml
   workflow_dispatch:
 
 jobs:
@@ -43,8 +45,9 @@ jobs:
         args: --timeout=5m
 
   deploy:
-    name: Deploy to EC2
+    name: Deploy to Production EC2
     runs-on: ubuntu-latest
+    # Deploy will run even if lint check fails
     
     steps:
     - name: Checkout code
@@ -55,15 +58,15 @@ jobs:
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ap-southeast-1
-
-    - name: Set up SSH key
+        aws-region: ap-southeast-1 
+        
+    - name: Set up SSH
       run: |
         mkdir -p ~/.ssh
         echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2.pem
         chmod 600 ~/.ssh/ec2.pem
-        
-    - name: Deploy to EC2
+
+    - name: Deploy to Production EC2
       run: |
         ssh \
           -o ServerAliveInterval=60 \
@@ -75,23 +78,61 @@ jobs:
           mkdir -p ~/deploy-logs
           
           # Log file
-          LOG_FILE=~/deploy-logs/deploy-$(date +%Y-%m-%d-%H-%M-%S).log
+          LOG_FILE=~/deploy-logs/deploy-production-$(date +%Y-%m-%d-%H-%M-%S).log
           
           # Start logging
           {
-            echo "=== Deployment started at $(date) ==="
+            echo "=== Production Deployment started at $(date) ==="
             
-            # Navigate to project directory
-            cd ~/GetstokFleetMonitoring
+            # Check disk space before deployment
+            echo "Current disk usage:"
+            df -h /
             
-            # Pull latest changes
-            echo "Pulling latest changes..."
-            git pull origin main
+            # Install git if not available
+            if ! command -v git &> /dev/null; then
+              echo "Git not found. Installing git..."
+              sudo yum install -y git
+            fi
+            
+            # Install Docker and Docker Compose if not available
+            if ! command -v docker &> /dev/null; then
+              echo "Docker not found. Installing Docker..."
+              sudo yum install -y docker
+              sudo systemctl start docker
+              sudo systemctl enable docker
+              sudo usermod -a -G docker ec2-user
+            fi
+            
+            if ! command -v docker-compose &> /dev/null; then
+              echo "Docker Compose not found. Installing Docker Compose..."
+              sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+              sudo chmod +x /usr/local/bin/docker-compose
+            fi
+            
+            # Update repository using git pull instead of rm and clone
+            echo "Updating repository with git pull..."
+            if [ -d ~/GetstokFleetMonitoring ]; then
+              cd ~/GetstokFleetMonitoring
+              # Check for local changes and reset if needed
+              git status --porcelain | grep -q . && git reset --hard
+              git checkout main
+              git pull origin main
+            else
+              # If directory doesn't exist, create and clone
+              echo "Directory not found, creating and cloning repository..."
+              mkdir -p ~/GetstokFleetMonitoring
+              cd ~/GetstokFleetMonitoring
+              git clone -b main https://github.com/hafidzyami/GetstokFleetMonitoring.git .
+            fi
             
             # Ensure all .env files exist
             if [ -f backend/.env.example ] && [ ! -f backend/.env ]; then
               echo "Creating backend/.env from backend/.env.example"
               cp backend/.env.example backend/.env
+              
+              # Adjust configuration for production
+              sed -i "s/NODE_ENV=.*/NODE_ENV=production/" backend/.env
+              sed -i "s/APP_ENV=.*/APP_ENV=production/" backend/.env
             fi
             
             if [ -f backend/.env.db.example ] && [ ! -f backend/.env.db ]; then
@@ -107,6 +148,9 @@ jobs:
             if [ -f frontend/.env.example ] && [ ! -f frontend/.env ]; then
               echo "Creating frontend/.env from frontend/.env.example"
               cp frontend/.env.example frontend/.env
+              
+              # Set API endpoint for production
+              sed -i "s/NEXT_PUBLIC_API_URL=.*/NEXT_PUBLIC_API_URL=https:\/\/api.getstokfms.com/" frontend/.env
             fi
             
             # Make sure required directories for mqtt broker exist
@@ -114,11 +158,21 @@ jobs:
             mkdir -p mqtt_broker/mqtt/data mqtt_broker/mqtt/log
             chmod -R 777 mqtt_broker/mqtt/data mqtt_broker/mqtt/log
             
+            # Ensure Docker is running
+            if ! systemctl is-active --quiet docker; then
+              echo "Starting Docker service..."
+              sudo systemctl start docker
+            fi
+            
+            # Check if docker-compose.yml exists
+            if [ ! -f docker-compose.yml ]; then
+              echo "ERROR: docker-compose.yml not found in repository"
+              exit 1
+            fi
+            
             # Stop existing containers
             echo "Stopping existing containers..."
-            if [ -f docker-compose.yml ]; then
-              docker-compose down
-            fi
+            docker-compose down
             
             # Aggressive cleanup before building (remove all unused resources)
             echo "Performing aggressive Docker cleanup before building..."
@@ -165,9 +219,9 @@ jobs:
             echo "Disk usage after deployment:"
             df -h /
             
-            echo "=== Prod Deployment completed at $(date) ==="
+            echo "=== Production Deployment completed at $(date) ==="
           } 2>&1 | tee -a "$LOG_FILE"
           
           # Display result
-          echo "Prod Deployment completed. Log saved to $LOG_FILE"
+          echo "Production Deployment completed. Log saved to $LOG_FILE"
         '
