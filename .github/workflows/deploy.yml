@@ -170,3 +170,4 @@ jobs:
           
           # Display result
           echo "Prod Deployment completed. Log saved to $LOG_FILE"
+        '
