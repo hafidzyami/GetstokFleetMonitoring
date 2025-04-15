@@ -10,7 +10,8 @@ type UserRepository interface {
 	FindByEmail(email string) (*model.User, error)
 	FindByID(id uint) (*model.User, error)
 	Update(user *model.User) error
-	
+	FindAll() ([]*model.User, error)
+	FindByRole(role string) ([]*model.User, error)
 }
 
 type userRepository struct{}
@@ -44,6 +45,27 @@ func (r *userRepository) FindByID(id uint) (*model.User, error) {
 	return &user, nil
 }
 
+// Update updates an existing user
 func (r *userRepository) Update(user *model.User) error {
 	return config.DB.Save(user).Error
+}
+
+// FindAll returns all users
+func (r *userRepository) FindAll() ([]*model.User, error) {
+	var users []*model.User
+	err := config.DB.Find(&users).Error
+	if err != nil {
+		return nil, err
+	}
+	return users, nil
+}
+
+// FindByRole returns users with a specific role
+func (r *userRepository) FindByRole(role string) ([]*model.User, error) {
+	var users []*model.User
+	err := config.DB.Where("role = ?", role).Find(&users).Error
+	if err != nil {
+		return nil, err
+	}
+	return users, nil
 }

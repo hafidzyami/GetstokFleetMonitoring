@@ -5,11 +5,11 @@ const isDevelopment = process.env.NODE_ENV === 'development';
 
 // Tentukan host berdasarkan environment
 const apiHost = isDevelopment 
-  ? 'http://getstokfms.com:8080' 
+  ? 'http://localhost:8080' 
   : 'http://getstok_api:8080';
 
 const notificationHost = isDevelopment 
-  ? 'http://getstokfms.com:8081' 
+  ? 'http://localhost:8081' 
   : 'http://getstok-notification:8081';
 
   

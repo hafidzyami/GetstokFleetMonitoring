@@ -180,17 +180,26 @@ export default function Page() {
     }
 
     try {
-      const response = await fetch(
-        "https://api.openrouteservice.org/v2/directions/driving-hgv/json",
-        {
-          method: "POST",
-          headers: {
-            Authorization: process.env.NEXT_PUBLIC_API_ORS || "", // Get the API key from the environment variables
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(body),
-        }
-      );
+      // const response = await fetch(
+      //   "https://api.openrouteservice.org/v2/directions/driving-hgv/json",
+      //   {
+      //     method: "POST",
+      //     headers: {
+      //       Authorization: process.env.NEXT_PUBLIC_API_ORS || "", // Get the API key from the environment variables
+      //       "Content-Type": "application/json",
+      //     },
+      //     body: JSON.stringify(body),
+      //   }
+      // );
+
+      const response = await fetch("/api/v1/routing/directions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify(body),
+      });
 
       if (!response.ok) {
         const message = await response.json();
@@ -207,7 +216,7 @@ export default function Page() {
       const latLngs = getLatLngsForMap(data.routes[0].geometry);
 
       // Proses waytypes untuk segmen
-      const waytypes = data.routes[0].extras.waytypes.values;
+      const waytypes = data.routes[0].extras.waytype.values;
       for (const waytype of waytypes) {
         const startIdx = waytype[0];
         const endIdx = waytype[1];

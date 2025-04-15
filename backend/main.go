@@ -1,11 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	ws "github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
@@ -58,11 +60,15 @@ func main() {
 	authService := service.NewAuthService(userRepo)
 	truckService := service.NewTruckService(truckRepo)
 	truckHistoryService := service.NewTruckHistoryService(truckHistoryRepo)
+	routingSerivce := service.NewRoutingService()
+	userService := service.NewUserService(userRepo)
 
 	// Initialize controllers
 	authController := controller.NewAuthController(authService)
 	truckController := controller.NewTruckController(truckService)
 	truckHistoryController := controller.NewTruckHistoryController(truckHistoryService)
+	routingController := controller.NewRoutingController(routingSerivce)
+	userController := controller.NewUserController(userService)
 
 	// Initialize Fiber app
 	app := fiber.New(fiber.Config{
@@ -108,7 +114,72 @@ func main() {
 	})
 
 	// WebSocket endpoint
-	app.Get("/ws", ws.New(websocket.WebsocketHandler))
+	app.Get("/ws", ws.New(func(c *ws.Conn) {
+		log.Println("New WebSocket client connected")
+
+		// Register client
+		client := &websocket.Client{Conn: c}
+		hub := websocket.GetHub()
+		hub.Register(client)
+
+		// Create a done channel to signal when the connection is closed
+		done := make(chan struct{})
+
+		// Send connection confirmation message
+		testMsg := map[string]interface{}{
+			"type":    "connection_established",
+			"message": "WebSocket connection successfully established",
+		}
+		testJSON, _ := json.Marshal(testMsg)
+		if err := c.WriteMessage(ws.TextMessage, testJSON); err != nil {
+			log.Printf("Error sending confirmation message: %v", err)
+			close(done)
+			return
+		}
+
+		// Start a goroutine to keep the connection alive with pings
+		go func() {
+			ticker := time.NewTicker(15 * time.Second)
+			defer ticker.Stop()
+
+			for {
+				select {
+				case <-ticker.C:
+					pingMsg := map[string]interface{}{
+						"type":      "ping",
+						"timestamp": time.Now().Unix(),
+					}
+					pingJSON, _ := json.Marshal(pingMsg)
+
+					if err := c.WriteMessage(ws.TextMessage, pingJSON); err != nil {
+						log.Printf("Error sending ping: %v", err)
+						close(done)
+						return
+					}
+				case <-done:
+					return
+				}
+			}
+		}()
+
+		// Message handling loop
+		for {
+			_, message, err := c.ReadMessage()
+			if err != nil {
+				log.Printf("Read error: %v", err)
+				break
+			}
+
+			// Process incoming messages
+			log.Printf("Received message: %s", message)
+		}
+
+		// When we exit the loop, close the done channel to signal goroutines to stop
+		close(done)
+
+		// Unregister client when function returns
+		hub.Unregister(client)
+	}))
 
 	// Routes
 	api := app.Group("/api/v1")
@@ -117,6 +188,12 @@ func main() {
 	auth := api.Group("/auth")
 	auth.Post("/register", middleware.RoleAuthorization("management"), authController.Register)
 	auth.Post("/login", authController.Login)
+
+	// User routes
+	users := api.Group("/users")
+	users.Use(middleware.RoleAuthorization("management", "planner"))
+	users.Get("/", userController.GetAllUsers)
+	users.Post("/reset-password", userController.ResetPassword)
 
 	// Add truck routes
 	trucks := api.Group("/trucks")
@@ -127,6 +204,10 @@ func main() {
 	// Add truck history routes
 	trucks.Get("/:truckID/positions", truckHistoryController.GetPositionHistory)
 	trucks.Get("/:truckID/fuel", truckHistoryController.GetFuelHistory)
+
+	// Routing routes
+	routing := api.Group("/routing")
+	routing.Post("/directions", routingController.GetDirections)
 
 	// Protected routes
 	api.Get("/profile", middleware.Protected(), authController.GetProfile)
