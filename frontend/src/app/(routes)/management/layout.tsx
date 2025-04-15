@@ -9,6 +9,25 @@ import { useAuth } from "@/app/contexts/AuthContext";
 import { useNotification } from "@/app/contexts/NotificationContext";
 import { createGlobalStyle } from 'styled-components';
 
+// Definisikan interface untuk window
+declare global {
+  interface Window {
+    truckData?: Array<{
+      mac_id: string;
+      plate_number?: string;
+      type?: string;
+      fuel?: number;
+      latitude?: number;
+      longitude?: number;
+      last_position?: string;
+      last_fuel?: string;
+      [key: string]: any;
+    }>;
+    wsConnected?: boolean;
+    fleetChart?: any;
+  }
+}
+
 // Tambahkan style untuk animasi
 const GlobalStyle = createGlobalStyle`
   @keyframes fadeIn {
@@ -86,13 +105,20 @@ const LayoutManagement = ({ children }: { children: React.ReactNode }) => {
 
   // Listen for truck selection events
   useEffect(() => {
-    const handleTruckSelect = (event: CustomEvent) => {
+    interface TruckSelectedEvent extends CustomEvent {
+      detail: {
+        mac_id: string;
+        [key: string]: any;
+      };
+    }
+
+    const handleTruckSelect = (event: TruckSelectedEvent) => {
       const truckData = event.detail;
       if (truckData) {
         // Find the index of the truck in window.truckData
         if (window.truckData) {
           const index = window.truckData.findIndex(
-            (truck: any) => truck.mac_id === truckData.mac_id
+            (truck) => truck.mac_id === truckData.mac_id
           );
           setActiveTruckIndex(index >= 0 ? index : 0);
         } else {
@@ -163,8 +189,8 @@ const LayoutManagement = ({ children }: { children: React.ReactNode }) => {
         const ApexCharts = (await import("apexcharts")).default;
         
         // Clear any existing chart
-        if ((window as any).fleetChart) {
-          (window as any).fleetChart.destroy();
+        if (window.fleetChart) {
+          window.fleetChart.destroy();
         }
         
         const options = {
@@ -197,8 +223,8 @@ const LayoutManagement = ({ children }: { children: React.ReactNode }) => {
           },
         };
         
-        (window as any).fleetChart = new ApexCharts(chartElement, options);
-        (window as any).fleetChart.render();
+        window.fleetChart = new ApexCharts(chartElement, options);
+        window.fleetChart.render();
       } catch (error) {
         console.error("Error initializing chart:", error);
       }
@@ -208,9 +234,9 @@ const LayoutManagement = ({ children }: { children: React.ReactNode }) => {
     setTimeout(initChart, 200);
     
     return () => {
-      if ((window as any).fleetChart) {
-        (window as any).fleetChart.destroy();
-        (window as any).fleetChart = null;
+      if (window.fleetChart) {
+        window.fleetChart.destroy();
+        window.fleetChart = null;
       }
     };
   }, [activeTruckIndex, currentPath]);
@@ -305,13 +331,13 @@ const LayoutManagement = ({ children }: { children: React.ReactNode }) => {
             {currentPath.includes("/user-list") && "Daftar User"}
             <div className="flex items-center gap-4">
               {/* Connection status badge */}
-              {currentPath.includes("/dashboard") && (window as any).wsConnected !== undefined && (
+              {currentPath.includes("/dashboard") && window.wsConnected !== undefined && (
                 <div
                   className={`px-3 py-1 rounded-full text-sm font-medium text-white ${
-                    (window as any).wsConnected ? "bg-green-500" : "bg-red-500"
+                    window.wsConnected ? "bg-green-500" : "bg-red-500"
                   }`}
                 >
-                  {(window as any).wsConnected ? "Connected" : "Disconnected"}
+                  {window.wsConnected ? "Connected" : "Disconnected"}
                 </div>
               )}
               
@@ -488,7 +514,7 @@ const LayoutManagement = ({ children }: { children: React.ReactNode }) => {
                 <p className="text-[#707070] text-sm mb-3">
                   Status akan diperbarui secara berkala
                 </p>
-                {window.truckData && activeTruckIndex !== null && (
+                {window.truckData && activeTruckIndex !== null && window.truckData[activeTruckIndex] && (
                   <div className="flex items-center gap-2 bg-[#E6F5FF] border border-[#009EFF] p-2 rounded-md mb-3">
                     <i className="bx bx-car bg-[#009EFF] text-white text-xl p-[6px] rounded-full"></i>
                     <span className="font-medium text-black text-sm">
