@@ -1,81 +1,171 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "boxicons/css/boxicons.min.css";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
-const daftarUser = [
-  {
-    nama: "Hallo",
-    email: "Hallo@gmail.com",
-    status: "Active",
-    role: "Planner",
-  },
-  {
-    nama: "Hallo",
-    email: "Hallo@gmail.com",
-    status: "Active",
-    role: "Planner",
-  },
-  {
-    nama: "Hallo",
-    email: "Hallo@gmail.com",
-    status: "Active",
-    role: "Planner",
-  },
-  {
-    nama: "Hallo",
-    email: "Hallo@gmail.com",
-    status: "Active",
-    role: "Planner",
-  },
-  {
-    nama: "Hallo",
-    email: "Hallo@gmail.com",
-    status: "Active",
-    role: "Planner",
-  },
-  {
-    nama: "Hallo",
-    email: "Hallo@gmail.com",
-    status: "Active",
-    role: "Planner",
-  },
-  {
-    nama: "Hallo",
-    email: "Hallo@gmail.com",
-    status: "Active",
-    role: "Planner",
-  },
-  {
-    nama: "Hallo",
-    email: "Hallo@gmail.com",
-    status: "Active",
-    role: "Planner",
-  },
-  {
-    nama: "Hallo",
-    email: "Hallo@gmail.com",
-    status: "Active",
-    role: "Planner",
-  },
-  {
-    nama: "Hallo",
-    email: "Hallo@gmail.com",
-    status: "Active",
-    role: "Planner",
-  },
-];
-
-const DaftarUserPage = () => {
+const UserManagementPage = () => {
+  const [users, setUsers] = useState([]);
+  const [filteredUsers, setFilteredUsers] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedRole, setSelectedRole] = useState("");
   const [isOpen, setIsOpen] = useState({
     inputData: false,
     konfirmasi: false,
     notifikasiBerhasil: false,
+    resetPassword: false,
   });
-  const [status, setStatus] = useState("Active");
-  const [role, setRole] = useState("Planner");
-  const route = useRouter();
+  const [newUser, setNewUser] = useState({
+    name: "",
+    email: "",
+    role: "planner",
+  });
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
+
+  // Fetch users only once on component mount
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  // Filter users when search term or selected role changes
+  useEffect(() => {
+    filterUsers();
+  }, [searchTerm, selectedRole, users]);
+
+  const fetchUsers = async () => {
+    setIsLoading(true);
+    try {
+      // Get token from local storage or wherever it's stored
+      const token = localStorage.getItem("token");
+      
+      const response = await fetch(`/api/v1/users`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+      
+      const result = await response.json();
+      
+      if (response.ok) {
+        setUsers(result.data || []);
+        // Initial filtering will be handled by useEffect
+      } else {
+        console.error("Failed to fetch users:", result.error?.message);
+      }
+    } catch (error) {
+      console.error("Error fetching users:", error);
+    }
+    setIsLoading(false);
+  };
+
+  const filterUsers = () => {
+    let filtered = [...users];
+    
+    // Filter by search term
+    if (searchTerm) {
+      filtered = filtered.filter(
+        (user) =>
+          user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          user.email.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    
+    // Filter by role
+    if (selectedRole) {
+      filtered = filtered.filter(
+        (user) => user.role.toLowerCase() === selectedRole.toLowerCase()
+      );
+    }
+    
+    setFilteredUsers(filtered);
+  };
+
+  const handleAddUser = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      
+      const response = await fetch(`/api/v1/auth/register`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: newUser.name,
+          email: newUser.email,
+          role: newUser.role.toLowerCase(),
+        }),
+      });
+      
+      const result = await response.json();
+      
+      if (response.ok) {
+        // Close input modal and show success modal
+        setIsOpen({
+          ...isOpen,
+          inputData: false,
+          konfirmasi: false,
+          notifikasiBerhasil: true,
+        });
+        
+        // Refresh user list
+        fetchUsers();
+      } else {
+        console.error("Failed to add user:", result.error?.message);
+        alert(`Failed to add user: ${result.error?.message || "Unknown error"}`);
+      }
+    } catch (error) {
+      console.error("Error adding user:", error);
+      alert(`Error adding user: ${error.message}`);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!selectedUser) return;
+    
+    try {
+      const token = localStorage.getItem("token");
+      
+      const response = await fetch(`/api/v1/users/reset-password`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          user_id: selectedUser.id,
+        }),
+      });
+      
+      const result = await response.json();
+      
+      if (response.ok) {
+        alert("Password reset successful. Default password is 'password123'");
+        setIsOpen({ ...isOpen, resetPassword: false });
+      } else {
+        console.error("Failed to reset password:", result.error?.message);
+        alert(`Failed to reset password: ${result.error?.message || "Unknown error"}`);
+      }
+    } catch (error) {
+      console.error("Error resetting password:", error);
+      alert(`Error resetting password: ${error.message}`);
+    }
+  };
+
+  // Function to clear filters
+  const handleClearFilter = () => {
+    setSelectedRole("");
+    setSearchTerm("");
+  };
+
+  // Function to capitalize first letter for display
+  const capitalizeFirstLetter = (string) => {
+    return string.charAt(0).toUpperCase() + string.slice(1);
+  };
 
   return (
     <div className="h-full pt-[12%] px-4 sm:px-8">
@@ -86,64 +176,195 @@ const DaftarUserPage = () => {
           <input
             type="text"
             className="w-full outline-none text-sm sm:text-base"
-            placeholder="Cari Supir"
+            placeholder="Cari User"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
           />
+          {searchTerm && (
+            <button 
+              onClick={() => setSearchTerm('')}
+              className="text-gray-500 hover:text-red-500"
+            >
+              <i className="bx bx-x text-xl"></i>
+            </button>
+          )}
         </label>
-        <button
-          onClick={() => setIsOpen({ ...isOpen, inputData: true })}
-          className="bg-[#009EFF] flex gap-2 text-white px-4 sm:px-6 py-2 sm:py-2.5 rounded-[8px] font-bold w-full sm:w-auto justify-center"
-        >
-          <i className="bx bx-user-plus text-xl sm:text-2xl"></i>
-          <span className="text-sm sm:text-base">Tambah Role User</span>
-        </button>
+        
+        <div className="flex gap-2 w-full sm:w-auto">
+          <div className="relative flex-grow">
+            <select
+              value={selectedRole}
+              onChange={(e) => setSelectedRole(e.target.value)}
+              className="text-sm px-4 py-2 border border-[#F1F1F1] rounded-[8px] outline-none w-full appearance-none pr-8"
+            >
+              <option value="">Semua Role</option>
+              <option value="driver">Driver</option>
+              <option value="planner">Planner</option>
+              <option value="management">Management</option>
+            </select>
+            {selectedRole && (
+              <button 
+                onClick={() => setSelectedRole('')}
+                className="absolute right-2 top-2 text-gray-500 hover:text-red-500"
+              >
+                <i className="bx bx-x text-xl"></i>
+              </button>
+            )}
+          </div>
+          
+          <button
+            onClick={() => setIsOpen({ ...isOpen, inputData: true })}
+            className="bg-[#009EFF] flex gap-2 text-white px-4 sm:px-6 py-2 sm:py-2.5 rounded-[8px] font-bold w-full sm:w-auto justify-center"
+          >
+            <i className="bx bx-user-plus text-xl sm:text-2xl"></i>
+            <span className="text-sm sm:text-base">Tambah User Baru</span>
+          </button>
+        </div>
       </div>
+
+      {/* Filter status indicator */}
+      {(selectedRole || searchTerm) && (
+        <div className="mt-2 flex items-center text-sm text-[#009EFF]">
+          <i className="bx bx-filter mr-1"></i>
+          <span>
+            {selectedRole && `Role: ${capitalizeFirstLetter(selectedRole)}`}
+            {selectedRole && searchTerm && ' • '}
+            {searchTerm && `Pencarian: "${searchTerm}"`}
+          </span>
+          {(selectedRole || searchTerm) && (
+            <button 
+              onClick={handleClearFilter}
+              className="ml-2 text-[#009EFF] hover:underline text-xs"
+            >
+              Hapus filter
+            </button>
+          )}
+        </div>
+      )}
 
       {/* List */}
-      <div className="w-full mt-6 flex flex-col gap-3 h-[450px] overflow-y-auto">
-        {daftarUser.map((user, index) => (
-          <div
-            key={index}
-            className="px-4 sm:px-5 py-3 flex flex-col sm:flex-row sm:gap-5 bg-[#E6F5FF] rounded-[8px]"
-          >
-            <div className="flex items-center gap-3">
-              <i className="bx bx-user-plus text-xl text-white rounded-full bg-[#009EFF] p-2"></i>
-              <div className="text-sm sm:hidden">
-                <p className="font-semibold">{user.nama}</p>
-                <p className="text-[#707070]">{user.email}</p>
+      <div className="w-full mt-3 flex flex-col gap-3 h-[450px] overflow-y-auto">
+        {isLoading ? (
+          // Loading skeleton
+          Array.from({ length: 5 }).map((_, index) => (
+            <div
+              key={`skeleton-${index}`}
+              className="px-4 sm:px-5 py-3 flex flex-col sm:flex-row sm:items-center sm:gap-5 bg-[#F5F5F5] rounded-[8px] animate-pulse"
+            >
+              <div className="flex items-center gap-3 sm:w-12">
+                <div className="h-8 w-8 rounded-full bg-gray-300"></div>
+              </div>
+
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 w-full text-xs sm:text-sm mt-2 sm:mt-0">
+                <div className="flex flex-col items-center sm:w-16">
+                  <div className="h-4 w-4 bg-gray-300 rounded mb-1"></div>
+                  <div className="h-4 w-6 bg-gray-300 rounded"></div>
+                </div>
+                
+                <div className="hidden sm:flex flex-col items-center sm:w-40">
+                  <div className="h-4 w-12 bg-gray-300 rounded mb-1"></div>
+                  <div className="h-4 w-24 bg-gray-300 rounded"></div>
+                </div>
+                
+                <div className="hidden sm:flex flex-col items-center sm:w-48">
+                  <div className="h-4 w-12 bg-gray-300 rounded mb-1"></div>
+                  <div className="h-4 w-32 bg-gray-300 rounded"></div>
+                </div>
+                
+                <div className="flex flex-col items-center sm:w-24">
+                  <div className="h-4 w-8 bg-gray-300 rounded mb-1"></div>
+                  <div className="h-4 w-16 bg-gray-300 rounded"></div>
+                </div>
+                
+                <div className="flex flex-col items-center sm:w-24">
+                  <div className="h-4 w-12 bg-gray-300 rounded mb-1"></div>
+                  <div className="h-4 w-20 bg-gray-300 rounded"></div>
+                </div>
+              </div>
+
+              <div className="mt-3 sm:mt-0 ml-auto">
+                <div className="h-8 w-24 bg-gray-300 rounded"></div>
               </div>
             </div>
-
-            <div className="flex flex-wrap sm:flex-nowrap justify-between sm:justify-between w-full text-xs sm:text-sm items-center mt-2 sm:mt-0 gap-2">
-              <div className="flex flex-col items-center w-1/2 sm:w-auto">
-                <span className="font-medium">No</span>
-                <p className="text-[#707070]">{index + 1}</p>
-              </div>
-              <div className="hidden sm:flex flex-col font-semibold items-center">
-                Nama
-                <p className="text-[#707070]">{user.nama}</p>
-              </div>
-              <div className="hidden sm:flex flex-col font-semibold items-center">
-                Email
-                <p className="text-[#707070]">{user.email}</p>
-              </div>
-              <div className="flex flex-col font-semibold items-center w-1/2 sm:w-auto">
-                Status
-                <p className="text-[#707070]">{user.status}</p>
-              </div>
-              <div className="flex flex-col font-semibold items-center w-1/2 sm:w-auto">
-                Role
-                <p className="text-[#707070]">{user.role}</p>
-              </div>
+          ))
+        ) : filteredUsers.length === 0 ? (
+          <div className="flex justify-center items-center h-32 bg-gray-50 rounded-lg">
+            <div className="text-center">
+              <i className="bx bx-search-alt text-4xl text-gray-400"></i>
+              <p className="mt-2 text-gray-500">Tidak ada data user</p>
+              {(selectedRole || searchTerm) && (
+                <button 
+                  onClick={handleClearFilter}
+                  className="mt-2 text-[#009EFF] hover:underline"
+                >
+                  Hapus filter
+                </button>
+              )}
             </div>
-
-            <button className="mt-3 sm:mt-0 px-3 py-2 rounded-[8px] text-sm flex justify-center items-center w-full sm:w-[145px] bg-[#008EE6] text-white font-semibold">
-              Edit Pengguna
-            </button>
           </div>
-        ))}
+        ) : (
+          filteredUsers.map((user, index) => (
+            <div
+              key={user.id}
+              className="px-4 sm:px-5 py-3 flex flex-col sm:flex-row sm:items-center sm:gap-5 bg-[#E6F5FF] rounded-[8px]"
+            >
+              <div className="flex items-center gap-3 sm:w-12">
+                <i className="bx bx-user text-xl text-white rounded-full bg-[#009EFF] p-2"></i>
+                <div className="text-sm sm:hidden">
+                  <p className="font-semibold">{user.name}</p>
+                  <p className="text-[#707070]">{user.email}</p>
+                </div>
+              </div>
+
+              {/* Fixed-width columns for better alignment */}
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 w-full text-xs sm:text-sm mt-2 sm:mt-0">
+                <div className="flex flex-col items-center sm:w-16">
+                  <span className="font-medium">No</span>
+                  <p className="text-[#707070]">{index + 1}</p>
+                </div>
+                
+                <div className="hidden sm:flex flex-col items-center sm:w-40">
+                  <span className="font-medium">Nama</span>
+                  <p className="text-[#707070] text-center">{user.name}</p>
+                </div>
+                
+                <div className="hidden sm:flex flex-col items-center sm:w-48">
+                  <span className="font-medium">Email</span>
+                  <p className="text-[#707070] text-center overflow-hidden text-ellipsis">{user.email}</p>
+                </div>
+                
+                <div className="flex flex-col items-center sm:w-24">
+                  <span className="font-medium">Role</span>
+                  <p className="text-[#707070]">
+                    {capitalizeFirstLetter(user.role)}
+                  </p>
+                </div>
+                
+                <div className="flex flex-col items-center sm:w-24">
+                  <span className="font-medium">Created</span>
+                  <p className="text-[#707070]">
+                    {new Date(user.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3 sm:mt-0 ml-auto">
+                <button
+                  onClick={() => {
+                    setSelectedUser(user);
+                    setIsOpen({ ...isOpen, resetPassword: true });
+                  }}
+                  className="px-3 py-2 rounded-[8px] text-sm flex justify-center items-center w-full sm:w-auto bg-[#FFA500] text-white font-semibold"
+                >
+                  Reset Password
+                </button>
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
-      {/* Modal */}
+      {/* Add User Modal */}
       {isOpen.inputData && (
         <>
           <div
@@ -166,7 +387,7 @@ const DaftarUserPage = () => {
                 Tambah User Baru
               </p>
               <p className="text-sm text-[#707070] text-center">
-                Selamat datang kembali
+                Isi detail user baru
               </p>
             </div>
 
@@ -180,6 +401,8 @@ const DaftarUserPage = () => {
                 type="text"
                 placeholder="Input nama"
                 className="text-sm px-4 py-2 border border-[#F1F1F1] rounded-[8px]"
+                value={newUser.name}
+                onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
               />
             </div>
 
@@ -190,26 +413,12 @@ const DaftarUserPage = () => {
                 <p>Email</p>
               </div>
               <input
-                type="text"
+                type="email"
                 placeholder="Input email"
                 className="text-sm px-4 py-2 border border-[#F1F1F1] rounded-[8px]"
+                value={newUser.email}
+                onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
               />
-            </div>
-
-            {/* Status Dropdown */}
-            <div className="flex flex-col gap-1 w-full text-[#545454] font-semibold">
-              <div className="flex gap-2 text-sm items-center">
-                <i className="bx bx-user-pin text-xl"></i>
-                <p>Status</p>
-              </div>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-                className="text-sm px-4 py-2 border border-[#F1F1F1] rounded-[8px]"
-              >
-                <option value="Active">Active</option>
-                <option value="Unactive">Unactive</option>
-              </select>
             </div>
 
             {/* Role Dropdown */}
@@ -219,13 +428,13 @@ const DaftarUserPage = () => {
                 <p>Role</p>
               </div>
               <select
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
+                value={newUser.role}
+                onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
                 className="text-sm px-4 py-2 border border-[#F1F1F1] rounded-[8px]"
               >
-                <option value="Driver">Driver</option>
-                <option value="Planner">Planner</option>
-                <option value="Management">Management</option>
+                <option value="driver">Driver</option>
+                <option value="planner">Planner</option>
+                <option value="management">Management</option>
               </select>
             </div>
 
@@ -233,7 +442,7 @@ const DaftarUserPage = () => {
               onClick={() =>
                 setIsOpen({ ...isOpen, konfirmasi: true, inputData: false })
               }
-              className="bg-[#F1F1F1] w-full py-2 rounded-[8px] text-[#4343]"
+              className="bg-[#009EFF] w-full py-2 rounded-[8px] text-white font-semibold"
             >
               Tambah user baru
             </button>
@@ -241,6 +450,7 @@ const DaftarUserPage = () => {
         </>
       )}
 
+      {/* Confirmation Modal */}
       {isOpen.konfirmasi && (
         <>
           <div
@@ -260,29 +470,37 @@ const DaftarUserPage = () => {
                 height={134}
               />
               <p className="text-xl sm:text-2xl font-semibold text-[#009EFF]">
-                Tambah User Baru
+                Konfirmasi
               </p>
               <p className="text-sm text-[#707070] text-center">
-                Selamat datang kembali
+                Apakah Anda yakin ingin menambahkan user baru?
+              </p>
+              <p className="text-sm font-bold text-center">
+                {newUser.name} - {newUser.email} ({capitalizeFirstLetter(newUser.role)})
+              </p>
+              <p className="text-sm text-[#707070] text-center mt-2">
+                Password default: password123
               </p>
             </div>
 
             <button
-              onClick={() =>
-                setIsOpen({
-                  ...isOpen,
-                  konfirmasi: false,
-                  notifikasiBerhasil: true,
-                })
-              }
+              onClick={handleAddUser}
               className="bg-[#008EE6] w-full py-2 rounded-[8px] text-white font-semibold"
             >
-              Tambah user baru
+              Ya, Tambah User
+            </button>
+            
+            <button
+              onClick={() => setIsOpen({ ...isOpen, konfirmasi: false })}
+              className="border border-[#008EE6] text-[#008EE6] w-full py-2 rounded-[8px] font-semibold"
+            >
+              Batal
             </button>
           </div>
         </>
       )}
 
+      {/* Success Notification Modal */}
       {isOpen.notifikasiBerhasil && (
         <>
           <div
@@ -291,7 +509,7 @@ const DaftarUserPage = () => {
           ></div>
 
           <div
-            className="bg-white w-[90%] sm:w-[354px] fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-[8px] gap-1 flex flex-col  p-6 z-50"
+            className="bg-white w-[90%] sm:w-[354px] fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-[8px] gap-1 flex flex-col p-6 z-50"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex gap-2 items-center font-semibold text-[#009EFF]">
@@ -302,10 +520,10 @@ const DaftarUserPage = () => {
               Pengguna baru berhasil ditambahkan
             </p>
 
-            <div className=" flex gap-3 items-center justify-center mt-3">
+            <div className="flex gap-3 items-center justify-center mt-3">
               <button
-                onClick={() => route.push("/management/dashboard")}
-                className="border-[#008EE6] text-[#008EE6] border flex-1 w-full py-2 rounded-[8px]  font-semibold"
+                onClick={() => router.push("/management/dashboard")}
+                className="border-[#008EE6] text-[#008EE6] border flex-1 w-full py-2 rounded-[8px] font-semibold"
               >
                 Dashboard
               </button>
@@ -313,7 +531,6 @@ const DaftarUserPage = () => {
                 onClick={() =>
                   setIsOpen({
                     ...isOpen,
-
                     notifikasiBerhasil: false,
                   })
                 }
@@ -325,8 +542,53 @@ const DaftarUserPage = () => {
           </div>
         </>
       )}
+
+      {/* Reset Password Modal */}
+      {isOpen.resetPassword && selectedUser && (
+        <>
+          <div
+            className="fixed inset-0 backdrop-blur-sm z-40"
+            onClick={() => setIsOpen({ ...isOpen, resetPassword: false })}
+          ></div>
+
+          <div
+            className="bg-white w-[90%] sm:w-[354px] fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-[8px] gap-6 flex flex-col items-center p-6 z-50"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col gap-2 items-center">
+              <i className="bx bx-key text-4xl text-[#009EFF]"></i>
+              <p className="text-xl sm:text-2xl font-semibold text-[#009EFF]">
+                Reset Password
+              </p>
+              <p className="text-sm text-[#707070] text-center">
+                Apakah Anda yakin ingin mereset password untuk:
+              </p>
+              <p className="text-sm font-bold text-center">
+                {selectedUser.name} - {selectedUser.email}
+              </p>
+              <p className="text-sm text-[#707070] text-center mt-2">
+                Password akan direset menjadi: <span className="font-bold">password123</span>
+              </p>
+            </div>
+
+            <button
+              onClick={handleResetPassword}
+              className="bg-[#008EE6] w-full py-2 rounded-[8px] text-white font-semibold"
+            >
+              Ya, Reset Password
+            </button>
+            
+            <button
+              onClick={() => setIsOpen({ ...isOpen, resetPassword: false })}
+              className="border border-[#008EE6] text-[#008EE6] w-full py-2 rounded-[8px] font-semibold"
+            >
+              Batal
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 };
 
-export default DaftarUserPage;
+export default UserManagementPage;

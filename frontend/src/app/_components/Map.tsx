@@ -11,12 +11,26 @@ import {
   useMap,
 } from "react-leaflet";
 import { LatLngExpression, LatLngTuple } from "leaflet";
-import React, { useEffect, useRef  } from "react";
+import React, { useEffect, useRef } from "react";
 import SearchField from "./SearchField"; // Adjust the import path as necessary
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.css";
 import "leaflet-defaulticon-compatibility";
+
+const calculatePolygonCenter = (positions: LatLngTuple[]): LatLngTuple => {
+  if (positions.length === 0) return [0, 0];
+
+  let lat = 0;
+  let lng = 0;
+
+  positions.forEach((pos) => {
+    lat += pos[0];
+    lng += pos[1];
+  });
+
+  return [lat / positions.length, lng / positions.length];
+};
 
 const Legend = () => {
   return (
@@ -62,7 +76,18 @@ interface MapProps {
   zoom?: number;
   markers: { id: string; position: LatLngTuple }[];
   impassableMarkers: { id: string; position: LatLngTuple }[];
-  listOfImpassibleMarkers: { id: string; position: LatLngTuple }[][];
+  listOfImpassibleMarkers: Array<
+    | { id: string; position: LatLngTuple }[] // Old format (array of markers)
+    | {
+        // New format (object with markers and metadata)
+        markers: { id: string; position: LatLngTuple }[];
+        reason: string;
+        isPermanent: boolean;
+        photo?: string | null;
+        photoData?: string | null;
+        timestamp?: string;
+      }
+  >;
   onMapRightClick: (latlng: LatLngTuple) => void;
   onAddMarker: (latlng: LatLngTuple) => void;
   onUpdateMarkerPosition: (id: string, newPosition: LatLngTuple) => void;
@@ -81,15 +106,17 @@ interface MapProps {
   // surfaceTypes?: string[];
 }
 
-const MapRefSetter: React.FC<{ onMapRef?: (map: L.Map) => void }> = ({ onMapRef }) => {
+const MapRefSetter: React.FC<{ onMapRef?: (map: L.Map) => void }> = ({
+  onMapRef,
+}) => {
   const map = useMap();
   const hoverMarkerRef = useRef<L.Marker | null>(null);
-  
+
   useEffect(() => {
     if (onMapRef) {
       onMapRef(map);
     }
-    
+
     // Setup event handler untuk hover marker
     const handleHoverPoint = (event: CustomEvent) => {
       // Hapus marker lama jika ada
@@ -97,7 +124,7 @@ const MapRefSetter: React.FC<{ onMapRef?: (map: L.Map) => void }> = ({ onMapRef 
         hoverMarkerRef.current.remove();
         hoverMarkerRef.current = null;
       }
-      
+
       // Buat marker baru jika ada point data
       const point = event.detail;
       if (point && point.lat && point.lng) {
@@ -114,32 +141,36 @@ const MapRefSetter: React.FC<{ onMapRef?: (map: L.Map) => void }> = ({ onMapRef 
           iconSize: [12, 12],
           iconAnchor: [6, 6],
         });
-        
+
         // Buat marker dengan tooltip
         hoverMarkerRef.current = L.marker([point.lat, point.lng], {
           icon: hoverIcon,
           zIndexOffset: 1000,
         }).addTo(map);
-        
+
         // Tambahkan tooltip ke marker
-        const elevationText = point.elevation !== undefined ? 
-          `Elevation: ${point.elevation.toFixed(1)} m<br>` : '';
-          
-        hoverMarkerRef.current.bindTooltip(
-          `<div style="padding: 4px; font-size: 12px;">
+        const elevationText =
+          point.elevation !== undefined
+            ? `Elevation: ${point.elevation.toFixed(1)} m<br>`
+            : "";
+
+        hoverMarkerRef.current
+          .bindTooltip(
+            `<div style="padding: 4px; font-size: 12px;">
             ${elevationText}
             Location: ${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}
           </div>`,
-          { 
-            permanent: true, 
-            direction: 'top',
-            className: 'elevation-tooltip',
-            offset: [0, -8] 
-          }
-        ).openTooltip();
+            {
+              permanent: true,
+              direction: "top",
+              className: "elevation-tooltip",
+              offset: [0, -8],
+            }
+          )
+          .openTooltip();
       }
     };
-    
+
     // Event untuk hover data null/reset
     const handleHoverReset = () => {
       if (hoverMarkerRef.current) {
@@ -147,21 +178,27 @@ const MapRefSetter: React.FC<{ onMapRef?: (map: L.Map) => void }> = ({ onMapRef 
         hoverMarkerRef.current = null;
       }
     };
-    
+
     // Daftarkan event listener
-    document.addEventListener('elevation-hover', handleHoverPoint as EventListener);
-    document.addEventListener('elevation-hover-reset', handleHoverReset);
-    
+    document.addEventListener(
+      "elevation-hover",
+      handleHoverPoint as EventListener
+    );
+    document.addEventListener("elevation-hover-reset", handleHoverReset);
+
     return () => {
       // Cleanup
-      document.removeEventListener('elevation-hover', handleHoverPoint as EventListener);
-      document.removeEventListener('elevation-hover-reset', handleHoverReset);
+      document.removeEventListener(
+        "elevation-hover",
+        handleHoverPoint as EventListener
+      );
+      document.removeEventListener("elevation-hover-reset", handleHoverReset);
       if (hoverMarkerRef.current) {
         hoverMarkerRef.current.remove();
       }
     };
   }, [map, onMapRef]);
-  
+
   return null;
 };
 
@@ -184,9 +221,9 @@ const Map = ({
   segments,
   tollways,
   onMapRef,
-  // routeGeometry,
-  // surfaceTypes,
-}: MapProps) => {
+}: // routeGeometry,
+// surfaceTypes,
+MapProps) => {
   return (
     <MapContainer
       center={center}
@@ -298,42 +335,163 @@ const Map = ({
         />
       )}
 
-      {listOfImpassibleMarkers.map((impassibleMarkers, index) => {
+      {listOfImpassibleMarkers.map((impassibleItem, index) => {
+        // Determine if we're using the old format (array) or new format (object with markers property)
+        const isNewFormat =
+          !Array.isArray(impassibleItem) && impassibleItem.markers;
+        const markersToRender = isNewFormat
+          ? impassibleItem.markers
+          : impassibleItem;
+
+        // Use a different color for permanent areas in the new format
+        const polygonOptions =
+          isNewFormat && impassibleItem.isPermanent
+            ? { color: "darkred", fillColor: "red", fillOpacity: 0.2 }
+            : redOptions;
+
+        // Calculate center of polygon for the center marker
+        const centerPosition = calculatePolygonCenter(
+          markersToRender.map((marker) => marker.position)
+        );
+
+        // Create a custom center icon showing the area number
+        const centerIcon = L.divIcon({
+          className: "custom-center-marker",
+          html: `
+      <div style="
+        background-color: ${
+          isNewFormat && impassibleItem.isPermanent ? "darkred" : "red"
+        };
+        color: white;
+        border: 2px solid white;
+        border-radius: 50%;
+        width: 26px;
+        height: 26px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: bold;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+      ">
+        A${index + 1}
+      </div>
+    `,
+          iconSize: [26, 26],
+          iconAnchor: [13, 13],
+        });
+
         // Render the polygon for the current group of impassible markers
         return (
           <React.Fragment key={index}>
+            {/* Render the polygon itself */}
             <Polygon
-              positions={impassibleMarkers.map((marker) => marker.position)}
-              pathOptions={redOptions}
+              positions={markersToRender.map((marker) => marker.position)}
+              pathOptions={polygonOptions}
             />
-            {impassibleMarkers.map((marker) => {
+
+            {/* Render the center marker with area number */}
+            <Marker position={centerPosition} icon={centerIcon}>
+              <Popup>
+                <div className="avoid-area-popup">
+                  <h3 className="text-lg font-bold mb-2">
+                    Area {index + 1} yang Dihindari
+                  </h3>
+
+                  {isNewFormat ? (
+                    <>
+                      <div className="mb-2">
+                        <span className="font-semibold">Alasan:</span>{" "}
+                        {impassibleItem.reason}
+                      </div>
+
+                      {impassibleItem.isPermanent && (
+                        <div className="mb-2">
+                          <span className="bg-red-100 text-red-800 text-xs font-medium px-2 py-1 rounded">
+                            Permanen
+                          </span>
+                        </div>
+                      )}
+
+                      {impassibleItem.photo && (
+                        <div className="mt-3">
+                          <h4 className="font-semibold mb-1">Bukti Foto:</h4>
+                          <div className="border border-gray-300 rounded p-2 bg-gray-100">
+                            <p className="text-sm text-gray-600">
+                              {impassibleItem.photo}
+                            </p>
+
+                            {impassibleItem.photoData ? (
+                              <div className="mt-1">
+                                <img
+                                  src={impassibleItem.photoData}
+                                  alt="Bukti foto area yang dihindari"
+                                  className="max-w-full h-auto rounded"
+                                  style={{ maxHeight: "150px" }}
+                                />
+                              </div>
+                            ) : (
+                              <div className="text-center mt-1 p-2 bg-gray-200 rounded">
+                                <span className="text-xs text-gray-500">
+                                  Preview foto tidak tersedia
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {impassibleItem.timestamp && (
+                        <div className="mt-2 text-xs text-gray-500">
+                          Ditambahkan:{" "}
+                          {new Date(impassibleItem.timestamp).toLocaleString(
+                            "id-ID"
+                          )}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-sm text-gray-600">
+                      Area ini tidak memiliki informasi tambahan.
+                    </div>
+                  )}
+                </div>
+              </Popup>
+            </Marker>
+
+            {/* Render the individual corner markers */}
+            {markersToRender.map((marker) => {
               // Create a custom icon with the default marker and a string overlay
               const customIcon = L.divIcon({
                 className: "custom-marker",
                 html: `    
-                <div style="position: relative;">    
-                    <img src="${
-                      defaultIcon.options.iconUrl
-                    }" style="width: 25px; height: 41px;" />    
-                    <div style="    
-                        position: absolute;     
-                        top: 2px;     
-                        left: 1px;     
-                        background-color: red;     
-                        color: white;     
-                        border-radius: 50%;     
-                        width: 23.5px;     
-                        height: 23.5px;     
-                        display: flex;     
-                        align-items: center;     
-                        justify-content: center;     
-                        font-size: 12px;     
-                        font-weight: bold;     
-                        z-index: 1000;">    
-                        ${marker.id.split("-")[1]}    
-                    </div>    
-                </div>    
-              `,
+          <div style="position: relative;">    
+              <img src="${
+                defaultIcon.options.iconUrl
+              }" style="width: 25px; height: 41px;" />    
+              <div style="    
+                  position: absolute;     
+                  top: 2px;     
+                  left: 1px;     
+                  background-color: ${
+                    isNewFormat && impassibleItem.isPermanent
+                      ? "darkred"
+                      : "red"
+                  };     
+                  color: white;     
+                  border-radius: 50%;     
+                  width: 23.5px;     
+                  height: 23.5px;     
+                  display: flex;     
+                  align-items: center;     
+                  justify-content: center;     
+                  font-size: 12px;     
+                  font-weight: bold;     
+                  z-index: 1000;">    
+                  ${marker.id.split("-")[1]}    
+              </div>    
+          </div>    
+        `,
                 iconSize: [25, 41],
                 iconAnchor: [12, 41],
               });

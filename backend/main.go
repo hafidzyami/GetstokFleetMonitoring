@@ -61,12 +61,14 @@ func main() {
 	truckService := service.NewTruckService(truckRepo)
 	truckHistoryService := service.NewTruckHistoryService(truckHistoryRepo)
 	routingSerivce := service.NewRoutingService()
+	userService := service.NewUserService(userRepo)
 
 	// Initialize controllers
 	authController := controller.NewAuthController(authService)
 	truckController := controller.NewTruckController(truckService)
 	truckHistoryController := controller.NewTruckHistoryController(truckHistoryService)
 	routingController := controller.NewRoutingController(routingSerivce)
+	userController := controller.NewUserController(userService)
 
 	// Initialize Fiber app
 	app := fiber.New(fiber.Config{
@@ -186,6 +188,12 @@ func main() {
 	auth := api.Group("/auth")
 	auth.Post("/register", middleware.RoleAuthorization("management"), authController.Register)
 	auth.Post("/login", authController.Login)
+
+	// User routes
+	users := api.Group("/users")
+	users.Use(middleware.RoleAuthorization("management", "planner"))
+	users.Get("/", userController.GetAllUsers)
+	users.Post("/reset-password", userController.ResetPassword)
 
 	// Add truck routes
 	trucks := api.Group("/trucks")

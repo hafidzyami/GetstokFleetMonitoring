@@ -4,8 +4,11 @@ import React, { useEffect, useState, useRef } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import Image from "next/image";
+import { useAuth } from "@/app/contexts/AuthContext";
+import ApexCharts from "apexcharts";
 
-// Memperbaiki masalah icon di Leaflet
+// Fix Leaflet icon issue
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl:
@@ -18,7 +21,7 @@ L.Icon.Default.mergeOptions({
 
 // Custom truck icon
 const truckIcon = new L.Icon({
-  iconUrl: "/truck-icon.png", // Pastikan file ada di folder public
+  iconUrl: "/truck-icon.png", // Make sure this file exists in public folder
   iconSize: [32, 32],
   iconAnchor: [16, 32],
   popupAnchor: [0, -32],
@@ -37,7 +40,19 @@ function MapController({ activePosition }) {
   return null;
 }
 
-const TruckMonitor = () => {
+// Sample activity data (from layout.tsx)
+const aktivitas = [
+  { day: "Today" },
+  { day: "Monday", date: "12/12/2023" },
+  { day: "Tuesday", date: "12/12/2023" },
+  { day: "Wednesday", date: "12/12/2023" },
+  { day: "Thursday", date: "12/12/2023" },
+  { day: "Friday", date: "12/12/2023" },
+  { day: "Saturday", date: "12/12/2023" },
+  { day: "Sunday", date: "12/12/2023" },
+];
+
+const DashboardPage = () => {
   const [trucks, setTrucks] = useState({});
   const [activeTruck, setActiveTruck] = useState(null);
   const [connected, setConnected] = useState(false);
@@ -45,9 +60,12 @@ const TruckMonitor = () => {
   const [error, setError] = useState(null);
   const socketRef = useRef(null);
   const componentMountedRef = useRef(true);
+  const chartRef = useRef(null);
+  const mapRef = useRef(null);
+  const { user } = useAuth();
 
-  // Default center of the map (can be Indonesia's center)
-  const defaultCenter = [-6.2, 106.816666]; // Jakarta
+  // Default center of the map (Jakarta)
+  const defaultCenter = [-6.2, 106.816666];
 
   // Get token from localStorage
   const getToken = () => localStorage.getItem("token");
@@ -79,12 +97,6 @@ const TruckMonitor = () => {
             trucksMap[truck.mac_id] = truck;
           });
           setTrucks(trucksMap);
-
-          // Set first truck as active if exists
-          const truckList = Object.values(trucksMap);
-          if (truckList.length > 0) {
-            setActiveTruck(truckList[0]);
-          }
         }
         setError(null);
       } catch (err) {
@@ -251,7 +263,76 @@ const TruckMonitor = () => {
     };
   }, []);
 
+  // Initialize chart when activeTruck changes
+  useEffect(() => {
+    if (!activeTruck) return;
+
+    const initChart = () => {
+      const chartElement = document.querySelector("#fleet-chart");
+      if (!chartElement) return;
+
+      if (chartRef.current) {
+        chartRef.current.destroy();
+      }
+
+      const options = {
+        chart: {
+          type: "line",
+          height: 200,
+        },
+        series: [
+          {
+            name: "Fuel Level",
+            data: [70, 65, 60, 72, 68, 74, 71, 69, 73], // Sample data, replace with real truck data
+          },
+        ],
+        xaxis: {
+          categories: [
+            "Jan",
+            "Feb",
+            "Mar",
+            "Apr",
+            "May",
+            "Jun",
+            "Jul",
+            "Aug",
+            "Sep",
+          ],
+        },
+        colors: ["#009EFF"],
+        stroke: {
+          curve: "smooth",
+        },
+      };
+
+      chartRef.current = new ApexCharts(chartElement, options);
+      chartRef.current.render();
+    };
+
+    // Initialize chart with a small delay to ensure the element is ready
+    setTimeout(initChart, 200);
+
+    return () => {
+      if (chartRef.current) {
+        chartRef.current.destroy();
+        chartRef.current = null;
+      }
+    };
+  }, [activeTruck]);
+
+  // Modified to toggle selection when clicking the same truck
   const handleTruckSelect = (truck) => {
+    // If the same truck is clicked again, unselect it
+    if (activeTruck && activeTruck.mac_id === truck.mac_id) {
+      setActiveTruck(null);
+    } else {
+      // Otherwise select the new truck
+      setActiveTruck(truck);
+    }
+  };
+
+  // New function to handle marker click on the map
+  const handleMarkerClick = (truck) => {
     setActiveTruck(truck);
   };
 
@@ -277,12 +358,11 @@ const TruckMonitor = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen">
-      {/* Header */}
-      <div className="bg-slate-800 text-white px-4 py-3 flex justify-between items-center shadow-md">
-        <h1 className="text-xl font-bold">Fleet Monitoring System</h1>
+    <div className="px-4 md:px-8">
+      {/* Connection Status */}
+      <div className="flex justify-end mb-4">
         <div
-          className={`px-3 py-1 rounded-full text-sm font-medium ${
+          className={`px-3 py-1 rounded-full text-sm font-medium text-white ${
             connected ? "bg-green-500" : "bg-red-500"
           }`}
         >
@@ -291,9 +371,9 @@ const TruckMonitor = () => {
       </div>
 
       {/* Main Content */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Truck List Sidebar */}
-        <div className="w-72 bg-gray-50 p-4 overflow-y-auto border-r border-gray-200">
+      <div className="flex flex-col lg:flex-row gap-4 h-[calc(100vh-200px)]">
+        {/* Truck List Sidebar (using UI from layout.tsx) */}
+        <div className="w-full lg:w-72 bg-white shadow-md rounded-lg p-4 overflow-y-auto max-h-[400px] lg:max-h-full">
           <h2 className="text-lg font-semibold mb-3 pb-2 border-b border-gray-200">
             Trucks
           </h2>
@@ -305,23 +385,26 @@ const TruckMonitor = () => {
               {Object.values(trucks).map((truck) => (
                 <div
                   key={truck.mac_id}
-                  className={`bg-white rounded-lg p-3 shadow cursor-pointer transition duration-200 hover:shadow-md ${
+                  className={`bg-white rounded-lg p-3 border cursor-pointer transition duration-200 hover:shadow-md ${
                     activeTruck && activeTruck.mac_id === truck.mac_id
-                      ? "border-l-4 border-blue-500 bg-blue-50"
-                      : ""
+                      ? "border-l-4 border-[#009EFF] bg-[#E6F5FF]"
+                      : "border-gray-200"
                   }`}
                   onClick={() => handleTruckSelect(truck)}
                 >
-                  <div className="flex justify-between items-center mb-2">
-                    <h3 className="font-medium">
-                      {truck.plate_number || `Truck ${truck.mac_id}`}
-                    </h3>
-                    <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded">
-                      {truck.type || "Unknown"}
-                    </span>
+                  <div className="flex items-center gap-2">
+                    <i className="bx bx-car rounded-full bg-[#009EFF] text-white text-xl p-2 flex items-center justify-center"></i>
+                    <div className="flex flex-col w-full">
+                      <h3 className="font-medium">
+                        {truck.plate_number || `Truck ${truck.mac_id}`}
+                      </h3>
+                      <span className="text-xs text-gray-500">
+                        {truck.type || "Unknown Type"}
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="space-y-1 text-sm">
+                  <div className="space-y-1 text-sm mt-2">
                     <div className="flex justify-between">
                       <span className="text-gray-500">Fuel:</span>
                       <span>
@@ -331,18 +414,10 @@ const TruckMonitor = () => {
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Last Position:</span>
+                      <span className="text-gray-500">Last Update:</span>
                       <span>
                         {truck.last_position
                           ? new Date(truck.last_position).toLocaleTimeString()
-                          : "N/A"}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Last Fuel Update:</span>
-                      <span>
-                        {truck.last_fuel
-                          ? new Date(truck.last_fuel).toLocaleTimeString()
                           : "N/A"}
                       </span>
                     </div>
@@ -353,136 +428,217 @@ const TruckMonitor = () => {
           )}
         </div>
 
-        {/* Map Container */}
-        <div className="flex-1 relative">
-          <MapContainer
-            center={
-              hasPositionData && activeTruck?.latitude
-                ? [activeTruck.latitude, activeTruck.longitude]
-                : defaultCenter
-            }
-            zoom={13}
-            className="h-full w-full"
+        {/* Map and Chart Container */}
+        <div className="flex-1 flex flex-col">
+          {/* Map Container */}
+          <div 
+            ref={mapRef}
+            className={`relative flex-1 mb-4 transition-all duration-300 ${
+              activeTruck ? "h-[calc(100%-250px)]" : "h-full"
+            }`}
           >
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
+            <MapContainer
+              center={
+                hasPositionData && activeTruck?.latitude
+                  ? [activeTruck.latitude, activeTruck.longitude]
+                  : defaultCenter
+              }
+              zoom={13}
+              style={{ height: "100%", width: "100%" }}
+              whenCreated={(map) => {
+                mapRef.current = map;
+              }}
+            >
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
 
-            {Object.values(trucks).map((truck) =>
-              truck.latitude && truck.longitude ? (
-                <Marker
-                  key={truck.mac_id}
-                  position={[truck.latitude, truck.longitude]}
-                  icon={truckIcon}
-                >
-                  <Popup>
-                    <div>
-                      <h3 className="font-bold">
-                        {truck.plate_number || `Truck ${truck.mac_id}`}
-                      </h3>
-                      <p>Type: {truck.type || "Unknown"}</p>
-                      <p>
-                        Fuel:{" "}
-                        {truck.fuel !== undefined
-                          ? `${truck.fuel.toFixed(2)}%`
-                          : "N/A"}
-                      </p>
-                      <p>
-                        Position: {truck.latitude.toFixed(6)},{" "}
-                        {truck.longitude.toFixed(6)}
-                      </p>
-                    </div>
-                  </Popup>
-                </Marker>
-              ) : null
-            )}
+              {Object.values(trucks).map((truck) =>
+                truck.latitude && truck.longitude ? (
+                  <Marker
+                    key={truck.mac_id}
+                    position={[truck.latitude, truck.longitude]}
+                    icon={truckIcon}
+                    eventHandlers={{
+                      click: () => handleMarkerClick(truck),
+                    }}
+                  >
+                    <Popup>
+                      <div>
+                        <h3 className="font-bold">
+                          {truck.plate_number || `Truck ${truck.mac_id}`}
+                        </h3>
+                        <p>Type: {truck.type || "Unknown"}</p>
+                        <p>
+                          Fuel:{" "}
+                          {truck.fuel !== undefined
+                            ? `${truck.fuel.toFixed(2)}%`
+                            : "N/A"}
+                        </p>
+                        <p>
+                          Position: {truck.latitude.toFixed(6)},{" "}
+                          {truck.longitude.toFixed(6)}
+                        </p>
+                      </div>
+                    </Popup>
+                  </Marker>
+                ) : null
+              )}
 
-            {activeTruck && activeTruck.latitude && activeTruck.longitude && (
-              <MapController activePosition={activeTruck} />
-            )}
-          </MapContainer>
+              {activeTruck && activeTruck.latitude && activeTruck.longitude && (
+                <MapController activePosition={activeTruck} />
+              )}
+            </MapContainer>
+          </div>
+
+          {/* Chart Panel - Only visible when a truck is selected */}
+          {activeTruck && (
+            <div className="bg-white shadow-md py-3 rounded-lg w-full transition-opacity duration-300">
+              <div className="flex flex-col md:flex-row justify-between mb-2 gap-4 px-4">
+                <div className="flex gap-2">
+                  <button className="p-2 bg-[#009EFF] text-white rounded-[8px] flex gap-2 items-center text-sm">
+                    <i className="bx bx-radar text-lg"></i> Sensor
+                  </button>
+                  <button className="p-2 text-[#009EFF] border border-[#009EFF] rounded-[8px] flex gap-2 items-center text-sm">
+                    <i className="bx bx-data text-lg"></i> Data
+                  </button>
+                </div>
+                <div className="flex justify-between md:justify-end gap-3 text-xs md:text-sm">
+                  <div className="flex flex-col items-center">
+                    <p className="font-semibold">96.695</p>
+                    <p className="text-[#707070]">Kilometer</p>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <p className="font-semibold">03:57:34</p>
+                    <p className="text-[#707070]">Driving</p>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <p className="font-semibold">01:02:09</p>
+                    <p className="text-[#707070]">Idling</p>
+                  </div>
+                </div>
+              </div>
+              <div id="fleet-chart" className="w-full h-[200px]" />
+            </div>
+          )}
         </div>
 
-        {/* Truck Details Panel */}
+        {/* Truck Details Panel - Only visible when a truck is selected */}
         {activeTruck && (
-          <div className="w-80 bg-gray-50 p-4 overflow-y-auto border-l border-gray-200">
-            <h2 className="text-lg font-semibold mb-4 pb-2 border-b border-gray-200">
-              {activeTruck.plate_number || `Truck ${activeTruck.mac_id}`}{" "}
-              Details
-            </h2>
+          <div className="w-full lg:w-80 bg-white shadow-md rounded-lg p-4 overflow-y-auto max-h-[400px] lg:max-h-full">
+            <div className="flex flex-row lg:flex-col">
+              {/* Left column (Details) */}
+              <div className="flex-1 pr-4 lg:pr-0">
+                <h2 className="text-lg font-semibold mb-4 pb-2 border-b border-gray-200">
+                  {activeTruck.plate_number || `Truck ${activeTruck.mac_id}`}{" "}
+                  Details
+                </h2>
 
-            <div className="space-y-4">
-              <div>
-                <p className="text-xs text-gray-500 mb-1">ID</p>
-                <p className="font-medium">{activeTruck.id}</p>
-              </div>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">ID</p>
+                    <p className="font-medium">{activeTruck.id}</p>
+                  </div>
 
-              <div>
-                <p className="text-xs text-gray-500 mb-1">MAC ID</p>
-                <p className="font-medium">{activeTruck.mac_id}</p>
-              </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">MAC ID</p>
+                    <p className="font-medium">{activeTruck.mac_id}</p>
+                  </div>
 
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Type</p>
-                <p className="font-medium">{activeTruck.type || "Unknown"}</p>
-              </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Type</p>
+                    <p className="font-medium">{activeTruck.type || "Unknown"}</p>
+                  </div>
 
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Plate Number</p>
-                <p className="font-medium">
-                  {activeTruck.plate_number || "Not registered"}
-                </p>
-              </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Plate Number</p>
+                    <p className="font-medium">
+                      {activeTruck.plate_number || "Not registered"}
+                    </p>
+                  </div>
 
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Fuel Level</p>
-                <div className="flex items-center">
-                  <p className="font-medium">
-                    {activeTruck.fuel !== undefined
-                      ? `${activeTruck.fuel.toFixed(2)}%`
-                      : "N/A"}
-                  </p>
-                  {activeTruck.fuel !== undefined && (
-                    <div className="ml-2 flex-1 bg-gray-200 rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-blue-500 h-full"
-                        style={{ width: `${Math.min(activeTruck.fuel, 100)}%` }}
-                      ></div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Fuel Level</p>
+                    <div className="flex items-center">
+                      <p className="font-medium">
+                        {activeTruck.fuel !== undefined
+                          ? `${activeTruck.fuel.toFixed(2)}%`
+                          : "N/A"}
+                      </p>
+                      {activeTruck.fuel !== undefined && (
+                        <div className="ml-2 flex-1 bg-gray-200 rounded-full h-2 overflow-hidden">
+                          <div
+                            className="bg-blue-500 h-full"
+                            style={{ width: `${Math.min(activeTruck.fuel, 100)}%` }}
+                          ></div>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Position</p>
+                    <p className="font-medium">
+                      {activeTruck.latitude && activeTruck.longitude
+                        ? `${activeTruck.latitude.toFixed(
+                            6
+                          )}, ${activeTruck.longitude.toFixed(6)}`
+                        : "N/A"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">
+                      Last Position Update
+                    </p>
+                    <p className="font-medium">
+                      {activeTruck.last_position
+                        ? new Date(activeTruck.last_position).toLocaleString()
+                        : "N/A"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Last Fuel Update</p>
+                    <p className="font-medium">
+                      {activeTruck.last_fuel
+                        ? new Date(activeTruck.last_fuel).toLocaleString()
+                        : "N/A"}
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Position</p>
-                <p className="font-medium">
-                  {activeTruck.latitude && activeTruck.longitude
-                    ? `${activeTruck.latitude.toFixed(
-                        6
-                      )}, ${activeTruck.longitude.toFixed(6)}`
-                    : "N/A"}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-xs text-gray-500 mb-1">
-                  Last Position Update
-                </p>
-                <p className="font-medium">
-                  {activeTruck.last_position
-                    ? new Date(activeTruck.last_position).toLocaleString()
-                    : "N/A"}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Last Fuel Update</p>
-                <p className="font-medium">
-                  {activeTruck.last_fuel
-                    ? new Date(activeTruck.last_fuel).toLocaleString()
-                    : "N/A"}
-                </p>
+              {/* Right column (Activity) - Only on small screens */}
+              <div className="flex-1 pl-4 border-l lg:border-l-0 lg:pl-0 lg:pt-4 lg:mt-4 lg:border-t">
+                <span className="text-xs text-[#009EFF] font-medium block mb-2">Aktivitas</span>
+                <div className="flex flex-col gap-2 overflow-y-auto text-xs">
+                  {aktivitas.slice(0, 4).map((item, index) => (
+                    <div
+                      key={index}
+                      className="border border-[#F1F1F1] p-3 rounded-md"
+                    >
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="font-medium text-[#484848]">
+                          {item.day}
+                          {item.date && (
+                            <span className="text-[#ADADAD] font-light ml-2">
+                              {item.date}
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-yellow-500">!</span>
+                      </div>
+                      <div className="w-full h-1 rounded-[8px] bg-gray-300 relative">
+                        <div
+                          className="h-full bg-blue-500 rounded-[8px]"
+                          style={{ width: `${45 + Math.random() * 30}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -492,4 +648,4 @@ const TruckMonitor = () => {
   );
 };
 
-export default TruckMonitor;
+export default DashboardPage;
