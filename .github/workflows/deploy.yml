@@ -47,7 +47,6 @@ jobs:
   deploy:
     name: Deploy to Production EC2
     runs-on: ubuntu-latest
-    # Deploy will run even if lint check fails
     
     steps:
     - name: Checkout code
@@ -118,7 +117,7 @@ jobs:
               git checkout main
               git pull origin main
             else
-              # If directory doesn't exist, create and clone
+              # If directory doesn'\''t exist, create and clone
               echo "Directory not found, creating and cloning repository..."
               mkdir -p ~/GetstokFleetMonitoring
               cd ~/GetstokFleetMonitoring
