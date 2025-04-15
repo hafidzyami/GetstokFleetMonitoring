@@ -3,7 +3,7 @@ package service
 import (
 	"bytes"
 	"errors"
-	"io/ioutil"
+	"io" // Replace io/ioutil with io
 	"net/http"
 	"os"
 )
@@ -50,8 +50,8 @@ func (s *routingService) GetDirections(requestBody []byte) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 
-	// Baca response body
-	responseBody, err := ioutil.ReadAll(resp.Body)
+	// Baca response body using io.ReadAll instead of ioutil.ReadAll
+	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, errors.New("Gagal membaca response: " + err.Error())
 	}

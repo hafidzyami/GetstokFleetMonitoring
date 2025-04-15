@@ -582,59 +582,6 @@ const BuatRutePage = () => {
     }
   };
 
-  // Handle destination fields
-  const addDestination = () => {
-    setDestinations([...destinations, ""]);
-  };
-
-  const updateDestination = (index: number, value: string) => {
-    const newDestinations = [...destinations];
-    newDestinations[index] = value;
-    setDestinations(newDestinations);
-  };
-
-  const removeDestination = (index: number) => {
-    if (destinations.length > 1) {
-      const newDestinations = [...destinations];
-      newDestinations.splice(index, 1);
-      setDestinations(newDestinations);
-
-      // Also remove the corresponding marker if it exists
-      if (index < markers.length) {
-        const markerToRemove = markers[index];
-        removeMarker(markerToRemove.id);
-      }
-    }
-  };
-
-  // Focus the search control and set up callback for this input
-  const startAddressSearch = (index: number) => {
-    if (!mapRef.current) return;
-
-    // Set up callback for when search result is selected
-    setSearchResultCallback((latlng: LatLngTuple, address: string) => {
-      const newDestinations = [...destinations];
-      newDestinations[index] = address;
-      setDestinations(newDestinations);
-    });
-
-    // Focus and clear the search input
-    const searchBar = document.querySelector(".leaflet-control-geosearch form");
-    const searchInput = document.querySelector(
-      ".leaflet-control-geosearch form input"
-    );
-
-    if (searchBar && searchInput) {
-      // Make search bar visible by triggering the click event
-      (searchBar as HTMLElement).classList.add("open");
-      (searchInput as HTMLInputElement).focus();
-      (searchInput as HTMLInputElement).value = destinations[index] || "";
-
-      // Optional: Select all text in the input
-      (searchInput as HTMLInputElement).select();
-    }
-  };
-
   // Handle form submission
   const handleGenerate = () => {
     if (!driver) {
