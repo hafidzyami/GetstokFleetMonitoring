@@ -55,7 +55,9 @@ const BuatRutePage = () => {
   const [segments, setSegments] = useState<MapSegment[]>([]);
   const [tollways, setTollways] = useState<TollwaySegment[]>([]);
   const [impassibleMarkers, setImpassibleMarkers] = useState<Marker[]>([]);
-  const [listOfImpassibleMarkers, setListOfImpassibleMarkers] = useState<(Marker[] | AvoidanceInfo)[]>([]);
+  const [listOfImpassibleMarkers, setListOfImpassibleMarkers] = useState<
+    (Marker[] | AvoidanceInfo)[]
+  >([]);
   const [center, setCenter] = useState<LatLngTuple>([-6.8904, 107.6102]);
   const [flagImpassible, setFlagImpassible] = useState<boolean>(false);
   const [routeGeometry, setRouteGeometry] = useState<string>("");
@@ -80,21 +82,110 @@ const BuatRutePage = () => {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [drivers, setDrivers] = useState<Array<{ id: string; name: string }>>(
+    []
+  );
+  const [trucks, setTrucks] = useState<
+    Array<{ id: string; plate_number: string; mac_id: string }>
+  >([]);
+  const [isLoadingDrivers, setIsLoadingDrivers] = useState(false);
+  const [isLoadingTrucks, setIsLoadingTrucks] = useState(false);
+
+  const fetchDrivers = async () => {
+    setIsLoadingDrivers(true);
+    try {
+      const response = await fetch("/api/v1/users?role=driver", {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
+  
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+  
+      const responseJson = await response.json();
+      
+      // Extract the data array from the response object
+      const data = responseJson.data || [];
+      
+      if (Array.isArray(data)) {
+        setDrivers(data.map((driver: any) => ({
+          id: driver.id || `driver-${Date.now()}-${Math.random()}`,
+          name: driver.name || driver.username || 'Unknown Driver'
+        })));
+      } else {
+        console.warn("Unexpected drivers API data format:", responseJson);
+        setDrivers([]);
+      }
+    } catch (error) {
+      console.error("Error fetching drivers:", error);
+      setDrivers([]);
+    } finally {
+      setIsLoadingDrivers(false);
+    }
+  };
+  
+  const fetchTrucks = async () => {
+    setIsLoadingTrucks(true);
+    try {
+      const response = await fetch("/api/v1/trucks", {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
+  
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+  
+      const responseJson = await response.json();
+      
+      // Extract the data array from the response object
+      const data = responseJson.data || [];
+      
+      if (Array.isArray(data)) {
+        setTrucks(data.map((truck: any) => ({
+          id: truck.id || `truck-${Date.now()}-${Math.random()}`,
+          plate_number: truck.plate_number || 'N/A',
+          mac_id: truck.mac_id || 'N/A',
+          displayValue: `${truck.plate_number || 'N/A'}/${truck.mac_id || 'N/A'}`
+        })));
+      } else {
+        console.warn("Unexpected trucks API data format:", responseJson);
+        setTrucks([]);
+      }
+    } catch (error) {
+      console.error("Error fetching trucks:", error);
+      setTrucks([]);
+    } finally {
+      setIsLoadingTrucks(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDrivers();
+    fetchTrucks();
+  }, []);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
       setAvoidancePhoto(file);
-      
+
       const reader = new FileReader();
       reader.onloadend = () => {
         const dataUrl = reader.result as string;
         setPhotoPreview(dataUrl);
-        
+
         // Simpan ke localStorage (hati-hati dengan ukuran!)
         try {
           localStorage.setItem(`avoidance-photo-${Date.now()}`, dataUrl);
         } catch (e) {
-          console.error('Error saving to localStorage, likely size exceeded:', e);
+          console.error(
+            "Error saving to localStorage, likely size exceeded:",
+            e
+          );
         }
       };
       reader.readAsDataURL(file);
@@ -293,17 +384,25 @@ const BuatRutePage = () => {
     };
 
     if (listOfImpassibleMarkers.length > 0) {
-      const impassibleCoordinates = listOfImpassibleMarkers.flatMap((avoidance) => {
-        // Check if we're dealing with the new format or old format
-        if (Array.isArray(avoidance)) {
-          // Old format (just an array of markers)
-          return avoidance.map((marker) => [marker.position[1], marker.position[0]]);
-        } else {
-          // New format (object with markers property)
-          return avoidance.markers.map((marker) => [marker.position[1], marker.position[0]]);
+      const impassibleCoordinates = listOfImpassibleMarkers.flatMap(
+        (avoidance) => {
+          // Check if we're dealing with the new format or old format
+          if (Array.isArray(avoidance)) {
+            // Old format (just an array of markers)
+            return avoidance.map((marker) => [
+              marker.position[1],
+              marker.position[0],
+            ]);
+          } else {
+            // New format (object with markers property)
+            return avoidance.markers.map((marker) => [
+              marker.position[1],
+              marker.position[0],
+            ]);
+          }
         }
-      });
-  
+      );
+
       if (impassibleCoordinates.length >= 3) {
         body.options = {
           avoid_polygons: {
@@ -341,7 +440,7 @@ const BuatRutePage = () => {
         const endIdx = waytype[1];
         const typeValue = waytype[2];
         const segment = latLngs.slice(startIdx, endIdx + 1) as LatLngTuple[];
-        setSegments((prev : MapSegment[]) => [...prev, { segment, typeValue }]);
+        setSegments((prev: MapSegment[]) => [...prev, { segment, typeValue }]);
       }
 
       // Process tollways
@@ -351,7 +450,10 @@ const BuatRutePage = () => {
         const endIdx = tollway[1];
         const tollwayValue = tollway[2];
         const segment = latLngs.slice(startIdx, endIdx + 1) as LatLngTuple[];
-        setTollways((prev : TollwaySegment[]) => [...prev, { segment, tollwayValue }]);
+        setTollways((prev: TollwaySegment[]) => [
+          ...prev,
+          { segment, tollwayValue },
+        ]);
       }
 
       // Extract surface type information
@@ -510,7 +612,10 @@ const BuatRutePage = () => {
     );
   };
 
-  const updateListOfImpassibleMarkers = (id: string, newPosition: LatLngTuple) => {
+  const updateListOfImpassibleMarkers = (
+    id: string,
+    newPosition: LatLngTuple
+  ) => {
     setListOfImpassibleMarkers((prev) =>
       prev.map((avoidanceInfo) => {
         // Check if we're dealing with the new format or old format
@@ -525,7 +630,7 @@ const BuatRutePage = () => {
             ...avoidanceInfo,
             markers: avoidanceInfo.markers.map((marker) =>
               marker.id === id ? { ...marker, position: newPosition } : marker
-            )
+            ),
           };
         }
       })
@@ -553,7 +658,10 @@ const BuatRutePage = () => {
     };
 
     // Add to the list of impassible markers with the additional info
-    setListOfImpassibleMarkers((prev) => [...prev, avoidanceInfo as (Marker[] | AvoidanceInfo)]);
+    setListOfImpassibleMarkers((prev) => [
+      ...prev,
+      avoidanceInfo as Marker[] | AvoidanceInfo,
+    ]);
 
     // Reset form
     setImpassibleMarkers([]);
@@ -659,13 +767,18 @@ const BuatRutePage = () => {
             className="text-sm px-6 py-4 border-[2px] border-[#F1F1F1] rounded-[8px]"
             value={driver}
             onChange={(e) => setDriver(e.target.value)}
+            disabled={isLoadingDrivers}
           >
-            <option value="">Pilih nama Supir Mobil Anda di sini</option>
-            <option value="Sucipto Adi Nugroho Wahyudin">
-              Sucipto Adi Nugroho Wahyudin
+            <option value="">
+              {isLoadingDrivers
+                ? "Memuat data supir..."
+                : "Pilih nama Supir Mobil Anda di sini"}
             </option>
-            <option value="Kartono Sucipto">Kartono Sucipto</option>
-            <option value="andi Bahras">andi Bahras</option>
+            {drivers.map((driverItem) => (
+              <option key={driverItem.id} value={driverItem.name}>
+                {driverItem.name}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -678,12 +791,18 @@ const BuatRutePage = () => {
             className="text-sm px-6 py-4 border-[2px] border-[#F1F1F1] rounded-[8px]"
             value={vehiclePlate}
             onChange={(e) => setVehiclePlate(e.target.value)}
+            disabled={isLoadingTrucks}
           >
-            <option value="">Pilih Plat Nomor Kendaraan Anda di sini</option>
-            <option value="B1234 SUV">B1234 SUV</option>
-            <option value="B 3832 USY">B 3832 USY</option>
-            <option value="B 0239 IIA">B 0239 IIA</option>
-            <option value="B 2812 KUS">B 2812 KUS</option>
+            <option value="">
+              {isLoadingTrucks
+                ? "Memuat data kendaraan..."
+                : "Pilih Plat Nomor Kendaraan Anda di sini"}
+            </option>
+            {trucks.map((truck) => (
+              <option key={truck.id} value={truck.displayValue}>
+                {truck.displayValue}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -1005,10 +1124,10 @@ const BuatRutePage = () => {
                 {listOfImpassibleMarkers.map((avoidanceInfo, polygonIndex) => {
                   // Check if we're dealing with the new format or old format
                   const isNewFormat = !Array.isArray(avoidanceInfo);
-                  const markersArray = isNewFormat 
-                    ? (avoidanceInfo as AvoidanceInfo).markers 
-                    : avoidanceInfo as Marker[];
-                  
+                  const markersArray = isNewFormat
+                    ? (avoidanceInfo as AvoidanceInfo).markers
+                    : (avoidanceInfo as Marker[]);
+
                   return (
                     <div
                       key={polygonIndex}
@@ -1042,24 +1161,27 @@ const BuatRutePage = () => {
                       <div className="text-xs ml-1 mb-1">
                         {isNewFormat && (
                           <div className="text-gray-700 font-medium">
-                            {(avoidanceInfo as AvoidanceInfo).reason ? 
-                              `Alasan: ${(avoidanceInfo as AvoidanceInfo).reason}` : ""}
+                            {(avoidanceInfo as AvoidanceInfo).reason
+                              ? `Alasan: ${
+                                  (avoidanceInfo as AvoidanceInfo).reason
+                                }`
+                              : ""}
                           </div>
                         )}
                         <div className="text-gray-500 flex items-center gap-1">
-                          <span>
-                            {markersArray.length} titik
-                          </span>
-                          {isNewFormat && (avoidanceInfo as AvoidanceInfo).isPermanent && (
-                            <span className="bg-red-100 text-red-800 text-xs font-medium px-2 py-0.5 rounded">
-                              Permanen
-                            </span>
-                          )}
-                          {isNewFormat && (avoidanceInfo as AvoidanceInfo).photo && (
-                            <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-0.5 rounded">
-                              Dengan Foto
-                            </span>
-                          )}
+                          <span>{markersArray.length} titik</span>
+                          {isNewFormat &&
+                            (avoidanceInfo as AvoidanceInfo).isPermanent && (
+                              <span className="bg-red-100 text-red-800 text-xs font-medium px-2 py-0.5 rounded">
+                                Permanen
+                              </span>
+                            )}
+                          {isNewFormat &&
+                            (avoidanceInfo as AvoidanceInfo).photo && (
+                              <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-0.5 rounded">
+                                Dengan Foto
+                              </span>
+                            )}
                         </div>
                       </div>
                     </div>
