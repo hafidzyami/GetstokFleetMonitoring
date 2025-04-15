@@ -37,6 +37,13 @@ interface TollwaySegment {
   tollwayValue: number;
 }
 
+interface Truck {
+  id: string;
+  plate_number: string;
+  mac_id: string;
+  displayValue: string;
+}
+
 const BuatRutePage = () => {
   const router = useRouter();
 
@@ -85,9 +92,7 @@ const BuatRutePage = () => {
   const [drivers, setDrivers] = useState<Array<{ id: string; name: string }>>(
     []
   );
-  const [trucks, setTrucks] = useState<
-    Array<{ id: string; plate_number: string; mac_id: string }>
-  >([]);
+  const [trucks, setTrucks] = useState<Truck[]>([]);
   const [isLoadingDrivers, setIsLoadingDrivers] = useState(false);
   const [isLoadingTrucks, setIsLoadingTrucks] = useState(false);
 
@@ -99,21 +104,23 @@ const BuatRutePage = () => {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
       });
-  
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-  
+
       const responseJson = await response.json();
-      
+
       // Extract the data array from the response object
       const data = responseJson.data || [];
-      
+
       if (Array.isArray(data)) {
-        setDrivers(data.map((driver: any) => ({
-          id: driver.id || `driver-${Date.now()}-${Math.random()}`,
-          name: driver.name || driver.username || 'Unknown Driver'
-        })));
+        setDrivers(
+          data.map((driver: any) => ({
+            id: driver.id || `driver-${Date.now()}-${Math.random()}`,
+            name: driver.name || driver.username || "Unknown Driver",
+          }))
+        );
       } else {
         console.warn("Unexpected drivers API data format:", responseJson);
         setDrivers([]);
@@ -125,7 +132,7 @@ const BuatRutePage = () => {
       setIsLoadingDrivers(false);
     }
   };
-  
+
   const fetchTrucks = async () => {
     setIsLoadingTrucks(true);
     try {
@@ -134,23 +141,28 @@ const BuatRutePage = () => {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
       });
-  
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-  
+
       const responseJson = await response.json();
-      
+
       // Extract the data array from the response object
       const data = responseJson.data || [];
-      
+
       if (Array.isArray(data)) {
-        setTrucks(data.map((truck: any) => ({
+        // This now creates objects that match the Truck interface
+        const formattedTrucks: Truck[] = data.map((truck: any) => ({
           id: truck.id || `truck-${Date.now()}-${Math.random()}`,
-          plate_number: truck.plate_number || 'N/A',
-          mac_id: truck.mac_id || 'N/A',
-          displayValue: `${truck.plate_number || 'N/A'}/${truck.mac_id || 'N/A'}`
-        })));
+          plate_number: truck.plate_number || "N/A",
+          mac_id: truck.mac_id || "N/A",
+          displayValue: `${truck.plate_number || "N/A"}/${
+            truck.mac_id || "N/A"
+          }`,
+        }));
+
+        setTrucks(formattedTrucks);
       } else {
         console.warn("Unexpected trucks API data format:", responseJson);
         setTrucks([]);
