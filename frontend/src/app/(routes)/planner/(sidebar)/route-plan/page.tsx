@@ -157,7 +157,7 @@ const BuatRutePage = () => {
           id: truck.id || `truck-${Date.now()}-${Math.random()}`,
           plate_number: truck.plate_number || "N/A",
           mac_id: truck.mac_id || "N/A",
-          displayValue: `${truck.plate_number || "N/A"}/${
+          displayValue: `${truck.plate_number || "N/A"} | ${
             truck.mac_id || "N/A"
           }`,
         }));
@@ -703,7 +703,7 @@ const BuatRutePage = () => {
   };
 
   // Handle form submission
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!driver) {
       alert("Silakan pilih nama supir terlebih dahulu");
       return;
@@ -719,7 +719,82 @@ const BuatRutePage = () => {
       return;
     }
 
-    router.push("/planner/buat-rute/1");
+    // Show loading indicator
+    setIsLoadingRoute(true);
+
+    try {
+      // Prepare waypoints
+      const waypoints = markers.map((marker) => ({
+        latitude: marker.position[0],
+        longitude: marker.position[1],
+        address: marker.address || "",
+      }));
+
+      // Prepare avoidance areas
+      const avoidanceAreas = listOfImpassibleMarkers.map((area) => {
+        // Check if we're dealing with the new format or old format
+        if (Array.isArray(area)) {
+          // Old format (just an array of markers)
+          return {
+            reason: "Unspecified",
+            is_permanent: false,
+            points: area.map((marker) => ({
+              latitude: marker.position[0],
+              longitude: marker.position[1],
+            })),
+          };
+        } else {
+          // New format (object with markers property)
+          return {
+            reason: area.reason,
+            is_permanent: area.isPermanent,
+            photo: area.photoData,
+            points: area.markers.map((marker) => ({
+              latitude: marker.position[0],
+              longitude: marker.position[1],
+            })),
+          };
+        }
+      });
+
+      let parts = vehiclePlate.split(" | ");
+      let vehicle_plate = `${parts[0]}/${parts[1]}`;
+
+      // Make API request to create route plan
+      const response = await fetch("/api/v1/route-plans", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({
+          driver_name: driver,
+          vehicle_plate: vehicle_plate,
+          route_geometry: routeGeometry,
+          waypoints: waypoints,
+          avoidance_areas: avoidanceAreas,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || "Gagal menyimpan rute");
+      }
+
+      const data = await response.json();
+
+      // Save the route plan ID to localStorage or state if needed
+      const routePlanId = data.data?.id;
+      localStorage.setItem("currentRoutePlanId", routePlanId);
+
+      // Navigate to the next page
+      router.push(`/planner/route-history/${routePlanId}`);
+    } catch (error: any) {
+      console.error("Error creating route plan:", error);
+      alert(`Gagal menyimpan rute: ${error.message}`);
+    } finally {
+      setIsLoadingRoute(false);
+    }
   };
 
   // Append search control style to document head

@@ -10,6 +10,7 @@ import (
 type TruckRepository interface {
 	Create(truck *model.Truck) error
 	FindByMacID(macID string) (*model.Truck, error)
+	FindByID(id uint) (*model.Truck, error)
 	FindAll() ([]*model.Truck, error)
 	Update(truck *model.Truck) error
 	UpdateInfo(macID string, plateNumber string, truckType string) error
@@ -30,6 +31,16 @@ func (r *truckRepository) Create(truck *model.Truck) error {
 func (r *truckRepository) FindByMacID(macID string) (*model.Truck, error) {
 	var truck model.Truck
 	err := config.DB.Where("mac_id = ?", macID).First(&truck).Error
+	if err != nil {
+		return nil, err
+	}
+	return &truck, nil
+}
+
+// FindByID finds truck by ID
+func (r *truckRepository) FindByID(id uint) (*model.Truck, error) {
+	var truck model.Truck
+	err := config.DB.First(&truck, id).Error
 	if err != nil {
 		return nil, err
 	}

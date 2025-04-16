@@ -1,5 +1,33 @@
 basePath: /api/v1
 definitions:
+  model.AvoidanceAreaRequest:
+    properties:
+      is_permanent:
+        type: boolean
+      photo:
+        description: Base64 encoded image
+        type: string
+      points:
+        items:
+          $ref: '#/definitions/model.AvoidancePointRequest'
+        minItems: 3
+        type: array
+      reason:
+        type: string
+    required:
+    - points
+    - reason
+    type: object
+  model.AvoidancePointRequest:
+    properties:
+      latitude:
+        type: number
+      longitude:
+        type: number
+    required:
+    - latitude
+    - longitude
+    type: object
   model.BaseResponse:
     properties:
       apiVersion:
@@ -74,6 +102,28 @@ definitions:
     required:
     - user_id
     type: object
+  model.RoutePlanCreateRequest:
+    properties:
+      avoidance_areas:
+        items:
+          $ref: '#/definitions/model.AvoidanceAreaRequest'
+        type: array
+      driver_name:
+        type: string
+      route_geometry:
+        type: string
+      vehicle_plate:
+        type: string
+      waypoints:
+        items:
+          $ref: '#/definitions/model.WaypointRequest'
+        minItems: 2
+        type: array
+    required:
+    - driver_name
+    - vehicle_plate
+    - waypoints
+    type: object
   model.RoutingRequest:
     properties:
       coordinates:
@@ -115,6 +165,18 @@ definitions:
     required:
     - new_password
     - old_password
+    type: object
+  model.WaypointRequest:
+    properties:
+      address:
+        type: string
+      latitude:
+        type: number
+      longitude:
+        type: number
+    required:
+    - latitude
+    - longitude
     type: object
 host: localhost:8080
 info:
@@ -254,6 +316,197 @@ paths:
       summary: Update user password
       tags:
       - profile
+  /route-plans:
+    get:
+      consumes:
+      - application/json
+      description: Get a list of all route plans
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Route plans data
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get all route plans
+      tags:
+      - route-plans
+    post:
+      consumes:
+      - application/json
+      description: Create a new route plan with waypoints and avoidance areas
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Route plan details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.RoutePlanCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Successfully created route plan
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a new route plan
+      tags:
+      - route-plans
+  /route-plans/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a route plan and all associated data
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Route plan ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success message
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a route plan
+      tags:
+      - route-plans
+    get:
+      consumes:
+      - application/json
+      description: Get detailed information about a specific route plan
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Route plan ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Route plan data
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get route plan by ID
+      tags:
+      - route-plans
+  /route-plans/{id}/status:
+    put:
+      consumes:
+      - application/json
+      description: Update the status of a route plan
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Route plan ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Status update
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties:
+            type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success message
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Update route plan status
+      tags:
+      - route-plans
   /routing/directions:
     post:
       consumes:

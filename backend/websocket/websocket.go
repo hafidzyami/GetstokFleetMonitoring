@@ -1,5 +1,4 @@
-// Update your websocket/websocket.go file to include these improvements
-
+// backend/websocket/websocket.go
 package websocket
 
 import (
@@ -41,8 +40,8 @@ func NewHub() *Hub {
 func (h *Hub) Run() {
     log.Println("Starting WebSocket hub")
     
-    // Start a ticker to check for stale connections
-    ticker := time.NewTicker(30 * time.Second)
+    // Start a ticker to check for stale connections - using 5 minutes instead of 30 seconds
+    ticker := time.NewTicker(5 * time.Minute)
     defer ticker.Stop()
     
     for {
@@ -65,6 +64,7 @@ func (h *Hub) Run() {
             
         case message := <-h.broadcast:
             h.mu.Lock()
+            clientCount := len(h.clients)
             for client := range h.clients {
                 select {
                 case client.Send <- message:
@@ -73,23 +73,26 @@ func (h *Hub) Run() {
                     // Client's send buffer is full, assume it's dead
                     close(client.Send)
                     delete(h.clients, client)
+                    clientCount--
+                    log.Println("Client removed due to full buffer, new count:", clientCount)
                 }
             }
             h.mu.Unlock()
             
         case <-ticker.C:
-            // Check for stale connections
+            // Check for stale connections - increasing timeout to 10 minutes
             now := time.Now()
             h.mu.Lock()
             for client := range h.clients {
-                if now.Sub(client.LastPing) > 2*time.Minute {
-                    log.Println("Closing stale connection (no ping for 2 minutes)")
+                if now.Sub(client.LastPing) > 10*time.Minute {
+                    log.Printf("Closing stale connection (no ping for 10 minutes): %v", now.Sub(client.LastPing))
                     client.Conn.Close()
                     delete(h.clients, client)
                     close(client.Send)
                 }
             }
             h.mu.Unlock()
+            log.Printf("Stale connection check complete. Current client count: %d", h.GetClientCount())
         }
     }
 }

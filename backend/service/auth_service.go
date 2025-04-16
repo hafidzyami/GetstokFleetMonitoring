@@ -36,7 +36,7 @@ func (s *authService) Register(req model.RegisterRequest) (*model.AuthResponse, 
 
 	// Hash password
 	// TODO
-	hashedPassword, err := utils.HashPassword("getstok1234")
+	hashedPassword, err := utils.HashPassword("password123")
 	if err != nil {
 		return nil, err
 	}

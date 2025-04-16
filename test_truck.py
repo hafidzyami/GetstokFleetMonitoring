@@ -180,7 +180,7 @@ class TruckSimulator:
             logger.info(f"Truck {self.truck_id}: Pos=({self.latitude:.6f}, {self.longitude:.6f}), Fuel={self.fuel_level:.2f}%")
             
             # Wait for the next interval
-            time.sleep(self.interval)
+            time.sleep(60)
     
     def stop(self):
         """Stop the truck simulator."""

@@ -47,6 +47,7 @@ func main() {
 	userRepo := repository.NewUserRepository()
 	truckRepo := repository.NewTruckRepository()
 	truckHistoryRepo := repository.NewTruckHistoryRepository()
+	routePlanRepo := repository.NewRoutePlanRepository()
 
 	// Set user repository in utils and mqtt package
 	utils.SetUserRepository(userRepo)
@@ -62,6 +63,7 @@ func main() {
 	truckHistoryService := service.NewTruckHistoryService(truckHistoryRepo)
 	routingSerivce := service.NewRoutingService()
 	userService := service.NewUserService(userRepo)
+	routingPlanService := service.NewRoutePlanService(routePlanRepo, truckRepo, userRepo)
 
 	// Initialize controllers
 	authController := controller.NewAuthController(authService)
@@ -69,6 +71,7 @@ func main() {
 	truckHistoryController := controller.NewTruckHistoryController(truckHistoryService)
 	routingController := controller.NewRoutingController(routingSerivce)
 	userController := controller.NewUserController(userService)
+	routePlanController := controller.NewRoutePlanController(routingPlanService)
 
 	// Initialize Fiber app
 	app := fiber.New(fiber.Config{
@@ -118,7 +121,7 @@ func main() {
 		log.Println("New WebSocket client connected")
 
 		// Register client
-		client := &websocket.Client{Conn: c}
+		client := &websocket.Client{Conn: c, LastPing: time.Now()}
 		hub := websocket.GetHub()
 		hub.Register(client)
 
@@ -172,6 +175,19 @@ func main() {
 
 			// Process incoming messages
 			log.Printf("Received message: %s", message)
+
+			// Update the client's LastPing time when we receive any message
+			client.LastPing = time.Now()
+
+			// Add special handling for pong messages
+			var msg map[string]interface{}
+			if err := json.Unmarshal(message, &msg); err == nil {
+				if msgType, ok := msg["type"].(string); ok && msgType == "pong" {
+					log.Printf("Received pong from client, updating LastPing")
+					// Explicitly update LastPing in the hub
+					hub.UpdateClientPing(client)
+				}
+			}
 		}
 
 		// When we exit the loop, close the done channel to signal goroutines to stop
@@ -180,7 +196,7 @@ func main() {
 		// Unregister client when function returns
 		hub.Unregister(client)
 	}))
-
+	
 	// Routes
 	api := app.Group("/api/v1")
 
@@ -208,6 +224,15 @@ func main() {
 	// Routing routes
 	routing := api.Group("/routing")
 	routing.Post("/directions", routingController.GetDirections)
+
+	// Route plans routes
+	routePlans := api.Group("/route-plans")
+	routePlans.Use(middleware.Protected())
+	routePlans.Post("/", routePlanController.CreateRoutePlan)
+	routePlans.Get("/", routePlanController.GetAllRoutePlans)
+	routePlans.Get("/:id", routePlanController.GetRoutePlanByID)
+	routePlans.Put("/:id/status", routePlanController.UpdateRoutePlanStatus)
+	routePlans.Delete("/:id", routePlanController.DeleteRoutePlan)
 
 	// Protected routes
 	api.Get("/profile", middleware.Protected(), authController.GetProfile)
