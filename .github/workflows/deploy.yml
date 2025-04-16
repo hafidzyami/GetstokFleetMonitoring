@@ -8,6 +8,8 @@ on:
       - 'docs/**'
       - mqtt_broker/**
       - .github/workflows/deploy-staging.yml
+      - hardware/**
+      - firmware/**
   workflow_dispatch:
 
 jobs:
