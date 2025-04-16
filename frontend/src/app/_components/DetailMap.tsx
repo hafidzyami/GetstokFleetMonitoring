@@ -37,13 +37,17 @@ interface DetailMapProps {
   onMapRef?: (map: L.Map) => void;
 }
 
-// Component to set the map view
-const MapViewSetter = ({ center, zoom }: { center: [number, number]; zoom: number }) => {
+// Component to set the map view and handle map reference
+const MapViewSetter = ({ center, zoom, onMapRef }: { center: [number, number]; zoom: number; onMapRef?: (map: L.Map) => void }) => {
   const map = useMap();
   
   useEffect(() => {
     map.setView(center, zoom);
-  }, [center, zoom, map]);
+    // Pass the map instance to the parent component if onMapRef is provided
+    if (onMapRef) {
+      onMapRef(map);
+    }
+  }, [center, zoom, map, onMapRef]);
   
   return null;
 };
@@ -159,7 +163,9 @@ const DetailMap: React.FC<DetailMapProps> = ({
 
       const point = event.detail;
       if (point && point.lat && point.lng) {
-        const map = document.querySelector('.leaflet-map-pane')?.closest('.leaflet-container')?._leaflet_map;
+        // Use proper TypeScript technique for accessing custom properties
+        const container = document.querySelector('.leaflet-map-pane')?.closest('.leaflet-container') as HTMLElement;
+        const map = container ? (container as any)._leaflet_map : null;
         
         if (map) {
           const hoverIcon = L.divIcon({
@@ -244,14 +250,14 @@ const DetailMap: React.FC<DetailMapProps> = ({
       center={center}
       zoom={zoom}
       style={{ height: "100%", width: "100%" }}
-      whenReady={(map) => onMapRef && onMapRef(map.target)}
     >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
 
-      <MapViewSetter center={center} zoom={zoom} />
+      {/* Use the MapViewSetter component to handle map reference and view settings */}
+      <MapViewSetter center={center} zoom={zoom} onMapRef={onMapRef} />
       <Legend />
       
       {/* Road segments with different colors */}

@@ -3,9 +3,11 @@ import React, { useEffect, useState, useMemo, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { format } from "date-fns";
-import type { LatLngTuple } from "leaflet";
-import { getLatLngsForMap } from "@/app/utils/polylineDecoder";
+import { id } from "date-fns/locale";
+// Import types directly to avoid confusion
+import "leaflet";
 import "boxicons/css/boxicons.min.css";
+import { getLatLngsForMap } from "@/app/utils/polylineDecoder";
 
 // Interfaces
 interface Waypoint {
@@ -57,16 +59,29 @@ interface ApiResponse {
   };
 }
 
+// Define the marker types to match DetailMap props
+interface MapMarker {
+  id: string;
+  position: [number, number]; // Explicit tuple type to match DetailMap
+  address?: string;
+}
+
+interface AvoidanceMarker {
+  id: string;
+  position: [number, number]; // Explicit tuple type to match DetailMap
+  reason?: string;
+}
+
 const RouteHistoryPage = () => {
   const params = useParams();
   const router = useRouter();
   const [routePlan, setRoutePlan] = useState<RoutePlan | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [markers, setMarkers] = useState<{ id: string; position: LatLngTuple; address?: string }[]>([]);
-  const [impassibleMarkers, setImpassibleMarkers] = useState<{ id: string; position: LatLngTuple; reason?: string }[][]>([]);
-  const [center, setCenter] = useState<LatLngTuple>([-6.8904, 107.6102]); // Default to Bandung
-  const [routeLatLngs, setRouteLatLngs] = useState<LatLngTuple[]>([]);
+  const [markers, setMarkers] = useState<MapMarker[]>([]);
+  const [impassibleMarkers, setImpassibleMarkers] = useState<AvoidanceMarker[][]>([]);
+  const [center, setCenter] = useState<[number, number]>([-6.8904, 107.6102]); // Default to Bandung
+  const [routeLatLngs, setRouteLatLngs] = useState<[number, number][]>([]); // Explicit tuple type
   const mapRef = useRef<any>(null);
 
   // Load Map component dynamically to avoid SSR issues
@@ -110,11 +125,11 @@ const RouteHistoryPage = () => {
         console.log("Route plan data:", data);
         setRoutePlan(data.data);
         
-        // Process waypoints for map markers
+        // Process waypoints for map markers - ensure they are [number, number] tuples
         if (data.data.waypoints && data.data.waypoints.length > 0) {
           const waypointMarkers = data.data.waypoints.map((waypoint) => ({
             id: `waypoint-${waypoint.id}`,
-            position: [waypoint.latitude, waypoint.longitude] as LatLngTuple,
+            position: [waypoint.latitude, waypoint.longitude] as [number, number], // Cast as explicit tuple
             address: waypoint.address || `Point ${waypoint.order + 1}`,
           }));
           setMarkers(waypointMarkers);
@@ -123,23 +138,23 @@ const RouteHistoryPage = () => {
           setCenter([data.data.waypoints[0].latitude, data.data.waypoints[0].longitude]);
         }
         
-        // Process avoidance areas
+        // Process avoidance areas - ensure positions are [number, number] tuples
         if (data.data.avoidance_areas && data.data.avoidance_areas.length > 0) {
           const avoidanceMarkersGroups = data.data.avoidance_areas.map(area => 
             area.points.map(point => ({
               id: `avoidance-${area.id}-${point.id}`,
-              position: [point.latitude, point.longitude] as LatLngTuple,
+              position: [point.latitude, point.longitude] as [number, number], // Cast as explicit tuple
               reason: area.reason,
             }))
           );
           setImpassibleMarkers(avoidanceMarkersGroups);
-        } else{
+        } else {
           setImpassibleMarkers([]);
         }
         
-        // Process route geometry
+        // Process route geometry - ensure they are [number, number] tuples
         if (data.data.route_geometry) {
-          const latLngs = getLatLngsForMap(data.data.route_geometry);
+          const latLngs = getLatLngsForMap(data.data.route_geometry) as [number, number][]; // Cast as explicit tuple array
           setRouteLatLngs(latLngs);
         }
 
@@ -439,7 +454,6 @@ const RouteHistoryPage = () => {
               routePath={routeLatLngs}
               zoom={12}
               onMapRef={(map) => mapRef.current = map}
-              // TODO SEGMENT AND TOLLS
             />
           </div>
         </div>
