@@ -39,6 +39,7 @@ interface AvoidanceArea {
   has_photo: boolean;
   photo_url?: string;
   requester_id?: number;
+  status?: string;
   points: AvoidancePointResponse[];
 }
 
@@ -89,6 +90,7 @@ interface AvoidanceMarker {
   reason?: string;
   photoURL?: string;
   requesterID?: number;
+  status?: string;
 }
 
 // Interface untuk area baru yang akan ditandai
@@ -195,15 +197,16 @@ const DriverRouteDetailPage = () => {
 
         // Process avoidance areas
         if (data.data.avoidance_areas && data.data.avoidance_areas.length > 0) {
-        const avoidanceMarkersGroups = data.data.avoidance_areas.map((area) =>
-        area.points.map((point) => ({
-        id: `avoidance-${area.id}-${point.id}`,
-        position: [point.latitude, point.longitude] as [number, number],
-        reason: area.reason,
-        photoURL: area.photo_url,
-          requesterID: area.requester_id,
-          }))
-        );
+          const avoidanceMarkersGroups = data.data.avoidance_areas.map((area) =>
+            area.points.map((point) => ({
+              id: `avoidance-${area.id}-${point.id}`,
+              position: [point.latitude, point.longitude] as [number, number],
+              reason: area.reason,
+              photoURL: area.photo_url,
+              requesterID: area.requester_id,
+              status: area.status
+            }))
+          );
           setImpassibleMarkers(avoidanceMarkersGroups);
         
           // Fetch requester names
@@ -413,7 +416,8 @@ const DriverRouteDetailPage = () => {
             is_permanent: newAvoidanceArea.isPermanent,
             photo_key: photoKey || undefined,
             points: pointsData,
-            requester_id: currentUserId
+            requester_id: currentUserId,
+            status: "pending"
           }
         ]
       };
@@ -557,9 +561,6 @@ const DriverRouteDetailPage = () => {
         ...routePlan,
         status: newStatus,
       });
-      
-      // Show success message
-      alert(`Status rute berhasil diubah menjadi: ${newStatus}`);
     } catch (err) {
       console.error("Error updating status:", err);
       alert("Gagal mengubah status rute. Silakan coba lagi.");
@@ -742,7 +743,7 @@ const DriverRouteDetailPage = () => {
             <button 
               onClick={() => setIsMarkingMode(true)} 
               className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-md flex items-center gap-2 transition-colors"
-              disabled={showAvoidanceForm || routePlan.status === "completed" || routePlan.status === "cancelled" || routePlan.status === "on confirmation"}
+              disabled={showAvoidanceForm || routePlan.status === "completed" || routePlan.status === "cancelled"}
             >
               <i className="bx bx-map-pin"></i>
               <span>Tandai Area</span>
@@ -859,17 +860,73 @@ const DriverRouteDetailPage = () => {
                 {routePlan.avoidance_areas.map((area, index) => (
                   <div
                     key={area.id}
-                    className="border border-gray-200 rounded-lg p-4"
+                    className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                    onClick={() => {
+                      if (mapRef.current && area.points && area.points.length > 0) {
+                        // Hitung center dari area
+                        const latSum = area.points.reduce((sum, p) => sum + p.latitude, 0);
+                        const lngSum = area.points.reduce((sum, p) => sum + p.longitude, 0);
+                        const centerLat = latSum / area.points.length;
+                        const centerLng = lngSum / area.points.length;
+                        
+                        // Set center map ke area yang dipilih
+                        mapRef.current.setView([centerLat, centerLng], 15);
+
+                        // Cari marker yang sesuai dan buka popupnya
+                        const areaMarkers = impassibleMarkers.find(markerGroup => {
+                          if (markerGroup.length > 0) {
+                            const idParts = markerGroup[0].id.split('-');
+                            return idParts.length >= 2 && parseInt(idParts[1]) === area.id;
+                          }
+                          return false;
+                        });
+
+                        // Jika marker ditemukan, tampilkan popup
+                        if (areaMarkers && areaMarkers.length > 0) {
+                          // Kita perlu menunggu sedikit agar peta selesai digerakkan
+                          setTimeout(() => {
+                            // Cari layer yang sesuai untuk area ini
+                            mapRef.current.eachLayer((layer: any) => {
+                              if (layer._icon && layer._popup) {
+                                const iconEl = layer._icon;
+                                if (iconEl.innerText === `A${index + 1}`) {
+                                  layer.openPopup();
+                                }
+                              }
+                            });
+                          }, 500);
+                        }
+                      }
+                    }}
                   >
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="font-medium text-gray-800">
                         Area {index + 1}
                       </h3>
-                      {area.is_permanent && (
-                        <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded">
-                          Permanen
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {area.is_permanent && (
+                          <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded">
+                            Permanen
+                          </span>
+                        )}
+                        {area.status && (
+                          <span className={
+                            `px-2 py-0.5 text-xs rounded ${
+                              area.status === "approved" 
+                                ? "bg-green-100 text-green-700" 
+                                : area.status === "rejected" 
+                                  ? "bg-red-100 text-red-700" 
+                                  : "bg-yellow-100 text-yellow-700"
+                            }`
+                          }>
+                            {area.status === "approved" 
+                              ? "Disetujui" 
+                              : area.status === "rejected" 
+                                ? "Ditolak" 
+                                : "Menunggu"}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <p className="text-sm text-gray-600 mb-2">
                       {area.reason}

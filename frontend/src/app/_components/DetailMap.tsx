@@ -35,6 +35,7 @@ interface DetailMapProps {
       photoURL?: string;
       photoData?: string;
       requesterID?: any;
+      status?: string;
     }>
   >;
   routePath?: Array<[number, number]>;
@@ -52,6 +53,8 @@ interface DetailMapProps {
   onAvoidanceAreaConfirm?: (areaId: number) => void;
   onAvoidanceAreaReject?: (areaId: number) => void;
   routeStatus?: string;
+  requesterRoles?: { [key: number]: string };
+  userRole?: string;
 }
 
 // Component to set the map view and handle map reference
@@ -133,6 +136,8 @@ const DetailMap: React.FC<DetailMapProps> = ({
   onAvoidanceAreaConfirm,
   onAvoidanceAreaReject,
   routeStatus = "",
+  requesterRoles = {},
+  userRole = "",
 }) => {
   const [mounted, setMounted] = useState(false);
   const hoverMarkerRef = useRef<L.Marker | null>(null);
@@ -501,10 +506,21 @@ const DetailMap: React.FC<DetailMapProps> = ({
                     <span className="font-semibold">Oleh:</span> {requesterID ? (requesterNamesLocal[requesterID] || requesterNames[requesterID] || `Pengguna ${requesterID}`) : "Pengguna tidak diketahui"}
                   </div>
 
-                  {/* Tombol konfirmasi untuk planner saat status rute "on confirmation" */}
-                  {isPlanner && routeStatus === "on confirmation" && (
+                  {markerGroup[0]?.status && (
+                    <div className="mb-2">
+                      <span className="font-semibold">Status:</span> {
+                        markerGroup[0].status === "pending" ? "Menunggu" :
+                        markerGroup[0].status === "approved" ? "Disetujui" :
+                        markerGroup[0].status === "rejected" ? "Ditolak" :
+                        markerGroup[0].status
+                      }
+                    </div>
+                  )}
+                  
+                  {/* Tombol hanya ditampilkan jika requesterID memiliki role driver */}
+                  {requesterRoles[requesterID] === "driver" && markerGroup[0]?.status === "pending" && (
                     <div className="mt-3 mb-3 space-y-2">
-                      <div className="font-semibold text-yellow-600">Konfirmasi area ini:</div>
+                      <div className="font-semibold text-yellow-600">Area dikirim oleh driver:</div>
                       <div className="flex space-x-2">
                         <button 
                           onClick={(e) => {

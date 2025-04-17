@@ -214,6 +214,7 @@ func main() {
 	users.Use(middleware.RoleAuthorization("management", "planner", "driver"))
 	users.Get("/", userController.GetAllUsers)
 	users.Get("/:id", userController.GetUserByID)
+	users.Get("/:id/role", userController.GetUserRoleByID)
 	users.Post("/reset-password", userController.ResetPassword)
 
 	// Add truck routes
@@ -240,6 +241,8 @@ func main() {
 	routePlans.Delete("/:id", routePlanController.DeleteRoutePlan)
 	routePlans.Get("/driver/:driverID", routePlanController.GetRoutePlansByDriverID)
 	routePlans.Post("/:id/avoidance", routePlanController.AddAvoidanceArea)
+	routePlans.Put("/avoidance/:id/status", routePlanController.UpdateAvoidanceAreaStatus)
+	routePlans.Delete("/avoidance/:id", routePlanController.DeleteAvoidanceArea)
 
 	// Upload
 	uploads := api.Group("/uploads")

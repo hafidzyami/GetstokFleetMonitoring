@@ -358,3 +358,114 @@ func (c *RoutePlanController) AddAvoidanceArea(ctx *fiber.Ctx) error {
         result,
     ))
 }
+
+// UpdateAvoidanceAreaStatus godoc
+// @Summary Update avoidance area status
+// @Description Update the status of an avoidance area
+// @Tags route-plans
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param Authorization header string true "Bearer token" default(Bearer <token>)
+// @Param id path int true "Avoidance area ID"
+// @Param request body map[string]string true "Status update"
+// @Success 200 {object} model.BaseResponse "Success message"
+// @Failure 400 {object} model.BaseResponse "Bad request"
+// @Failure 401 {object} model.BaseResponse "Unauthorized"
+// @Failure 404 {object} model.BaseResponse "Not found"
+// @Router /route-plans/avoidance/{id}/status [put]
+func (c *RoutePlanController) UpdateAvoidanceAreaStatus(ctx *fiber.Ctx) error {
+    // Get ID from params
+    idParam := ctx.Params("id")
+    id, err := strconv.ParseUint(idParam, 10, 32)
+    if err != nil {
+        return ctx.Status(fiber.StatusBadRequest).JSON(model.SimpleErrorResponse(
+            fiber.StatusBadRequest,
+            "Invalid avoidance area ID",
+        ))
+    }
+
+    // Parse request body
+    var req map[string]string
+    if err := ctx.BodyParser(&req); err != nil {
+        return ctx.Status(fiber.StatusBadRequest).JSON(model.SimpleErrorResponse(
+            fiber.StatusBadRequest,
+            "Invalid request body",
+        ))
+    }
+
+    // Check if status is provided
+    status, ok := req["status"]
+    if !ok || status == "" {
+        return ctx.Status(fiber.StatusBadRequest).JSON(model.SimpleErrorResponse(
+            fiber.StatusBadRequest,
+            "Status is required",
+        ))
+    }
+
+    // Update status
+    if err := c.routePlanService.UpdateAvoidanceAreaStatus(uint(id), status); err != nil {
+        if strings.Contains(err.Error(), "not found") {
+            return ctx.Status(fiber.StatusNotFound).JSON(model.SimpleErrorResponse(
+                fiber.StatusNotFound,
+                err.Error(),
+            ))
+        }
+        return ctx.Status(fiber.StatusBadRequest).JSON(model.SimpleErrorResponse(
+            fiber.StatusBadRequest,
+            err.Error(),
+        ))
+    }
+
+    // Return response
+    return ctx.Status(fiber.StatusOK).JSON(model.SuccessResponse(
+        "route-plans.updateAvoidanceAreaStatus",
+        map[string]string{"message": "Avoidance area status updated successfully"},
+    ))
+}
+
+// DeleteAvoidanceArea godoc
+// @Summary Delete an avoidance area
+// @Description Delete an avoidance area and all its points
+// @Tags route-plans
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param Authorization header string true "Bearer token" default(Bearer <token>)
+// @Param id path int true "Avoidance area ID"
+// @Success 200 {object} model.BaseResponse "Success message"
+// @Failure 400 {object} model.BaseResponse "Bad request"
+// @Failure 401 {object} model.BaseResponse "Unauthorized"
+// @Failure 404 {object} model.BaseResponse "Not found"
+// @Router /route-plans/avoidance/{id} [delete]
+func (c *RoutePlanController) DeleteAvoidanceArea(ctx *fiber.Ctx) error {
+    // Get ID from params
+    idParam := ctx.Params("id")
+    id, err := strconv.ParseUint(idParam, 10, 32)
+    if err != nil {
+        return ctx.Status(fiber.StatusBadRequest).JSON(model.SimpleErrorResponse(
+            fiber.StatusBadRequest,
+            "Invalid avoidance area ID",
+        ))
+    }
+
+    // Delete avoidance area
+    if err := c.routePlanService.DeleteAvoidanceArea(uint(id)); err != nil {
+        if strings.Contains(err.Error(), "not found") {
+            return ctx.Status(fiber.StatusNotFound).JSON(model.SimpleErrorResponse(
+                fiber.StatusNotFound,
+                err.Error(),
+            ))
+        }
+        return ctx.Status(fiber.StatusInternalServerError).JSON(model.SimpleErrorResponse(
+            fiber.StatusInternalServerError,
+            "Failed to delete avoidance area: " + err.Error(),
+        ))
+    }
+
+    // Return response
+    return ctx.Status(fiber.StatusOK).JSON(model.SuccessResponse(
+        "route-plans.deleteAvoidanceArea",
+        map[string]string{"message": "Avoidance area deleted successfully"},
+    ))
+}

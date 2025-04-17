@@ -41,6 +41,7 @@ interface AvoidanceArea {
   has_photo: boolean;
   photo_url?: string;
   requester_id?: number;
+  status?: string;
   points: AvoidancePointResponse[];
 }
 
@@ -91,6 +92,7 @@ interface AvoidanceMarker {
   reason?: string;
   photoURL?: string;
   requesterID?: number;
+  status?: string;
 }
 
 const RouteHistoryPage = () => {
@@ -113,9 +115,17 @@ const RouteHistoryPage = () => {
     { segment: [number, number][]; tollwayValue: number }[]
   >([]);
   const [surfaceTypes, setSurfaceTypes] = useState<any>([]);
-  const [requesterNames, setRequesterNames] = useState<{ [key: number]: string }>({});
+  const [requesterNames, setRequesterNames] = useState<{
+    [key: number]: string;
+  }>({});
+  const [requesterRoles, setRequesterRoles] = useState<{
+    [key: number]: string;
+  }>({});
   const { user } = useAuth();
-  const [isProcessingAvoidanceArea, setIsProcessingAvoidanceArea] = useState(false);
+  const [isProcessingAvoidanceArea, setIsProcessingAvoidanceArea] =
+    useState(false);
+
+  console.log("impassible", impassibleMarkers);
 
   // Load Map component dynamically to avoid SSR issues
   const Map = useMemo(
@@ -130,6 +140,31 @@ const RouteHistoryPage = () => {
       }),
     []
   );
+
+  const fetchRole = async (userId: number | undefined) => {
+    try {
+      if (!userId) return;
+      
+      const response = await fetch(`/api/v1/users/${userId}/role`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch user data");
+      }
+
+      const data = await response.json();
+      console.log("role", data.data.role);
+      return data.data.role;
+    } catch (error) {
+      console.error("Error fetching user data:", error);
+      return `Pengguna ${userId}`;
+    }
+  };
 
   useEffect(() => {
     const fetchRoutePlanDetail = async () => {
@@ -182,52 +217,69 @@ const RouteHistoryPage = () => {
 
         // Process avoidance areas
         if (data.data.avoidance_areas && data.data.avoidance_areas.length > 0) {
-        const avoidanceMarkersGroups = data.data.avoidance_areas.map((area) =>
-        area.points.map((point) => ({
-        id: `avoidance-${area.id}-${point.id}`,
-        position: [point.latitude, point.longitude] as [number, number],
-        reason: area.reason,
-        photoURL: area.photo_url, // Gunakan photo_url dari response API
-          requesterID: area.requester_id, // Tambahkan requester_id
-          }))
-        );
+          const avoidanceMarkersGroups = data.data.avoidance_areas.map((area) =>
+            area.points.map((point) => ({
+              id: `avoidance-${area.id}-${point.id}`,
+              position: [point.latitude, point.longitude] as [number, number],
+              reason: area.reason,
+              photoURL: area.photo_url, // Gunakan photo_url dari response API
+              requesterID: area.requester_id, // Tambahkan requester_id
+              status: area.status, // Tambahkan status
+            }))
+          );
           setImpassibleMarkers(avoidanceMarkersGroups);
-        
+
           // Fetch requester names
-            const fetchRequesterNames = async () => {
-              const newRequesterNames: { [key: number]: string } = {};
-              
-              for (const area of data.data.avoidance_areas) {
-                if (area.requester_id && !requesterNames[area.requester_id]) {
-                  try {
-                    const response = await fetch(`/api/v1/users/${area.requester_id}`, {
+          const fetchRequesterNames = async () => {
+            const newRequesterNames: { [key: number]: string } = {};
+
+            for (const area of data.data.avoidance_areas) {
+              if (area.requester_id && !requesterNames[area.requester_id]) {
+                try {
+                  const response = await fetch(
+                    `/api/v1/users/${area.requester_id}`,
+                    {
                       headers: {
                         Authorization: `Bearer ${token}`,
                       },
-                    });
-                    
-                    if (response.ok) {
-                      const userData = await response.json();
-                      console.log(`Fetched user data for ID ${area.requester_id}:`, userData);
-                      if (userData.data && userData.data.name) {
-                        newRequesterNames[area.requester_id] = userData.data.name;
+                    }
+                  );
+
+                  if (response.ok) {
+                    const userData = await response.json();
+                    console.log(
+                      `Fetched user data for ID ${area.requester_id}:`,
+                      userData
+                    );
+                    if (userData.data && userData.data.name) {
+                      newRequesterNames[area.requester_id] = userData.data.name;
+                      // Juga simpan role pengguna
+                      if (userData.data && userData.data.role) {
+                        setRequesterRoles((prev) => ({
+                          ...prev,
+                          [area.requester_id as number]: userData.data.role,
+                        }));
                       }
                     }
-                  } catch (error) {
-                    console.error(`Error fetching user ${area.requester_id}:`, error);
                   }
+                } catch (error) {
+                  console.error(
+                    `Error fetching user ${area.requester_id}:`,
+                    error
+                  );
                 }
               }
-              
-              if (Object.keys(newRequesterNames).length > 0) {
-                setRequesterNames(prev => ({ ...prev, ...newRequesterNames }));
-              }
-            };
-            
-            fetchRequesterNames();
-          } else {
-            setImpassibleMarkers([]);
-          }
+            }
+
+            if (Object.keys(newRequesterNames).length > 0) {
+              setRequesterNames((prev) => ({ ...prev, ...newRequesterNames }));
+            }
+          };
+
+          fetchRequesterNames();
+        } else {
+          setImpassibleMarkers([]);
+        }
 
         // Process route geometry and segments
         if (data.data.route_geometry) {
@@ -258,14 +310,8 @@ const RouteHistoryPage = () => {
                 const startIdx = tollway[0];
                 const endIdx = tollway[1];
                 const tollwayValue = tollway[2];
-                const segment = latLngs.slice(
-                  startIdx,
-                  endIdx + 1
-                );
-                setTollways((prev) => [
-                  ...prev,
-                  { segment, tollwayValue },
-                ]);
+                const segment = latLngs.slice(startIdx, endIdx + 1);
+                setTollways((prev) => [...prev, { segment, tollwayValue }]);
               }
             }
 
@@ -355,11 +401,11 @@ const RouteHistoryPage = () => {
         bgColor: "bg-red-100",
         textColor: "text-red-800",
       },
-      "on confirmation":{
+      "on confirmation": {
         text: "Menunggu Konfirmasi",
         bgColor: "bg-yellow-100",
         textColor: "text-yellow-800",
-      }
+      },
     };
 
     const statusInfo = statusMap[status.toLowerCase()] || {
@@ -387,7 +433,7 @@ const RouteHistoryPage = () => {
     }
   };
 
-  // Handle status update
+  // Handle route status update
   const handleStatusUpdate = async (newStatus: string) => {
     if (!routePlan) return;
 
@@ -422,6 +468,139 @@ const RouteHistoryPage = () => {
     } catch (err) {
       console.error("Error updating status:", err);
       alert("Gagal mengubah status rute. Silakan coba lagi.");
+    }
+  };
+
+  // Handle avoidance area approval
+  const handleApproveAvoidanceArea = async (areaId: number) => {
+    if (!routePlan) return;
+    setIsProcessingAvoidanceArea(true);
+
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        router.push("/login");
+        return;
+      }
+
+      const response = await fetch(
+        `/api/v1/route-plans/avoidance/${areaId}/status`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ status: "approved" }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Error approving avoidance area: ${response.statusText}`
+        );
+      }
+
+      // Update local state
+      if (routePlan && routePlan.avoidance_areas) {
+        const updatedAvoidanceAreas = routePlan.avoidance_areas.map((area) => {
+          if (area.id === areaId) {
+            return { ...area, status: "approved" };
+          }
+          return area;
+        });
+
+        setRoutePlan({
+          ...routePlan,
+          avoidance_areas: updatedAvoidanceAreas,
+        });
+
+        // Juga update impassibleMarkers
+        const updatedImpassibleMarkers = impassibleMarkers.map(
+          (markerGroup) => {
+            // Periksa apakah ini adalah grup marker yang sesuai dengan areaId
+            if (markerGroup.length > 0) {
+              const idParts = markerGroup[0].id.split("-");
+              if (idParts.length >= 2 && parseInt(idParts[1]) === areaId) {
+                // Tambahkan status ke semua marker dalam grup
+                return markerGroup.map((marker) => ({
+                  ...marker,
+                  status: "approved",
+                }));
+              }
+            }
+            return markerGroup;
+          }
+        );
+        setImpassibleMarkers(updatedImpassibleMarkers);
+      }
+
+      alert("Area berhasil disetujui");
+    } catch (err) {
+      console.error("Error approving avoidance area:", err);
+      alert("Gagal menyetujui area. Silakan coba lagi.");
+    } finally {
+      setIsProcessingAvoidanceArea(false);
+    }
+  };
+
+  // Handle avoidance area rejection (delete)
+  const handleRejectAvoidanceArea = async (areaId: number) => {
+    if (!routePlan) return;
+    setIsProcessingAvoidanceArea(true);
+
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        router.push("/login");
+        return;
+      }
+
+      const response = await fetch(`/api/v1/route-plans/avoidance/${areaId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          `Error deleting avoidance area: ${response.statusText}`
+        );
+      }
+
+      // Update local state
+      if (routePlan && routePlan.avoidance_areas) {
+        const updatedAvoidanceAreas = routePlan.avoidance_areas.filter(
+          (area) => area.id !== areaId
+        );
+
+        setRoutePlan({
+          ...routePlan,
+          avoidance_areas: updatedAvoidanceAreas,
+        });
+
+        // Juga hapus dari impassibleMarkers
+        const updatedImpassibleMarkers = impassibleMarkers.filter(
+          (markerGroup) => {
+            if (markerGroup.length > 0) {
+              const idParts = markerGroup[0].id.split("-");
+              if (idParts.length >= 2) {
+                return parseInt(idParts[1]) !== areaId;
+              }
+            }
+            return true;
+          }
+        );
+        setImpassibleMarkers(updatedImpassibleMarkers);
+      }
+
+      alert("Area berhasil dihapus");
+    } catch (err) {
+      console.error("Error deleting avoidance area:", err);
+      alert("Gagal menghapus area. Silakan coba lagi.");
+    } finally {
+      setIsProcessingAvoidanceArea(false);
     }
   };
 
@@ -501,7 +680,6 @@ const RouteHistoryPage = () => {
             </div>
           </div>
         </div>
-
       </div>
 
       {/* Main content grid */}
@@ -605,24 +783,115 @@ const RouteHistoryPage = () => {
                   {routePlan.avoidance_areas.map((area, index) => (
                     <div
                       key={area.id}
-                      className="border border-gray-200 rounded-lg p-4"
+                      className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
+                      onClick={() => {
+                        if (
+                          mapRef.current &&
+                          area.points &&
+                          area.points.length > 0
+                        ) {
+                          // Hitung center dari area
+                          const latSum = area.points.reduce(
+                            (sum, p) => sum + p.latitude,
+                            0
+                          );
+                          const lngSum = area.points.reduce(
+                            (sum, p) => sum + p.longitude,
+                            0
+                          );
+                          const centerLat = latSum / area.points.length;
+                          const centerLng = lngSum / area.points.length;
+
+                          // Set center map ke area yang dipilih
+                          mapRef.current.setView([centerLat, centerLng], 15);
+
+                          // Cari marker yang sesuai dan buka popupnya
+                          const areaMarkers = impassibleMarkers.find(
+                            (markerGroup) => {
+                              if (markerGroup.length > 0) {
+                                const idParts = markerGroup[0].id.split("-");
+                                return (
+                                  idParts.length >= 2 &&
+                                  parseInt(idParts[1]) === area.id
+                                );
+                              }
+                              return false;
+                            }
+                          );
+
+                          // Jika marker ditemukan, tampilkan popup
+                          if (areaMarkers && areaMarkers.length > 0) {
+                            // Kita perlu menunggu sedikit agar peta selesai digerakkan
+                            setTimeout(() => {
+                              // Cari layer yang sesuai untuk area ini
+                              mapRef.current.eachLayer((layer: any) => {
+                                if (layer._icon && layer._popup) {
+                                  const iconEl = layer._icon;
+                                  if (iconEl.innerText === `A${index + 1}`) {
+                                    layer.openPopup();
+                                  }
+                                }
+                              });
+                            }, 500);
+                          }
+                        }
+                      }}
                     >
                       <div className="flex items-center justify-between mb-2">
-                        <h3 className="font-medium text-gray-800">
+                        <h3 className="font-medium text-gray-800 cursor-pointer">
                           Area {index + 1}
                         </h3>
-                        {area.is_permanent && (
-                          <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded">
-                            Permanen
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {area.is_permanent && (
+                            <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded">
+                              Permanen
+                            </span>
+                          )}
+                          {area.status && requesterRoles[area.requester_id as any] !== "planner" && (
+                            <span
+                              className={`px-2 py-0.5 text-xs rounded ${
+                                area.status === "approved"
+                                  ? "bg-green-100 text-green-700"
+                                  : area.status === "rejected"
+                                  ? "bg-red-100 text-red-700"
+                                  : "bg-yellow-100 text-yellow-700"
+                              }`}
+                            >
+                              {area.status === "approved"
+                                ? "Disetujui"
+                                : area.status === "rejected"
+                                ? "Ditolak"
+                                : "Menunggu"}
+                            </span>
+                          )}
+                          <button
+                            className="ml-1 text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50"
+                            onClick={(e) => {
+                              e.stopPropagation(); // Mencegah event propagation ke parent
+                              if (
+                                confirm(
+                                  `Apakah Anda yakin ingin menghapus Area ${
+                                    index + 1
+                                  }?`
+                                )
+                              ) {
+                                handleRejectAvoidanceArea(area.id);
+                              }
+                            }}
+                            title="Hapus area ini"
+                          >
+                            <i className="bx bx-trash"></i>
+                          </button>
+                        </div>
                       </div>
                       <p className="text-sm text-gray-600 mb-2">
                         {area.reason}
                       </p>
                       {area.requester_id && (
                         <p className="text-xs text-gray-500 mb-1">
-                          Oleh: {requesterNames[area.requester_id] || `Pengguna ${area.requester_id}`}
+                          Oleh:{" "}
+                          {requesterNames[area.requester_id] ||
+                            `Pengguna ${area.requester_id}`}
                         </p>
                       )}
                       <p className="text-xs text-gray-500">
@@ -648,10 +917,27 @@ const RouteHistoryPage = () => {
               zoom={12}
               onMapRef={(map) => (mapRef.current = map)}
               requesterNames={requesterNames}
+              requesterRoles={requesterRoles}
+              userRole={user?.role || ""}
+              isPlanner={user?.role === "planner"}
+              routeStatus={routePlan.status}
+              onAvoidanceAreaConfirm={handleApproveAvoidanceArea}
+              onAvoidanceAreaReject={handleRejectAvoidanceArea}
             />
           </div>
         </div>
       </div>
+      {isProcessingAvoidanceArea && (
+        <div className="fixed inset-0 bg-gray-50 opacity-90 z-[9999] flex items-center justify-center">
+          <div className="bg-white p-8 rounded-lg shadow-2xl flex flex-col items-center">
+            <div className="w-20 h-20 border-4 border-t-blue-500 border-blue-200 rounded-full animate-spin mb-6"></div>
+            <p className="text-xl font-semibold text-gray-800">
+              Menghapus Avoidance Area...
+            </p>
+            <p className="text-sm text-gray-500 mt-2">Mohon tunggu sebentar</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

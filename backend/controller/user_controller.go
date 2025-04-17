@@ -136,3 +136,44 @@ func (c *UserController) GetUserByID(ctx *fiber.Ctx) error {
 		user,
 	))
 }
+
+// GetUserRoleByID godoc
+// @Summary Get user role by ID
+// @Description Get user role by user ID
+// @Tags users
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param Authorization header string true "Bearer token" default(Bearer <token>)
+// @Param id path int true "User ID"
+// @Success 200 {object} model.BaseResponse "User role"
+// @Failure 400 {object} model.BaseResponse "Bad request"
+// @Failure 401 {object} model.BaseResponse "Unauthorized"
+// @Failure 404 {object} model.BaseResponse "Not found"
+// @Router /users/{id}/role [get]
+func (c *UserController) GetUserRoleByID(ctx *fiber.Ctx) error {
+	// Parse user ID from params
+	userID, err := ctx.ParamsInt("id")
+	if err != nil || userID <= 0 {
+		return ctx.Status(fiber.StatusBadRequest).JSON(model.SimpleErrorResponse(
+			fiber.StatusBadRequest,
+			"Invalid user ID",
+		))
+	}
+	
+	// Get user role by ID
+	role, err := c.userService.GetUserRoleByID(uint(userID))
+	if err != nil {
+		return ctx.Status(fiber.StatusNotFound).JSON(model.SimpleErrorResponse(
+			fiber.StatusNotFound,
+			"User not found",
+		))
+	}
+	
+	// Return user role
+	return ctx.Status(fiber.StatusOK).JSON(model.SuccessResponse(
+		"users.getRoleByID",
+		map[string]string{"role": role},
+	))
+}
+

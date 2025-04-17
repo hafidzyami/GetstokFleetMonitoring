@@ -36,6 +36,7 @@ interface DriverMapProps {
       photoURL?: string;
       photoData?: string;
       requesterID?: any;
+      status?: string;
     }>
   >;
   routePath?: Array<[number, number]>;
@@ -463,6 +464,17 @@ const DriverMap: React.FC<DriverMapProps> = ({
                   <div className="mb-2">
                     <span className="font-semibold">Oleh:</span> {requesterID ? (requesterNamesLocal[requesterID] || requesterNames[requesterID] || `Pengguna ${requesterID}`) : JSON.parse(localStorage.getItem("user") as string).name}
                   </div>
+
+                  {markerGroup[0]?.status && (
+                    <div className="mb-2">
+                      <span className="font-semibold">Status:</span> {
+                        markerGroup[0].status === "approved" ? "Disetujui" :
+                        markerGroup[0].status === "rejected" ? "Ditolak" :
+                        markerGroup[0].status === "pending" ? "Menunggu" :
+                        markerGroup[0].status
+                      }
+                    </div>
+                  )}
 
                   {/* Prioritas menggunakan photoURL jika tersedia, fallback ke photoData */}
                   {(markerGroup[0]?.photoURL || photoData) && (
