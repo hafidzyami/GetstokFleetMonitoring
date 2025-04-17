@@ -237,6 +237,8 @@ func main() {
 	routePlans.Get("/:id", routePlanController.GetRoutePlanByID)
 	routePlans.Put("/:id/status", routePlanController.UpdateRoutePlanStatus)
 	routePlans.Delete("/:id", routePlanController.DeleteRoutePlan)
+	routePlans.Get("/driver/:driverID", routePlanController.GetRoutePlansByDriverID)
+	routePlans.Post("/:id/avoidance", routePlanController.AddAvoidanceArea)
 
 	// Upload
 	uploads := api.Group("/uploads")

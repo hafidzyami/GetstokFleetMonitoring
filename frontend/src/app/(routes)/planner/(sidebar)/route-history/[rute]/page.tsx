@@ -441,7 +441,7 @@ const RouteHistoryPage = () => {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center">
           <button
-            onClick={() => router.push("/planner/riwayat-rute")}
+            onClick={() => router.push("/planner/route-history")}
             className="mr-4 flex items-center justify-center w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
           >
             <i className="bx bx-arrow-back text-xl"></i>

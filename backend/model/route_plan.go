@@ -62,6 +62,7 @@ type RouteAvoidanceArea struct {
 	IsPermanent      bool           `json:"is_permanent"`
 	PhotoURL         string         `json:"photo_url,omitempty"`     // S3 URL for the photo
 	PhotoKey         string         `json:"photo_key,omitempty"`     // S3 object key for the photo
+	RequesterID      uint           `json:"requester_id"` // ID of the user who requested the avoidance area
 	CreatedAt        time.Time      `json:"created_at"`
 	UpdatedAt        time.Time      `json:"updated_at"`
 	DeletedAt        gorm.DeletedAt `json:"-" gorm:"index"`
@@ -100,6 +101,7 @@ type WaypointRequest struct {
 type AvoidanceAreaRequest struct {
 	Reason      string               `json:"reason" validate:"required"`
 	IsPermanent bool                 `json:"is_permanent"`
+	RequesterID uint                 `json:"requester_id"` // ID of the user who requested the avoidance area
 	Photo       string               `json:"photo,omitempty"` // Base64 encoded image (deprecated)
 	PhotoKey    string               `json:"photo_key,omitempty"` // S3 object key yang sudah diupload
 	Points      []AvoidancePointRequest `json:"points" validate:"required,min=3"`
@@ -139,9 +141,11 @@ type WaypointResponse struct {
 type AvoidanceAreaResponse struct {
 	ID          uint                    `json:"id"`
 	Reason      string                  `json:"reason"`
+	RequesterID uint                    `json:"requester_id"`
 	IsPermanent bool                    `json:"is_permanent"`
 	PhotoURL    string                  `json:"photo_url,omitempty"`
 	Points      []AvoidancePointResponse `json:"points"`
+	CreatedAt   time.Time               `json:"created_at"`
 }
 
 // AvoidancePointResponse represents a point in an avoidance area response

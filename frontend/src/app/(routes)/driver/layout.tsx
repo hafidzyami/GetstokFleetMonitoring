@@ -140,8 +140,13 @@ const LayoutPengemudi = ({ children }: { children: React.ReactNode }) => {
   const sidebar: SidebarItem[] = [
     {
       icon: "bx-map-alt",
-      name: "Rute ",
+      name: "Rute",
       href: "/driver/route",
+    },
+    {
+      icon: "bx-list-ul",
+      name: "Daftar Rute",
+      href: "/driver/route-list",
     },
     {
       icon: "bx-receipt",

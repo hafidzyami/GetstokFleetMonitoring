@@ -5,7 +5,10 @@ definitions:
       is_permanent:
         type: boolean
       photo:
-        description: Base64 encoded image
+        description: Base64 encoded image (deprecated)
+        type: string
+      photo_key:
+        description: S3 object key yang sudah diupload
         type: string
       points:
         items:
@@ -14,6 +17,9 @@ definitions:
         type: array
       reason:
         type: string
+      requester_id:
+        description: ID of the user who requested the avoidance area
+        type: integer
     required:
     - points
     - reason
@@ -109,6 +115,9 @@ definitions:
           $ref: '#/definitions/model.AvoidanceAreaRequest'
         type: array
       driver_name:
+        type: string
+      extras_data:
+        description: JSON string data untuk extras
         type: string
       route_geometry:
         type: string
@@ -458,6 +467,53 @@ paths:
       summary: Get route plan by ID
       tags:
       - route-plans
+  /route-plans/{id}/avoidance:
+    post:
+      consumes:
+      - application/json
+      description: Add new avoidance area with points to an existing route plan
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Route plan ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Avoidance area details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.AvoidanceAreaRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully added avoidance area
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Add avoidance area to a route plan
+      tags:
+      - route-plans
   /route-plans/{id}/status:
     put:
       consumes:
@@ -507,11 +563,48 @@ paths:
       summary: Update route plan status
       tags:
       - route-plans
+  /route-plans/driver/{driverID}:
+    get:
+      consumes:
+      - application/json
+      description: Get all route plans created for a specific driver
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Driver ID
+        in: path
+        name: driverID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Route plans data
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get route plans by driver ID
+      tags:
+      - route-plans
   /routing/directions:
     post:
       consumes:
       - application/json
-      description: Proxy API call to OpenRouteService to get directions
+      description: Proxy API call to routing service to get directions
       parameters:
       - default: Bearer <token>
         description: Bearer token
@@ -541,7 +634,7 @@ paths:
             $ref: '#/definitions/model.BaseResponse'
       security:
       - BearerAuth: []
-      summary: Get directions from OpenRouteService
+      summary: Get directions from external routing service (OpenRouteService)
       tags:
       - routing
   /trucks:
@@ -737,6 +830,83 @@ paths:
       summary: Get truck position history
       tags:
       - trucks
+  /uploads/photo:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload a photo and get back the S3 URL
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Photo file to upload
+        in: formData
+        name: photo
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully uploaded photo
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload a photo to S3
+      tags:
+      - uploads
+  /uploads/photo/base64:
+    post:
+      consumes:
+      - application/json
+      description: Upload a base64 encoded photo and get back the S3 URL
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Photo data
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties:
+            type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully uploaded photo
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload a base64 encoded photo to S3
+      tags:
+      - uploads
   /users:
     get:
       consumes:
