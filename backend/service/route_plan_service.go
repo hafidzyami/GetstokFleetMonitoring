@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -21,17 +22,21 @@ type routePlanService struct {
 	routePlanRepo repository.RoutePlanRepository
 	truckRepo     repository.TruckRepository
 	userRepo      repository.UserRepository
+	s3Service     S3Service
 }
 
 func NewRoutePlanService(
-	routePlanRepo repository.RoutePlanRepository, 
+	routePlanRepo repository.RoutePlanRepository,
 	truckRepo repository.TruckRepository,
 	userRepo repository.UserRepository,
 ) RoutePlanService {
+	s3Service, _ := NewS3Service()
+
 	return &routePlanService{
 		routePlanRepo: routePlanRepo,
 		truckRepo:     truckRepo,
 		userRepo:      userRepo,
+		s3Service:     s3Service,
 	}
 }
 
@@ -43,7 +48,7 @@ func (s *routePlanService) CreateRoutePlan(req model.RoutePlanCreateRequest, pla
 	if err != nil {
 		return nil, err
 	}
-	
+
 	driverFound := false
 	for _, driver := range drivers {
 		if driver.Name == req.DriverName {
@@ -52,43 +57,52 @@ func (s *routePlanService) CreateRoutePlan(req model.RoutePlanCreateRequest, pla
 			break
 		}
 	}
-	
+
 	if !driverFound {
 		return nil, errors.New("driver not found")
 	}
-	
+
 	// Find truck by plate number or MAC ID
 	var truckId uint
 	plateAndMac := strings.Split(req.VehiclePlate, "/")
 	if len(plateAndMac) < 2 {
 		return nil, errors.New("invalid vehicle plate format")
 	}
-	
+
 	macID := strings.TrimSpace(plateAndMac[1])
-	
+
 	truck, err := s.truckRepo.FindByMacID(macID)
 	if err != nil {
 		return nil, errors.New("truck not found")
 	}
-	
+
 	truckId = truck.ID
-	
+
 	// Create new route plan
 	routePlan := &model.RoutePlan{
 		DriverID:      driverId,
 		TruckID:       truckId,
-		PlannerID:     plannerId, // Add planner ID to route plan
+		PlannerID:     plannerId,
 		RouteGeometry: req.RouteGeometry,
 		Status:        "planned",
 		CreatedAt:     time.Now(),
 		UpdatedAt:     time.Now(),
 	}
-	
+
+	// Jika ada informasi extras dari body request
+	if req.ExtrasData != "" {
+		// Parse extras data
+		var extras model.RouteExtras
+		if err := json.Unmarshal([]byte(req.ExtrasData), &extras); err == nil {
+			routePlan.SetExtras(&extras)
+		}
+	}
+
 	if err := s.routePlanRepo.Create(routePlan); err != nil {
 		return nil, err
 	}
-	
-	// Add waypoints
+
+	// Tambahkan waypoints
 	var waypoints []*model.RouteWaypoint
 	for i, waypointReq := range req.Waypoints {
 		waypoint := &model.RouteWaypoint{
@@ -102,45 +116,66 @@ func (s *routePlanService) CreateRoutePlan(req model.RoutePlanCreateRequest, pla
 		}
 		waypoints = append(waypoints, waypoint)
 	}
-	
+
 	if err := s.routePlanRepo.AddWaypoints(waypoints); err != nil {
 		return nil, err
 	}
-	
-	// Add avoidance areas and points
+
+	// Tambahkan avoidance areas dan points
 	for _, areaReq := range req.AvoidanceAreas {
 		area := &model.RouteAvoidanceArea{
-			RoutePlanID:   routePlan.ID,
-			Reason:        areaReq.Reason,
-			IsPermanent:   areaReq.IsPermanent,
-			PhotoData:     areaReq.Photo,
-			CreatedAt:     time.Now(),
-			UpdatedAt:     time.Now(),
+			RoutePlanID: routePlan.ID,
+			Reason:      areaReq.Reason,
+			IsPermanent: areaReq.IsPermanent,
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
 		}
-		
+
+		// Handle photo upload to S3 if photo is provided
+		// Prioritaskan PhotoKey jika tersedia
+		if areaReq.PhotoKey != "" {
+			// Gunakan PhotoKey yang sudah diupload
+			area.PhotoKey = areaReq.PhotoKey
+
+			// Generate URL
+			if s.s3Service != nil {
+				photoURL, err := s.s3Service.GeneratePresignedURL(areaReq.PhotoKey)
+				if err == nil {
+					area.PhotoURL = photoURL
+				}
+			}
+		} else if areaReq.Photo != "" && s.s3Service != nil {
+			// Fallback ke cara lama jika PhotoKey tidak tersedia
+			objectKey, photoURL, err := s.s3Service.UploadBase64Image(areaReq.Photo, "avoidance-areas")
+			if err == nil {
+				area.PhotoKey = objectKey
+				area.PhotoURL = photoURL
+			}
+		}
+
 		if err := s.routePlanRepo.AddAvoidanceArea(area); err != nil {
 			return nil, err
 		}
-		
-		// Add points for this area
+
+		// Tambahkan points for this area
 		var points []*model.RouteAvoidancePoint
 		for i, pointReq := range areaReq.Points {
 			point := &model.RouteAvoidancePoint{
 				RouteAvoidanceAreaID: area.ID,
-				Latitude:            pointReq.Latitude,
-				Longitude:           pointReq.Longitude,
-				Order:               i,
-				CreatedAt:           time.Now(),
-				UpdatedAt:           time.Now(),
+				Latitude:             pointReq.Latitude,
+				Longitude:            pointReq.Longitude,
+				Order:                i,
+				CreatedAt:            time.Now(),
+				UpdatedAt:            time.Now(),
 			}
 			points = append(points, point)
 		}
-		
+
 		if err := s.routePlanRepo.AddAvoidancePoints(points); err != nil {
 			return nil, err
 		}
 	}
-	
+
 	// Return created route plan
 	return s.GetRoutePlanByID(routePlan.ID)
 }
@@ -152,32 +187,32 @@ func (s *routePlanService) GetRoutePlanByID(id uint) (*model.RoutePlanResponse, 
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Get driver info
 	driver, err := s.userRepo.FindByID(routePlan.DriverID)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Get planner info
 	planner, err := s.userRepo.FindByID(routePlan.PlannerID)
 	if err != nil {
 		// If planner not found, proceed without planner name
 		planner = &model.User{Name: "Unknown"}
 	}
-	
+
 	// Get truck info
 	truck, err := s.truckRepo.FindByID(routePlan.TruckID)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Get waypoints
 	waypoints, err := s.routePlanRepo.FindWaypointsByRoutePlanID(routePlan.ID)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	waypointResponses := make([]model.WaypointResponse, len(waypoints))
 	for i, waypoint := range waypoints {
 		waypointResponses[i] = model.WaypointResponse{
@@ -188,13 +223,13 @@ func (s *routePlanService) GetRoutePlanByID(id uint) (*model.RoutePlanResponse, 
 			Order:     waypoint.Order,
 		}
 	}
-	
+
 	// Get avoidance areas
 	areas, err := s.routePlanRepo.FindAvoidanceAreasByRoutePlanID(routePlan.ID)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	areaResponses := make([]model.AvoidanceAreaResponse, len(areas))
 	for i, area := range areas {
 		// Get points for this area
@@ -202,7 +237,7 @@ func (s *routePlanService) GetRoutePlanByID(id uint) (*model.RoutePlanResponse, 
 		if err != nil {
 			return nil, err
 		}
-		
+
 		pointResponses := make([]model.AvoidancePointResponse, len(points))
 		for j, point := range points {
 			pointResponses[j] = model.AvoidancePointResponse{
@@ -212,30 +247,51 @@ func (s *routePlanService) GetRoutePlanByID(id uint) (*model.RoutePlanResponse, 
 				Order:     point.Order,
 			}
 		}
-		
+
+		// Regenerate URL if needed
+		photoURL := area.PhotoURL
+		if photoURL == "" && area.PhotoKey != "" && s.s3Service != nil {
+			// Generate fresh URL if we have the object key
+			newURL, err := s.s3Service.GeneratePresignedURL(area.PhotoKey)
+			if err == nil {
+				photoURL = newURL
+
+				// Update the URL in the database
+				area.PhotoURL = newURL
+				s.routePlanRepo.UpdateAvoidanceArea(area)
+			}
+		}
+
 		areaResponses[i] = model.AvoidanceAreaResponse{
 			ID:          area.ID,
 			Reason:      area.Reason,
 			IsPermanent: area.IsPermanent,
-			HasPhoto:    area.PhotoData != "",
+			PhotoURL:    photoURL,
 			Points:      pointResponses,
 		}
 	}
-	
+
+	// Get extras data
+	var extras *model.RouteExtras
+	if routePlan.ExtrasData != "" {
+		extras, _ = routePlan.GetExtras()
+	}
+
 	// Create response
 	response := &model.RoutePlanResponse{
 		ID:             routePlan.ID,
 		DriverName:     driver.Name,
-		PlannerName:    planner.Name,  // Add planner name to response
+		PlannerName:    planner.Name,
 		VehiclePlate:   truck.PlateNumber + "/" + truck.MacID,
 		RouteGeometry:  routePlan.RouteGeometry,
+		Extras:         extras,
 		Status:         routePlan.Status,
 		Waypoints:      waypointResponses,
 		AvoidanceAreas: areaResponses,
 		CreatedAt:      routePlan.CreatedAt,
 		UpdatedAt:      routePlan.UpdatedAt,
 	}
-	
+
 	return response, nil
 }
 
@@ -246,7 +302,7 @@ func (s *routePlanService) GetAllRoutePlans() ([]*model.RoutePlanResponse, error
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Create responses
 	responses := make([]*model.RoutePlanResponse, len(routePlans))
 	for i, routePlan := range routePlans {
@@ -256,7 +312,7 @@ func (s *routePlanService) GetAllRoutePlans() ([]*model.RoutePlanResponse, error
 		}
 		responses[i] = response
 	}
-	
+
 	return responses, nil
 }
 
@@ -271,25 +327,39 @@ func (s *routePlanService) UpdateRoutePlanStatus(id uint, status string) error {
 			break
 		}
 	}
-	
+
 	if !isValidStatus {
 		return errors.New("invalid status")
 	}
-	
+
 	// Get route plan
 	routePlan, err := s.routePlanRepo.FindByID(id)
 	if err != nil {
 		return err
 	}
-	
+
 	// Update status
 	routePlan.Status = status
 	routePlan.UpdatedAt = time.Now()
-	
+
 	return s.routePlanRepo.Update(routePlan)
 }
 
 // DeleteRoutePlan deletes a route plan
 func (s *routePlanService) DeleteRoutePlan(id uint) error {
+	// Get avoidance areas to delete photos from S3
+	if s.s3Service != nil {
+		areas, err := s.routePlanRepo.FindAvoidanceAreasByRoutePlanID(id)
+		if err == nil {
+			// Delete photos from S3
+			for _, area := range areas {
+				if area.PhotoKey != "" {
+					_ = s.s3Service.DeleteObject(area.PhotoKey)
+				}
+			}
+		}
+	}
+
+	// Delete route plan and related data from database
 	return s.routePlanRepo.Delete(id)
 }

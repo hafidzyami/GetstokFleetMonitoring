@@ -1,7 +1,15 @@
 "use client";
 import React, { useEffect, useState, useRef } from "react";
 import L from "leaflet";
-import { MapContainer, TileLayer, Marker, Popup, Polyline, Polygon, useMap } from "react-leaflet";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+  Polyline,
+  Polygon,
+  useMap,
+} from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
 // Fix Leaflet icon issue
@@ -18,13 +26,15 @@ interface DetailMapProps {
     position: [number, number];
     address?: string;
   }>;
-  impassibleMarkers?: Array<Array<{
-    id: string;
-    position: [number, number];
-    reason?: string;
-    photo?: string;
-    photoData?: string;
-  }>>;
+  impassibleMarkers?: Array<
+    Array<{
+      id: string;
+      position: [number, number];
+      reason?: string;
+      photoURL?: string;
+      photoData?: string;
+    }>
+  >;
   routePath?: Array<[number, number]>;
   segments?: Array<{
     segment: Array<[number, number]>;
@@ -38,9 +48,17 @@ interface DetailMapProps {
 }
 
 // Component to set the map view and handle map reference
-const MapViewSetter = ({ center, zoom, onMapRef }: { center: [number, number]; zoom: number; onMapRef?: (map: L.Map) => void }) => {
+const MapViewSetter = ({
+  center,
+  zoom,
+  onMapRef,
+}: {
+  center: [number, number];
+  zoom: number;
+  onMapRef?: (map: L.Map) => void;
+}) => {
   const map = useMap();
-  
+
   useEffect(() => {
     map.setView(center, zoom);
     // Pass the map instance to the parent component if onMapRef is provided
@@ -48,7 +66,7 @@ const MapViewSetter = ({ center, zoom, onMapRef }: { center: [number, number]; z
       onMapRef(map);
     }
   }, [center, zoom, map, onMapRef]);
-  
+
   return null;
 };
 
@@ -89,7 +107,7 @@ const createWaypointIcon = (text: string, bgColor: string) => {
     className: "custom-div-icon",
     html: `<div style="background-color: ${bgColor}; width: 30px; height: 30px; display: flex; justify-content: center; align-items: center; border-radius: 50%; color: white; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.3);">${text}</div>`,
     iconSize: [30, 30],
-    iconAnchor: [15, 15]
+    iconAnchor: [15, 15],
   });
 };
 
@@ -101,11 +119,11 @@ const DetailMap: React.FC<DetailMapProps> = ({
   routePath = [],
   segments = [],
   tollways = [],
-  onMapRef
+  onMapRef,
 }) => {
   const [mounted, setMounted] = useState(false);
   const hoverMarkerRef = useRef<L.Marker | null>(null);
-  const waypointIcons = useRef<{[key: number]: L.DivIcon}>({});
+  const waypointIcons = useRef<{ [key: number]: L.DivIcon }>({});
 
   useEffect(() => {
     // Initialize icons once on client-side
@@ -119,7 +137,7 @@ const DetailMap: React.FC<DetailMapProps> = ({
         iconAnchor: [12, 41],
         popupAnchor: [1, -34],
         tooltipAnchor: [16, -28],
-        shadowSize: [41, 41]
+        shadowSize: [41, 41],
       });
 
       // Avoidance icon (orange)
@@ -127,7 +145,7 @@ const DetailMap: React.FC<DetailMapProps> = ({
         className: "custom-div-icon",
         html: `<div style="background-color: #FF9800; width: 18px; height: 18px; display: flex; justify-content: center; align-items: center; border-radius: 50%; color: white; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.3);"></div>`,
         iconSize: [18, 18],
-        iconAnchor: [9, 9]
+        iconAnchor: [9, 9],
       });
 
       L.Marker.prototype.options.icon = defaultIcon;
@@ -139,7 +157,7 @@ const DetailMap: React.FC<DetailMapProps> = ({
       for (let i = 0; i < markers.length; i++) {
         // Use the index as the label (0, 1, 2, etc.)
         const label = i.toString();
-        
+
         // Different colors based on position
         let color;
         if (i === 0) {
@@ -149,7 +167,7 @@ const DetailMap: React.FC<DetailMapProps> = ({
         } else {
           color = "#2196F3"; // Blue for intermediate waypoints
         }
-        
+
         waypointIcons.current[i] = createWaypointIcon(label, color);
       }
     }
@@ -164,9 +182,11 @@ const DetailMap: React.FC<DetailMapProps> = ({
       const point = event.detail;
       if (point && point.lat && point.lng) {
         // Use proper TypeScript technique for accessing custom properties
-        const container = document.querySelector('.leaflet-map-pane')?.closest('.leaflet-container') as HTMLElement;
+        const container = document
+          .querySelector(".leaflet-map-pane")
+          ?.closest(".leaflet-container") as HTMLElement;
         const map = container ? (container as any)._leaflet_map : null;
-        
+
         if (map) {
           const hoverIcon = L.divIcon({
             className: "hover-marker",
@@ -187,22 +207,25 @@ const DetailMap: React.FC<DetailMapProps> = ({
             zIndexOffset: 1000,
           }).addTo(map);
 
-          const elevationText = point.elevation !== undefined
-            ? `Elevation: ${point.elevation.toFixed(1)} m<br>`
-            : "";
+          const elevationText =
+            point.elevation !== undefined
+              ? `Elevation: ${point.elevation.toFixed(1)} m<br>`
+              : "";
 
-          hoverMarkerRef.current.bindTooltip(
-            `<div style="padding: 4px; font-size: 12px;">
+          hoverMarkerRef.current
+            .bindTooltip(
+              `<div style="padding: 4px; font-size: 12px;">
               ${elevationText}
               Location: ${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}
             </div>`,
-            {
-              permanent: true,
-              direction: "top",
-              className: "elevation-tooltip",
-              offset: [0, -8],
-            }
-          ).openTooltip();
+              {
+                permanent: true,
+                direction: "top",
+                className: "elevation-tooltip",
+                offset: [0, -8],
+              }
+            )
+            .openTooltip();
         }
       }
     };
@@ -214,11 +237,17 @@ const DetailMap: React.FC<DetailMapProps> = ({
       }
     };
 
-    document.addEventListener("elevation-hover", handleHoverPoint as EventListener);
+    document.addEventListener(
+      "elevation-hover",
+      handleHoverPoint as EventListener
+    );
     document.addEventListener("elevation-hover-reset", handleHoverReset);
 
     return () => {
-      document.removeEventListener("elevation-hover", handleHoverPoint as EventListener);
+      document.removeEventListener(
+        "elevation-hover",
+        handleHoverPoint as EventListener
+      );
       document.removeEventListener("elevation-hover-reset", handleHoverReset);
       if (hoverMarkerRef.current && hoverMarkerRef.current.remove) {
         hoverMarkerRef.current.remove();
@@ -226,11 +255,13 @@ const DetailMap: React.FC<DetailMapProps> = ({
     };
   }, [mounted, markers]);
 
-  const calculatePolygonCenter = (positions: [number, number][]): [number, number] => {
+  const calculatePolygonCenter = (
+    positions: [number, number][]
+  ): [number, number] => {
     if (positions.length === 0) return [0, 0];
     let lat = 0;
     let lng = 0;
-    positions.forEach(pos => {
+    positions.forEach((pos) => {
       lat += pos[0];
       lng += pos[1];
     });
@@ -259,7 +290,7 @@ const DetailMap: React.FC<DetailMapProps> = ({
       {/* Use the MapViewSetter component to handle map reference and view settings */}
       <MapViewSetter center={center} zoom={zoom} onMapRef={onMapRef} />
       <Legend />
-      
+
       {/* Road segments with different colors */}
       {segments.map((seg, index) => {
         let color;
@@ -277,37 +308,32 @@ const DetailMap: React.FC<DetailMapProps> = ({
             color = "gray"; // Default
         }
         return (
-          <Polyline 
+          <Polyline
             key={`segment-${index}`}
-            positions={seg.segment} 
+            positions={seg.segment}
             color={color}
             weight={5}
             opacity={0.7}
           />
         );
       })}
-      
+
       {/* Tollways */}
       {tollways.map((toll, index) => (
-        <Polyline 
+        <Polyline
           key={`toll-${index}`}
-          positions={toll.segment} 
+          positions={toll.segment}
           color="purple"
           weight={5}
           opacity={0.7}
         />
       ))}
-      
+
       {/* Main route path if segments are not provided */}
       {segments.length === 0 && routePath.length > 0 && (
-        <Polyline 
-          positions={routePath} 
-          color="blue" 
-          weight={5}
-          opacity={0.7}
-        />
+        <Polyline positions={routePath} color="blue" weight={5} opacity={0.7} />
       )}
-      
+
       {/* Markers for waypoints */}
       {markers.map((marker, index) => {
         return (
@@ -319,29 +345,36 @@ const DetailMap: React.FC<DetailMapProps> = ({
             <Popup>
               <div className="text-sm">
                 <div className="font-semibold mb-1">
-                  {index === 0 ? "Titik Awal" : 
-                   index === markers.length - 1 ? "Titik Akhir" : 
-                   `Waypoint ${index}`}
+                  {index === 0
+                    ? "Titik Awal"
+                    : index === markers.length - 1
+                    ? "Titik Akhir"
+                    : `Waypoint ${index}`}
                 </div>
-                <div>{marker.address || `${marker.position[0].toFixed(6)}, ${marker.position[1].toFixed(6)}`}</div>
+                <div>
+                  {marker.address ||
+                    `${marker.position[0].toFixed(
+                      6
+                    )}, ${marker.position[1].toFixed(6)}`}
+                </div>
               </div>
             </Popup>
           </Marker>
         );
       })}
-      
+
       {/* Impassible areas */}
       {impassibleMarkers.map((markerGroup, groupIndex) => {
         if (markerGroup.length < 3) return null;
-        
+
         // Create polygon positions from markers
-        const polygonPositions = markerGroup.map(marker => marker.position);
+        const polygonPositions = markerGroup.map((marker) => marker.position);
         const reason = markerGroup[0]?.reason || "Area yang dihindari";
         const photoData = markerGroup[0]?.photoData;
-        
+
         // Calculate center for label
         const centerPosition = calculatePolygonCenter(polygonPositions);
-        
+
         // Create center icon with area number
         const centerIcon = L.divIcon({
           className: "custom-center-marker",
@@ -366,18 +399,18 @@ const DetailMap: React.FC<DetailMapProps> = ({
           iconSize: [26, 26],
           iconAnchor: [13, 13],
         });
-        
+
         return (
           <React.Fragment key={`avoidance-area-${groupIndex}`}>
             {/* Polygon for the avoidance area */}
-            <Polygon 
-              positions={polygonPositions} 
+            <Polygon
+              positions={polygonPositions}
               color="red"
               fillColor="red"
               fillOpacity={0.2}
               weight={2}
             />
-            
+
             {/* Center marker with popup */}
             <Marker position={centerPosition} icon={centerIcon}>
               <Popup>
@@ -385,17 +418,18 @@ const DetailMap: React.FC<DetailMapProps> = ({
                   <h3 className="text-lg font-bold mb-2">
                     Area {groupIndex + 1} yang Dihindari
                   </h3>
-                  
+
                   <div className="mb-2">
                     <span className="font-semibold">Alasan:</span> {reason}
                   </div>
-                  
-                  {photoData && (
+
+                  {/* Prioritas menggunakan photoURL jika tersedia, fallback ke photoData */}
+                  {(markerGroup[0]?.photoURL || photoData) && (
                     <div className="mt-3">
                       <h4 className="font-semibold mb-1">Bukti Foto:</h4>
                       <div className="mt-1">
                         <img
-                          src={photoData}
+                          src={markerGroup[0]?.photoURL || photoData}
                           alt="Bukti foto area yang dihindari"
                           className="max-w-full h-auto rounded"
                           style={{ maxHeight: "150px" }}
@@ -406,7 +440,7 @@ const DetailMap: React.FC<DetailMapProps> = ({
                 </div>
               </Popup>
             </Marker>
-            
+
             {/* Markers for each point in the area */}
             {markerGroup.map((marker) => (
               <Marker

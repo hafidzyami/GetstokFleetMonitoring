@@ -11,6 +11,11 @@ import L from "leaflet";
 import { GeoSearchControl, OpenStreetMapProvider } from "leaflet-geosearch";
 import "leaflet-geosearch/dist/geosearch.css"; // Make sure to include the CSS
 
+interface ExtrasType {
+  waytype?: any;
+  tollways?: any;
+}
+
 interface Marker {
   id: string;
   position: LatLngTuple;
@@ -21,9 +26,10 @@ interface AvoidanceInfo {
   markers: Marker[];
   reason: string;
   isPermanent: boolean;
-  photo: string | null;
-  photoData: string | null;
+  photoURL: string | null;
+  photoKey: string | null;
   timestamp: string;
+  photo?: any;
 }
 
 // Define segment types
@@ -95,6 +101,29 @@ const BuatRutePage = () => {
   const [trucks, setTrucks] = useState<Truck[]>([]);
   const [isLoadingDrivers, setIsLoadingDrivers] = useState(false);
   const [isLoadingTrucks, setIsLoadingTrucks] = useState(false);
+
+  const [isUploading, setIsUploading] = useState(false);
+  const [photoURL, setPhotoURL] = useState<string | null>(null);
+  const [photoKey, setPhotoKey] = useState<string | null>(null);
+
+  const [extras, setExtras] = useState<ExtrasType | null>(null);
+  const extractAndSetExtras = (data: any) => {
+    try {
+      const extras = data?.routes?.[0]?.extras;
+      if (!extras) throw new Error("extras not found in response");
+
+      // Ambil hanya waytype & tollways
+      const filtered: ExtrasType = {
+        ...(extras.waytype && { waytype: extras.waytype }),
+        ...(extras.tollways && { tollways: extras.tollways }),
+      };
+
+      setExtras(filtered);
+    } catch (error) {
+      console.error("Failed to extract extras:", error);
+      setExtras(null); // Atau bisa juga biarkan nilainya sebelumnya
+    }
+  };
 
   const fetchDrivers = async () => {
     setIsLoadingDrivers(true);
@@ -180,27 +209,57 @@ const BuatRutePage = () => {
     fetchTrucks();
   }, []);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
-      setAvoidancePhoto(file);
 
+      // Tampilkan loading state
+      setIsUploading(true);
+
+      // Tampilkan preview lokal
       const reader = new FileReader();
       reader.onloadend = () => {
         const dataUrl = reader.result as string;
         setPhotoPreview(dataUrl);
-
-        // Simpan ke localStorage (hati-hati dengan ukuran!)
-        try {
-          localStorage.setItem(`avoidance-photo-${Date.now()}`, dataUrl);
-        } catch (e) {
-          console.error(
-            "Error saving to localStorage, likely size exceeded:",
-            e
-          );
-        }
       };
       reader.readAsDataURL(file);
+
+      try {
+        // Buat FormData untuk upload
+        const formData = new FormData();
+        formData.append("photo", file);
+
+        // Upload ke server
+        const response = await fetch("/api/v1/uploads/photo", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Upload failed with status: ${response.status}`);
+        }
+
+        // Parse response
+        const data = await response.json();
+
+        // Ambil URL dan key
+        setPhotoURL(data.data.url);
+        setPhotoKey(data.data.key);
+
+        // Jangan simpan file di avoidancePhoto lagi, karena kita sudah punya URL
+        setAvoidancePhoto(null);
+      } catch (error) {
+        console.error("Error uploading photo:", error);
+        alert("Gagal mengupload foto. Silakan coba lagi.");
+
+        // Reset preview jika upload gagal
+        setPhotoPreview(null);
+      } finally {
+        setIsUploading(false);
+      }
     }
   };
 
@@ -442,7 +501,10 @@ const BuatRutePage = () => {
       }
 
       const data = await response.json();
+      console.log("Directions API response:", data);
       setRouteGeometry(data.routes[0].geometry);
+      console.log("Route Geometry:", data.routes[0].geometry);
+      extractAndSetExtras(data);
       const latLngs = getLatLngsForMap(data.routes[0].geometry);
 
       // Process waytypes for segments
@@ -664,8 +726,8 @@ const BuatRutePage = () => {
       markers: [...impassibleMarkers],
       reason: avoidanceReason,
       isPermanent: isPermanent,
-      photo: avoidancePhoto ? avoidancePhoto.name : null,
-      photoData: photoPreview,
+      photoURL: photoURL, // Gunakan photoURL bukan photoData
+      photoKey: photoKey, // Simpan photoKey untuk referensi S3
       timestamp: new Date().toISOString(),
     };
 
@@ -679,8 +741,9 @@ const BuatRutePage = () => {
     setImpassibleMarkers([]);
     setAvoidanceReason("");
     setIsPermanent(false);
-    setAvoidancePhoto(null);
     setPhotoPreview(null);
+    setPhotoURL(null);
+    setPhotoKey(null);
     setFlagImpassible(false);
 
     // Reset file input
@@ -703,6 +766,7 @@ const BuatRutePage = () => {
   };
 
   // Handle form submission
+  // Fungsi handleGenerate yang diperbarui tanpa ketergantungan pada routeLatLngs
   const handleGenerate = async () => {
     if (!driver) {
       alert("Silakan pilih nama supir terlebih dahulu");
@@ -748,7 +812,7 @@ const BuatRutePage = () => {
           return {
             reason: area.reason,
             is_permanent: area.isPermanent,
-            photo: area.photoData,
+            photo_key: area.photoKey, // Kirim photo_key, bukan photo data base64
             points: area.markers.map((marker) => ({
               latitude: marker.position[0],
               longitude: marker.position[1],
@@ -757,8 +821,39 @@ const BuatRutePage = () => {
         }
       });
 
+      console.log("extras1", JSON.stringify(extras))
+      console.log("extras2", extras)
+    
+      // const extras = {
+      //   waytype: {
+      //     values: segments.map((seg, idx) => {
+      //       // Kita tidak bisa lagi menggunakan indeks dari routeLatLngs
+      //       // Gunakan indeks berurutan dengan perkiraan panjang segmen
+      //       const segmentLength = seg.segment.length;
+      //       return [idx * 10, idx * 10 + segmentLength - 1, seg.typeValue];
+      //     }),
+      //     summary: [],
+      //   },
+      //   tollways: {
+      //     values: tollways.map((toll, idx) => {
+      //       // Menggunakan pendekatan yang sama untuk tollways
+      //       const tollLength = toll.segment.length;
+      //       // Gunakan offset besar untuk menghindari tumpang tindih dengan waytype
+      //       return [
+      //         segments.length * 10 + idx * 10,
+      //         segments.length * 10 + idx * 10 + tollLength - 1,
+      //         toll.tollwayValue,
+      //       ];
+      //     }),
+      //     summary: [],
+      //   },
+      // };
+
+      // Handle format plat nomor
       let parts = vehiclePlate.split(" | ");
       let vehicle_plate = `${parts[0]}/${parts[1]}`;
+
+      console.log("routeGeometry", routeGeometry);
 
       // Make API request to create route plan
       const response = await fetch("/api/v1/route-plans", {
@@ -771,6 +866,7 @@ const BuatRutePage = () => {
           driver_name: driver,
           vehicle_plate: vehicle_plate,
           route_geometry: routeGeometry,
+          extras_data: JSON.stringify(extras), // Tambahkan extras data
           waypoints: waypoints,
           avoidance_areas: avoidanceAreas,
         }),
@@ -842,6 +938,8 @@ const BuatRutePage = () => {
     };
   }, []);
 
+  console.log("segmentsFIX1", segments);
+  console.log("tollwayFIX1s", tollways);
   return (
     <div className="flex flex-col h-full">
       <div className="h-full px-8 overflow-y-auto">
@@ -1179,23 +1277,40 @@ const BuatRutePage = () => {
                   >
                     Bukti Foto (opsional)
                   </label>
-                  <input
-                    type="file"
-                    id="avoidancePhoto"
-                    ref={fileInputRef}
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    className="block w-full text-sm text-gray-500
-                  file:mr-4 file:py-2 file:px-4
-                  file:rounded-md file:border-0
-                  file:text-sm file:font-semibold
-                  file:bg-blue-50 file:text-blue-700
-                  hover:file:bg-blue-100"
-                  />
-                  {avoidancePhoto && (
-                    <p className="mt-1 text-xs text-gray-500">
-                      File dipilih: {avoidancePhoto.name}
-                    </p>
+                  <div className="relative">
+                    <input
+                      type="file"
+                      id="avoidancePhoto"
+                      ref={fileInputRef}
+                      accept="image/*"
+                      onChange={handleFileChange}
+                      className={`block w-full text-sm text-gray-500
+        file:mr-4 file:py-2 file:px-4
+        file:rounded-md file:border-0
+        file:text-sm file:font-semibold
+        file:bg-blue-50 file:text-blue-700
+        hover:file:bg-blue-100 ${
+          isUploading ? "opacity-50 cursor-not-allowed" : ""
+        }`}
+                      disabled={isUploading}
+                    />
+                    {isUploading && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-70">
+                        <div className="w-5 h-5 border-2 border-t-blue-500 border-blue-200 rounded-full animate-spin"></div>
+                      </div>
+                    )}
+                  </div>
+                  {photoPreview && (
+                    <div className="mt-2">
+                      <p className="text-xs text-gray-500 mb-1">
+                        {photoURL ? "Foto berhasil diupload" : "Preview foto:"}
+                      </p>
+                      <img
+                        src={photoPreview}
+                        alt="Preview"
+                        className="h-24 object-cover rounded border border-gray-200"
+                      />
+                    </div>
                   )}
                 </div>
               </div>

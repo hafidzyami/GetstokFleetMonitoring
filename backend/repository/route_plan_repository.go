@@ -17,6 +17,7 @@ type RoutePlanRepository interface {
 	FindAvoidancePointsByAreaID(areaID uint) ([]*model.RouteAvoidancePoint, error)
 	FindAll() ([]*model.RoutePlan, error)
 	Update(routePlan *model.RoutePlan) error
+	UpdateAvoidanceArea(area *model.RouteAvoidanceArea) error
 	Delete(id uint) error
 }
 
@@ -99,6 +100,11 @@ func (r *routePlanRepository) FindAll() ([]*model.RoutePlan, error) {
 // Update updates an existing route plan
 func (r *routePlanRepository) Update(routePlan *model.RoutePlan) error {
 	return config.DB.Save(routePlan).Error
+}
+
+// UpdateAvoidanceArea updates an existing avoidance area
+func (r *routePlanRepository) UpdateAvoidanceArea(area *model.RouteAvoidanceArea) error {
+	return config.DB.Save(area).Error
 }
 
 // Delete deletes a route plan by ID

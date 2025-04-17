@@ -183,6 +183,8 @@ jobs:
             docker network prune -f
             # Remove all unused images (not just dangling ones)
             docker image prune -a -f
+            # Remove all build
+            docker builder prune -a -f
             
             # Build and start containers
             echo "Building and starting containers..."

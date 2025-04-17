@@ -3,6 +3,7 @@ package model
 import (
 	"time"
 	"gorm.io/gorm"
+	"encoding/json"
 )
 
 // RoutePlan represents a planned route for a truck
@@ -12,10 +13,32 @@ type RoutePlan struct {
 	TruckID       uint           `json:"truck_id"`
 	PlannerID     uint           `json:"planner_id"` // Track who created the route plan
 	RouteGeometry string         `json:"route_geometry" gorm:"type:text"`
+	ExtrasData    string         `json:"extras_data,omitempty" gorm:"type:text"` // JSON string untuk menyimpan extras data
 	Status        string         `json:"status" gorm:"default:'planned'"` // planned, active, completed, cancelled
 	CreatedAt     time.Time      `json:"created_at"`
 	UpdatedAt     time.Time      `json:"updated_at"`
 	DeletedAt     gorm.DeletedAt `json:"-" gorm:"index"`
+}
+
+type RouteExtras struct {
+	Waytype   *ExtraValues `json:"waytype,omitempty"`
+	Tollways  *ExtraValues `json:"tollways,omitempty"`
+	Surface   *ExtraValues `json:"surface,omitempty"`
+	Waycategory *ExtraValues `json:"waycategory,omitempty"`
+	Suitability *ExtraValues `json:"suitability,omitempty"`
+}
+
+// ExtraValues adalah struktur untuk menyimpan values dan summary dari extras
+type ExtraValues struct {
+	Values  [][]int         `json:"values"`
+	Summary []ExtraSummary `json:"summary"`
+}
+
+// ExtraSummary adalah struktur untuk menyimpan summary value
+type ExtraSummary struct {
+	Value      int     `json:"value"`
+	Distance   float64 `json:"distance"`
+	Amount     float64 `json:"amount"`
 }
 
 // RouteWaypoint represents a waypoint in a planned route
@@ -37,8 +60,8 @@ type RouteAvoidanceArea struct {
 	RoutePlanID      uint           `json:"route_plan_id"`
 	Reason           string         `json:"reason" gorm:"type:text"`
 	IsPermanent      bool           `json:"is_permanent"`
-	PhotoFileName    string         `json:"photo_file_name,omitempty"`
-	PhotoData        string         `json:"photo_data,omitempty" gorm:"type:text"`
+	PhotoURL         string         `json:"photo_url,omitempty"`     // S3 URL for the photo
+	PhotoKey         string         `json:"photo_key,omitempty"`     // S3 object key for the photo
 	CreatedAt        time.Time      `json:"created_at"`
 	UpdatedAt        time.Time      `json:"updated_at"`
 	DeletedAt        gorm.DeletedAt `json:"-" gorm:"index"`
@@ -61,6 +84,7 @@ type RoutePlanCreateRequest struct {
 	DriverName        string                      `json:"driver_name" validate:"required"`
 	VehiclePlate      string                      `json:"vehicle_plate" validate:"required"` 
 	RouteGeometry     string                      `json:"route_geometry"`
+	ExtrasData        string                      `json:"extras_data,omitempty"` // JSON string data untuk extras
 	Waypoints         []WaypointRequest           `json:"waypoints" validate:"required,min=2"`
 	AvoidanceAreas    []AvoidanceAreaRequest      `json:"avoidance_areas,omitempty"`
 }
@@ -76,7 +100,8 @@ type WaypointRequest struct {
 type AvoidanceAreaRequest struct {
 	Reason      string               `json:"reason" validate:"required"`
 	IsPermanent bool                 `json:"is_permanent"`
-	Photo       string               `json:"photo,omitempty"` // Base64 encoded image
+	Photo       string               `json:"photo,omitempty"` // Base64 encoded image (deprecated)
+	PhotoKey    string               `json:"photo_key,omitempty"` // S3 object key yang sudah diupload
 	Points      []AvoidancePointRequest `json:"points" validate:"required,min=3"`
 }
 
@@ -91,8 +116,9 @@ type RoutePlanResponse struct {
 	ID              uint                  `json:"id"`
 	DriverName      string                `json:"driver_name"`
 	VehiclePlate    string                `json:"vehicle_plate"`
-	PlannerName     string                `json:"planner_name"` // Added planner name to response
+	PlannerName     string                `json:"planner_name"` 
 	RouteGeometry   string                `json:"route_geometry"`
+	Extras          *RouteExtras          `json:"extras,omitempty"` // Route extras data
 	Status          string                `json:"status"`
 	Waypoints       []WaypointResponse    `json:"waypoints"`
 	AvoidanceAreas  []AvoidanceAreaResponse `json:"avoidance_areas,omitempty"`
@@ -114,7 +140,7 @@ type AvoidanceAreaResponse struct {
 	ID          uint                    `json:"id"`
 	Reason      string                  `json:"reason"`
 	IsPermanent bool                    `json:"is_permanent"`
-	HasPhoto    bool                    `json:"has_photo"`
+	PhotoURL    string                  `json:"photo_url,omitempty"`
 	Points      []AvoidancePointResponse `json:"points"`
 }
 
@@ -124,4 +150,34 @@ type AvoidancePointResponse struct {
 	Latitude   float64 `json:"latitude"`
 	Longitude  float64 `json:"longitude"`
 	Order      int     `json:"order"`
+}
+
+func (r *RoutePlan) SetExtras(extras *RouteExtras) error {
+	if extras == nil {
+		r.ExtrasData = ""
+		return nil
+	}
+	
+	data, err := json.Marshal(extras)
+	if err != nil {
+		return err
+	}
+	
+	r.ExtrasData = string(data)
+	return nil
+}
+
+// GetExtras untuk mendapatkan extras data dari field ExtrasData
+func (r *RoutePlan) GetExtras() (*RouteExtras, error) {
+	if r.ExtrasData == "" {
+		return nil, nil
+	}
+	
+	var extras RouteExtras
+	err := json.Unmarshal([]byte(r.ExtrasData), &extras)
+	if err != nil {
+		return nil, err
+	}
+	
+	return &extras, nil
 }

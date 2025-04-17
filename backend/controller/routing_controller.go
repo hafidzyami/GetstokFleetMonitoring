@@ -17,8 +17,8 @@ func NewRoutingController(routingService service.RoutingService) *RoutingControl
 }
 
 // GetDirections godoc
-// @Summary Get directions from OpenRouteService
-// @Description Proxy API call to OpenRouteService to get directions
+// @Summary Get directions from external routing service (OpenRouteService)
+// @Description Proxy API call to routing service to get directions
 // @Tags routing
 // @Accept json
 // @Produce json
@@ -30,10 +30,10 @@ func NewRoutingController(routingService service.RoutingService) *RoutingControl
 // @Failure 500 {object} model.BaseResponse "Internal server error"
 // @Router /routing/directions [post]
 func (c *RoutingController) GetDirections(ctx *fiber.Ctx) error {
-	// Ambil body request
+	// Get request body
 	requestBody := ctx.Body()
 	
-	// Validasi JSON
+	// Validate JSON
 	var req model.RoutingRequest
 	if err := ctx.BodyParser(&req); err != nil {
 		return ctx.Status(fiber.StatusBadRequest).JSON(model.SimpleErrorResponse(
@@ -42,7 +42,7 @@ func (c *RoutingController) GetDirections(ctx *fiber.Ctx) error {
 		))
 	}
 	
-	// Periksa apakah ada koordinat
+	// Check if there are enough coordinates
 	if len(req.Coordinates) < 2 {
 		return ctx.Status(fiber.StatusBadRequest).JSON(model.SimpleErrorResponse(
 			fiber.StatusBadRequest,
@@ -50,7 +50,7 @@ func (c *RoutingController) GetDirections(ctx *fiber.Ctx) error {
 		))
 	}
 	
-	// Panggil service untuk mendapatkan directions
+	// Call service to get directions
 	responseBody, err := c.routingService.GetDirections(requestBody)
 	if err != nil {
 		return ctx.Status(fiber.StatusInternalServerError).JSON(model.SimpleErrorResponse(
@@ -59,7 +59,7 @@ func (c *RoutingController) GetDirections(ctx *fiber.Ctx) error {
 		))
 	}
 	
-	// Kirim response ke client
+	// Send response to client
 	ctx.Set("Content-Type", "application/json")
 	return ctx.Send(responseBody)
 }
