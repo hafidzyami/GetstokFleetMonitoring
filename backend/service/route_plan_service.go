@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"fmt"
 
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/model"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/repository"
@@ -12,10 +13,12 @@ import (
 
 type RoutePlanService interface {
 	CreateRoutePlan(req model.RoutePlanCreateRequest, plannerId uint) (*model.RoutePlanResponse, error)
+	GetRoutePlansByDriverID(driverID uint) ([]*model.RoutePlanResponse, error)
 	GetRoutePlanByID(id uint) (*model.RoutePlanResponse, error)
 	GetAllRoutePlans() ([]*model.RoutePlanResponse, error)
 	UpdateRoutePlanStatus(id uint, status string) error
 	DeleteRoutePlan(id uint) error
+	AddAvoidanceAreaToRoutePlan(routePlanID uint, areaRequests []model.AvoidanceAreaRequest) (*model.RoutePlanResponse, error)
 }
 
 type routePlanService struct {
@@ -38,6 +41,81 @@ func NewRoutePlanService(
 		userRepo:      userRepo,
 		s3Service:     s3Service,
 	}
+}
+
+func (s *routePlanService) AddAvoidanceAreaToRoutePlan(routePlanID uint, areaRequests []model.AvoidanceAreaRequest) (*model.RoutePlanResponse, error) {
+    // Validasi route plan exists
+    _, err := s.routePlanRepo.FindByID(routePlanID)
+    if err != nil {
+        return nil, fmt.Errorf("route plan not found: %w", err)
+    }
+    
+    // Iterasi setiap area
+    for _, areaReq := range areaRequests {
+        // Buat area
+        area := &model.RouteAvoidanceArea{
+            RoutePlanID: routePlanID,
+            Reason:      areaReq.Reason,
+            IsPermanent: areaReq.IsPermanent,
+            CreatedAt:   time.Now(),
+            UpdatedAt:   time.Now(),
+        }
+        
+        // Handle photo jika ada
+        if areaReq.PhotoKey != "" && s.s3Service != nil {
+            area.PhotoKey = areaReq.PhotoKey
+            photoURL, err := s.s3Service.GeneratePresignedURL(areaReq.PhotoKey)
+            if err == nil {
+                area.PhotoURL = photoURL
+            }
+        }
+        
+        // Simpan area
+        if err := s.routePlanRepo.AddAvoidanceArea(area); err != nil {
+            return nil, fmt.Errorf("failed to save avoidance area: %w", err)
+        }
+        
+        // Buat points
+        var points []*model.RouteAvoidancePoint
+        for i, point := range areaReq.Points {
+            points = append(points, &model.RouteAvoidancePoint{
+                RouteAvoidanceAreaID: area.ID,
+                Latitude:             point.Latitude,
+                Longitude:            point.Longitude,
+                Order:                i,
+                CreatedAt:            time.Now(),
+                UpdatedAt:            time.Now(),
+            })
+        }
+        
+        // Simpan points
+        if err := s.routePlanRepo.AddAvoidancePoints(points); err != nil {
+            return nil, fmt.Errorf("failed to save avoidance points: %w", err)
+        }
+    }
+    
+    // Return updated route plan
+    return s.GetRoutePlanByID(routePlanID)
+}
+
+func (s *routePlanService) GetRoutePlansByDriverID(driverID uint) ([]*model.RoutePlanResponse, error) {
+	// Get route plans by driver ID
+	routePlans, err := s.routePlanRepo.FindByDriverID(driverID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create responses
+	responses := make([]*model.RoutePlanResponse, len(routePlans))
+	for i, routePlan := range routePlans {
+		response, err := s.GetRoutePlanByID(routePlan.ID)
+		if err != nil {
+			return nil, err
+		}
+		responses[i] = response
+	}
+
+	return responses, nil
 }
 
 // CreateRoutePlan creates a new route plan

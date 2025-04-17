@@ -9,6 +9,7 @@ import {
   Polyline,
   Polygon,
   useMap,
+  useMapEvents,
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -18,8 +19,8 @@ import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
 import Image from "next/image";
 
-// Define props for the DetailMap component
-interface DetailMapProps {
+// Define props for the DriverMap component
+interface DriverMapProps {
   center: [number, number];
   zoom?: number;
   markers: Array<{
@@ -34,7 +35,6 @@ interface DetailMapProps {
       reason?: string;
       photoURL?: string;
       photoData?: string;
-      requesterID?: any;
     }>
   >;
   routePath?: Array<[number, number]>;
@@ -47,6 +47,9 @@ interface DetailMapProps {
     tollwayValue: number;
   }>;
   onMapRef?: (map: L.Map) => void;
+  isMarkingMode?: boolean;
+  onAddPoint?: (point: [number, number]) => void;
+  newAvoidancePoints?: Array<[number, number]>;
 }
 
 // Component to set the map view and handle map reference
@@ -60,7 +63,6 @@ const MapViewSetter = ({
   onMapRef?: (map: L.Map) => void;
 }) => {
   const map = useMap();
-  const [imageLoading, setImageLoading] = useState(true);
 
   useEffect(() => {
     map.setView(center, zoom);
@@ -69,6 +71,25 @@ const MapViewSetter = ({
       onMapRef(map);
     }
   }, [center, zoom, map, onMapRef]);
+
+  return null;
+};
+
+// MapClickHandler component to handle clicks on the map
+const MapClickHandler = ({
+  isMarkingMode,
+  onAddPoint,
+}: {
+  isMarkingMode?: boolean;
+  onAddPoint?: (point: [number, number]) => void;
+}) => {
+  const map = useMapEvents({
+    click: (e) => {
+      if (isMarkingMode && onAddPoint) {
+        onAddPoint([e.latlng.lat, e.latlng.lng]);
+      }
+    },
+  });
 
   return null;
 };
@@ -98,11 +119,24 @@ const Legend = () => {
   );
 };
 
+// Instructions for marking mode
+const MarkingInstructions = () => {
+  return (
+    <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-white p-3 rounded-lg shadow-lg z-[500] text-sm w-[90%] max-w-sm">
+      <div className="font-bold text-center mb-2">Mode Penandaan Area</div>
+      <div className="text-center text-gray-600">
+        Klik pada peta untuk membuat titik-titik area yang tidak dapat dilewati
+      </div>
+    </div>
+  );
+};
+
 // Initialize Leaflet icons
 let defaultIcon: any;
 let startIcon: any;
 let endIcon: any;
 let avoidanceIcon: any;
+let newPointIcon: any;
 
 // Function to create waypoint icons with numbers
 const createWaypointIcon = (text: string, bgColor: string) => {
@@ -114,7 +148,7 @@ const createWaypointIcon = (text: string, bgColor: string) => {
   });
 };
 
-const DetailMap: React.FC<DetailMapProps> = ({
+const DriverMap: React.FC<DriverMapProps> = ({
   center,
   zoom = 13,
   markers,
@@ -123,9 +157,11 @@ const DetailMap: React.FC<DetailMapProps> = ({
   segments = [],
   tollways = [],
   onMapRef,
+  isMarkingMode = false,
+  onAddPoint,
+  newAvoidancePoints = [],
 }) => {
   const [mounted, setMounted] = useState(false);
-  const hoverMarkerRef = useRef<L.Marker | null>(null);
   const waypointIcons = useRef<{ [key: number]: L.DivIcon }>({});
 
   useEffect(() => {
@@ -151,6 +187,14 @@ const DetailMap: React.FC<DetailMapProps> = ({
         iconAnchor: [9, 9],
       });
 
+      // New point icon (yellow)
+      newPointIcon = L.divIcon({
+        className: "custom-div-icon",
+        html: `<div style="background-color: #FFD600; width: 14px; height: 14px; display: flex; justify-content: center; align-items: center; border-radius: 50%; color: white; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.3);"></div>`,
+        iconSize: [14, 14],
+        iconAnchor: [7, 7],
+      });
+
       L.Marker.prototype.options.icon = defaultIcon;
       setMounted(true);
     }
@@ -174,88 +218,6 @@ const DetailMap: React.FC<DetailMapProps> = ({
         waypointIcons.current[i] = createWaypointIcon(label, color);
       }
     }
-
-    // Setup event handlers for elevation hover
-    const handleHoverPoint = (event: CustomEvent) => {
-      if (hoverMarkerRef.current && hoverMarkerRef.current.remove) {
-        hoverMarkerRef.current.remove();
-        hoverMarkerRef.current = null;
-      }
-
-      const point = event.detail;
-      if (point && point.lat && point.lng) {
-        // Use proper TypeScript technique for accessing custom properties
-        const container = document
-          .querySelector(".leaflet-map-pane")
-          ?.closest(".leaflet-container") as HTMLElement;
-        const map = container ? (container as any)._leaflet_map : null;
-
-        if (map) {
-          const hoverIcon = L.divIcon({
-            className: "hover-marker",
-            html: `<div style="
-              width: 12px;
-              height: 12px;
-              background-color: #ff0000;
-              border: 2px solid white;
-              border-radius: 50%;
-              box-shadow: 0 0 4px rgba(0,0,0,0.5);
-            "></div>`,
-            iconSize: [12, 12],
-            iconAnchor: [6, 6],
-          });
-
-          hoverMarkerRef.current = L.marker([point.lat, point.lng], {
-            icon: hoverIcon,
-            zIndexOffset: 1000,
-          }).addTo(map);
-
-          const elevationText =
-            point.elevation !== undefined
-              ? `Elevation: ${point.elevation.toFixed(1)} m<br>`
-              : "";
-
-          hoverMarkerRef.current
-            .bindTooltip(
-              `<div style="padding: 4px; font-size: 12px;">
-              ${elevationText}
-              Location: ${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}
-            </div>`,
-              {
-                permanent: true,
-                direction: "top",
-                className: "elevation-tooltip",
-                offset: [0, -8],
-              }
-            )
-            .openTooltip();
-        }
-      }
-    };
-
-    const handleHoverReset = () => {
-      if (hoverMarkerRef.current && hoverMarkerRef.current.remove) {
-        hoverMarkerRef.current.remove();
-        hoverMarkerRef.current = null;
-      }
-    };
-
-    document.addEventListener(
-      "elevation-hover",
-      handleHoverPoint as EventListener
-    );
-    document.addEventListener("elevation-hover-reset", handleHoverReset);
-
-    return () => {
-      document.removeEventListener(
-        "elevation-hover",
-        handleHoverPoint as EventListener
-      );
-      document.removeEventListener("elevation-hover-reset", handleHoverReset);
-      if (hoverMarkerRef.current && hoverMarkerRef.current.remove) {
-        hoverMarkerRef.current.remove();
-      }
-    };
   }, [mounted, markers]);
 
   const calculatePolygonCenter = (
@@ -292,7 +254,15 @@ const DetailMap: React.FC<DetailMapProps> = ({
 
       {/* Use the MapViewSetter component to handle map reference and view settings */}
       <MapViewSetter center={center} zoom={zoom} onMapRef={onMapRef} />
+
+      {/* Add MapClickHandler for marking mode */}
+      <MapClickHandler isMarkingMode={isMarkingMode} onAddPoint={onAddPoint} />
+
+      {/* Show legend */}
       <Legend />
+
+      {/* Show marking instructions when in marking mode */}
+      {isMarkingMode && <MarkingInstructions />}
 
       {segments.map((seg: any, index: any) => {
         let color;
@@ -341,35 +311,33 @@ const DetailMap: React.FC<DetailMapProps> = ({
       )}
 
       {/* Markers for waypoints */}
-      {markers.map((marker, index) => {
-        return (
-          <Marker
-            key={marker.id}
-            position={marker.position}
-            icon={waypointIcons.current[index] || defaultIcon}
-          >
-            <Popup>
-              <div className="text-sm">
-                <div className="font-semibold mb-1">
-                  {index === 0
-                    ? "Titik Awal"
-                    : index === markers.length - 1
-                    ? "Titik Akhir"
-                    : `Waypoint ${index}`}
-                </div>
-                <div>
-                  {marker.address ||
-                    `${marker.position[0].toFixed(
-                      6
-                    )}, ${marker.position[1].toFixed(6)}`}
-                </div>
+      {markers.map((marker, index) => (
+        <Marker
+          key={marker.id}
+          position={marker.position}
+          icon={waypointIcons.current[index] || defaultIcon}
+        >
+          <Popup>
+            <div className="text-sm">
+              <div className="font-semibold mb-1">
+                {index === 0
+                  ? "Titik Awal"
+                  : index === markers.length - 1
+                  ? "Titik Akhir"
+                  : `Waypoint ${index}`}
               </div>
-            </Popup>
-          </Marker>
-        );
-      })}
+              <div>
+                {marker.address ||
+                  `${marker.position[0].toFixed(
+                    6
+                  )}, ${marker.position[1].toFixed(6)}`}
+              </div>
+            </div>
+          </Popup>
+        </Marker>
+      ))}
 
-      {/* Impassible areas */}
+      {/* Impassible areas (existing) */}
       {impassibleMarkers.map((markerGroup, groupIndex) => {
         if (markerGroup.length < 3) return null;
 
@@ -377,7 +345,6 @@ const DetailMap: React.FC<DetailMapProps> = ({
         const polygonPositions = markerGroup.map((marker) => marker.position);
         const reason = markerGroup[0]?.reason || "Area yang dihindari";
         const photoData = markerGroup[0]?.photoData;
-        const requesterID = markerGroup[0]?.requesterID
 
         // Calculate center for label
         const centerPosition = calculatePolygonCenter(polygonPositions);
@@ -426,12 +393,8 @@ const DetailMap: React.FC<DetailMapProps> = ({
                     Area {groupIndex + 1} yang Dihindari
                   </h3>
 
-
                   <div className="mb-2">
                     <span className="font-semibold">Alasan:</span> {reason}
-                  </div>
-                  <div className="mb-2">
-                    <span className="font-semibold">Oleh:</span> {requesterID}
                   </div>
 
                   {/* Prioritas menggunakan photoURL jika tersedia, fallback ke photoData */}
@@ -463,8 +426,50 @@ const DetailMap: React.FC<DetailMapProps> = ({
           </React.Fragment>
         );
       })}
+
+      {/* New avoidance area that is being drawn */}
+      {newAvoidancePoints.length > 0 && (
+        <>
+          {/* Show the individual points */}
+          {newAvoidancePoints.map((point, index) => (
+            <Marker
+              key={`new-point-${index}`}
+              position={point}
+              icon={newPointIcon}
+            >
+              <Popup>
+                <div className="text-sm">
+                  <div className="font-semibold">Titik {index + 1}</div>
+                  <div>
+                    {point[0].toFixed(6)}, {point[1].toFixed(6)}
+                  </div>
+                </div>
+              </Popup>
+            </Marker>
+          ))}
+
+          {/* Show the line connecting points */}
+          <Polyline
+            positions={newAvoidancePoints}
+            color="yellow"
+            weight={3}
+            dashArray="5, 10"
+          />
+
+          {/* Show the polygon if there are at least 3 points */}
+          {newAvoidancePoints.length >= 3 && (
+            <Polygon
+              positions={newAvoidancePoints}
+              color="yellow"
+              fillColor="yellow"
+              fillOpacity={0.2}
+              weight={2}
+            />
+          )}
+        </>
+      )}
     </MapContainer>
   );
 };
 
-export default DetailMap;
+export default DriverMap;

@@ -2,6 +2,7 @@ package controller
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/model"
@@ -240,4 +241,120 @@ func (c *RoutePlanController) DeleteRoutePlan(ctx *fiber.Ctx) error {
 		"route-plans.delete",
 		map[string]string{"message": "Route plan deleted successfully"},
 	))
+}
+
+// GetRoutePlansByDriverID godoc
+// @Summary Get route plans by driver ID
+// @Description Get all route plans created for a specific driver
+// @Tags route-plans
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param Authorization header string true "Bearer token" default(Bearer <token>)
+// @Param driverID path int true "Driver ID"
+// @Success 200 {object} model.BaseResponse "Route plans data"
+// @Failure 401 {object} model.BaseResponse "Unauthorized"
+// @Failure 404 {object} model.BaseResponse "Not found"
+// @Router /route-plans/driver/{driverID} [get]
+func (c *RoutePlanController) GetRoutePlansByDriverID(ctx *fiber.Ctx) error {
+    // Get driver ID from params
+    driverIDParam := ctx.Params("driverID")
+    driverID, err := strconv.ParseUint(driverIDParam, 10, 32)
+    if err != nil {
+        return ctx.Status(fiber.StatusBadRequest).JSON(model.SimpleErrorResponse(
+            fiber.StatusBadRequest,
+            "Invalid driver ID",
+        ))
+    }
+
+    // Get route plans for driver
+    routePlans, err := c.routePlanService.GetRoutePlansByDriverID(uint(driverID))
+    if err != nil {
+        return ctx.Status(fiber.StatusInternalServerError).JSON(model.SimpleErrorResponse(
+            fiber.StatusInternalServerError,
+            "Failed to get route plans data",
+        ))
+    }
+
+    // If no route plans found, return empty array instead of 404
+    if len(routePlans) == 0 {
+        return ctx.Status(fiber.StatusOK).JSON(model.SuccessResponse(
+            "route-plans.getByDriverID",
+            []interface{}{},
+        ))
+    }
+
+    // Return response
+    return ctx.Status(fiber.StatusOK).JSON(model.SuccessResponse(
+        "route-plans.getByDriverID",
+        routePlans,
+    ))
+}
+
+// AddAvoidanceArea godoc
+// @Summary Add avoidance area to a route plan
+// @Description Add new avoidance area with points to an existing route plan
+// @Tags route-plans
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param Authorization header string true "Bearer token" default(Bearer <token>)
+// @Param id path int true "Route plan ID"
+// @Param request body model.AvoidanceAreaRequest true "Avoidance area details"
+// @Success 200 {object} model.BaseResponse "Successfully added avoidance area"
+// @Failure 400 {object} model.BaseResponse "Bad request"
+// @Failure 401 {object} model.BaseResponse "Unauthorized"
+// @Failure 404 {object} model.BaseResponse "Not found"
+// @Router /route-plans/{id}/avoidance [post]
+func (c *RoutePlanController) AddAvoidanceArea(ctx *fiber.Ctx) error {
+    // Parse route plan ID
+    idParam := ctx.Params("id")
+    id, err := strconv.ParseUint(idParam, 10, 32)
+    if err != nil {
+        return ctx.Status(fiber.StatusBadRequest).JSON(model.SimpleErrorResponse(
+            fiber.StatusBadRequest,
+            "Invalid route plan ID",
+        ))
+    }
+    
+    // Parse request
+    var req struct {
+        AvoidanceAreas []model.AvoidanceAreaRequest `json:"avoidance_areas"`
+    }
+    if err := ctx.BodyParser(&req); err != nil {
+        return ctx.Status(fiber.StatusBadRequest).JSON(model.SimpleErrorResponse(
+            fiber.StatusBadRequest,
+            "Invalid request body: " + err.Error(),
+        ))
+    }
+    
+    // Validasi request
+    if len(req.AvoidanceAreas) == 0 {
+        return ctx.Status(fiber.StatusBadRequest).JSON(model.SimpleErrorResponse(
+            fiber.StatusBadRequest,
+            "At least one avoidance area is required",
+        ))
+    }
+    
+    // Panggil service
+    result, err := c.routePlanService.AddAvoidanceAreaToRoutePlan(uint(id), req.AvoidanceAreas)
+    if err != nil {
+        // Handle error tergantung tipe errornya
+        if strings.Contains(err.Error(), "not found") {
+            return ctx.Status(fiber.StatusNotFound).JSON(model.SimpleErrorResponse(
+                fiber.StatusNotFound,
+                err.Error(),
+            ))
+        }
+        return ctx.Status(fiber.StatusInternalServerError).JSON(model.SimpleErrorResponse(
+            fiber.StatusInternalServerError,
+            err.Error(),
+        ))
+    }
+    
+    // Return response
+    return ctx.Status(fiber.StatusOK).JSON(model.SuccessResponse(
+        "route-plans.addAvoidanceArea",
+        result,
+    ))
 }

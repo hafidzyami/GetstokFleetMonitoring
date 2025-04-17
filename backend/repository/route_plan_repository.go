@@ -12,6 +12,7 @@ type RoutePlanRepository interface {
 	AddAvoidanceArea(area *model.RouteAvoidanceArea) error
 	AddAvoidancePoints(points []*model.RouteAvoidancePoint) error
 	FindByID(id uint) (*model.RoutePlan, error)
+	FindByDriverID(driverID uint) ([]*model.RoutePlan, error)
 	FindWaypointsByRoutePlanID(routePlanID uint) ([]*model.RouteWaypoint, error)
 	FindAvoidanceAreasByRoutePlanID(routePlanID uint) ([]*model.RouteAvoidanceArea, error)
 	FindAvoidancePointsByAreaID(areaID uint) ([]*model.RouteAvoidancePoint, error)
@@ -19,12 +20,43 @@ type RoutePlanRepository interface {
 	Update(routePlan *model.RoutePlan) error
 	UpdateAvoidanceArea(area *model.RouteAvoidanceArea) error
 	Delete(id uint) error
+	AddAvoidanceAreaWithPoints(area *model.RouteAvoidanceArea, points []*model.RouteAvoidancePoint) error
 }
 
 type routePlanRepository struct{}
 
 func NewRoutePlanRepository() RoutePlanRepository {
 	return &routePlanRepository{}
+}
+
+func (r *routePlanRepository) AddAvoidanceAreaWithPoints(area *model.RouteAvoidanceArea, points []*model.RouteAvoidancePoint) error {
+    return config.DB.Transaction(func(tx *gorm.DB) error {
+        // Simpan area
+        if err := tx.Create(area).Error; err != nil {
+            return err
+        }
+        
+        // Assign area ID ke setiap point
+        for i := range points {
+            points[i].RouteAvoidanceAreaID = area.ID
+        }
+        
+        // Simpan points
+        if err := tx.CreateInBatches(points, len(points)).Error; err != nil {
+            return err
+        }
+        
+        return nil
+    })
+}
+
+func (r *routePlanRepository) FindByDriverID(driverID uint) ([]*model.RoutePlan, error) {
+    var routePlans []*model.RoutePlan
+    err := config.DB.Where("driver_id = ?", driverID).Find(&routePlans).Error
+    if err != nil {
+        return nil, err
+    }
+    return routePlans, nil
 }
 
 // Create creates a new route plan in the database

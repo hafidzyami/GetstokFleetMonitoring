@@ -107,6 +107,10 @@ const BuatRutePage = () => {
   const [photoKey, setPhotoKey] = useState<string | null>(null);
 
   const [extras, setExtras] = useState<ExtrasType | null>(null);
+  const user: any = localStorage.getItem("user");
+  const userData = user ? JSON.parse(user) : null;
+  const requester_id = userData?.id || null;
+
   const extractAndSetExtras = (data: any) => {
     try {
       const extras = data?.routes?.[0]?.extras;
@@ -501,9 +505,7 @@ const BuatRutePage = () => {
       }
 
       const data = await response.json();
-      console.log("Directions API response:", data);
       setRouteGeometry(data.routes[0].geometry);
-      console.log("Route Geometry:", data.routes[0].geometry);
       extractAndSetExtras(data);
       const latLngs = getLatLngsForMap(data.routes[0].geometry);
 
@@ -576,7 +578,9 @@ const BuatRutePage = () => {
       }
     } catch (error) {
       console.error("Error fetching directions:", error);
-      alert("Gagal mendapatkan rute. Silakan coba lagi.");
+      alert(
+        "Gagal mendapatkan rute karena internet atau tidak ada jalan yang dapat dilalui. Silakan coba lagi."
+      );
     } finally {
       setIsLoadingRoute(false);
     }
@@ -806,6 +810,7 @@ const BuatRutePage = () => {
               latitude: marker.position[0],
               longitude: marker.position[1],
             })),
+            requester_id: requester_id,
           };
         } else {
           // New format (object with markers property)
@@ -817,13 +822,13 @@ const BuatRutePage = () => {
               latitude: marker.position[0],
               longitude: marker.position[1],
             })),
+            requester_id: requester_id,
           };
         }
       });
+      console.log("requester_id", requester_id);
+      console.log("avoidanceAreas", avoidanceAreas);
 
-      console.log("extras1", JSON.stringify(extras))
-      console.log("extras2", extras)
-    
       // const extras = {
       //   waytype: {
       //     values: segments.map((seg, idx) => {
@@ -938,8 +943,6 @@ const BuatRutePage = () => {
     };
   }, []);
 
-  console.log("segmentsFIX1", segments);
-  console.log("tollwayFIX1s", tollways);
   return (
     <div className="flex flex-col h-full">
       <div className="h-full px-8 overflow-y-auto">
