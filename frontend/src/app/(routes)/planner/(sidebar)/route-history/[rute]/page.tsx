@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
+import { useAuth } from "@/app/contexts/AuthContext";
 // Import types directly to avoid confusion
 import "leaflet";
 import "boxicons/css/boxicons.min.css";
@@ -39,6 +40,7 @@ interface AvoidanceArea {
   is_permanent: boolean;
   has_photo: boolean;
   photo_url?: string;
+  requester_id?: number;
   points: AvoidancePointResponse[];
 }
 
@@ -87,6 +89,8 @@ interface AvoidanceMarker {
   id: string;
   position: [number, number]; // Explicit tuple type to match DetailMap
   reason?: string;
+  photoURL?: string;
+  requesterID?: number;
 }
 
 const RouteHistoryPage = () => {
@@ -109,6 +113,9 @@ const RouteHistoryPage = () => {
     { segment: [number, number][]; tollwayValue: number }[]
   >([]);
   const [surfaceTypes, setSurfaceTypes] = useState<any>([]);
+  const [requesterNames, setRequesterNames] = useState<{ [key: number]: string }>({});
+  const { user } = useAuth();
+  const [isProcessingAvoidanceArea, setIsProcessingAvoidanceArea] = useState(false);
 
   // Load Map component dynamically to avoid SSR issues
   const Map = useMemo(
@@ -152,7 +159,6 @@ const RouteHistoryPage = () => {
         }
 
         const data: ApiResponse = await response.json();
-        console.log("Route plan data:", data);
         setRoutePlan(data.data);
 
         // Process waypoints for map markers
@@ -176,18 +182,52 @@ const RouteHistoryPage = () => {
 
         // Process avoidance areas
         if (data.data.avoidance_areas && data.data.avoidance_areas.length > 0) {
-          const avoidanceMarkersGroups = data.data.avoidance_areas.map((area) =>
-            area.points.map((point) => ({
-              id: `avoidance-${area.id}-${point.id}`,
-              position: [point.latitude, point.longitude] as [number, number],
-              reason: area.reason,
-              photoURL: area.photo_url, // Gunakan photo_url dari response API
-            }))
-          );
+        const avoidanceMarkersGroups = data.data.avoidance_areas.map((area) =>
+        area.points.map((point) => ({
+        id: `avoidance-${area.id}-${point.id}`,
+        position: [point.latitude, point.longitude] as [number, number],
+        reason: area.reason,
+        photoURL: area.photo_url, // Gunakan photo_url dari response API
+          requesterID: area.requester_id, // Tambahkan requester_id
+          }))
+        );
           setImpassibleMarkers(avoidanceMarkersGroups);
-        } else {
-          setImpassibleMarkers([]);
-        }
+        
+          // Fetch requester names
+            const fetchRequesterNames = async () => {
+              const newRequesterNames: { [key: number]: string } = {};
+              
+              for (const area of data.data.avoidance_areas) {
+                if (area.requester_id && !requesterNames[area.requester_id]) {
+                  try {
+                    const response = await fetch(`/api/v1/users/${area.requester_id}`, {
+                      headers: {
+                        Authorization: `Bearer ${token}`,
+                      },
+                    });
+                    
+                    if (response.ok) {
+                      const userData = await response.json();
+                      console.log(`Fetched user data for ID ${area.requester_id}:`, userData);
+                      if (userData.data && userData.data.name) {
+                        newRequesterNames[area.requester_id] = userData.data.name;
+                      }
+                    }
+                  } catch (error) {
+                    console.error(`Error fetching user ${area.requester_id}:`, error);
+                  }
+                }
+              }
+              
+              if (Object.keys(newRequesterNames).length > 0) {
+                setRequesterNames(prev => ({ ...prev, ...newRequesterNames }));
+              }
+            };
+            
+            fetchRequesterNames();
+          } else {
+            setImpassibleMarkers([]);
+          }
 
         // Process route geometry and segments
         if (data.data.route_geometry) {
@@ -289,9 +329,6 @@ const RouteHistoryPage = () => {
     fetchRoutePlanDetail();
   }, [params.rute, router]);
 
-  console.log("segments", segments);
-  console.log("tollways", tollways);
-
   // Function to format status with color
   const getStatusDisplay = (status: string) => {
     const statusMap: Record<
@@ -318,6 +355,11 @@ const RouteHistoryPage = () => {
         bgColor: "bg-red-100",
         textColor: "text-red-800",
       },
+      "on confirmation":{
+        text: "Menunggu Konfirmasi",
+        bgColor: "bg-yellow-100",
+        textColor: "text-yellow-800",
+      }
     };
 
     const statusInfo = statusMap[status.toLowerCase()] || {
@@ -432,9 +474,6 @@ const RouteHistoryPage = () => {
     );
   }
 
-  console.log("segmentsFIX", segments);
-  console.log("tollwaysFIX", tollways);
-
   return (
     <div className="h-full px-8 py-6 overflow-y-auto">
       {/* Header with back button and route info */}
@@ -454,42 +493,15 @@ const RouteHistoryPage = () => {
               <span>{formatDate(routePlan.created_at)}</span>
               <span>•</span>
               {getStatusDisplay(routePlan.status)}
+              {routePlan.status === "on confirmation" && (
+                <div className="ml-2 px-3 py-1 bg-yellow-100 border border-yellow-300 text-yellow-800 rounded-md text-sm animate-pulse">
+                  Silakan konfirmasi area yang tidak bisa dilalui
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        <div className="dropdown dropdown-end">
-          <button className="px-4 py-2 bg-blue-500 text-white rounded-md flex items-center gap-2">
-            <span>Update Status</span>
-            <i className="bx bx-chevron-down"></i>
-          </button>
-          <div className="dropdown-content bg-white shadow-lg rounded-md p-2 mt-1 min-w-[150px]">
-            <button
-              onClick={() => handleStatusUpdate("planned")}
-              className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded-md"
-            >
-              Direncanakan
-            </button>
-            <button
-              onClick={() => handleStatusUpdate("active")}
-              className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded-md"
-            >
-              Aktif
-            </button>
-            <button
-              onClick={() => handleStatusUpdate("completed")}
-              className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded-md"
-            >
-              Selesai
-            </button>
-            <button
-              onClick={() => handleStatusUpdate("cancelled")}
-              className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded-md"
-            >
-              Dibatalkan
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* Main content grid */}
@@ -608,6 +620,11 @@ const RouteHistoryPage = () => {
                       <p className="text-sm text-gray-600 mb-2">
                         {area.reason}
                       </p>
+                      {area.requester_id && (
+                        <p className="text-xs text-gray-500 mb-1">
+                          Oleh: {requesterNames[area.requester_id] || `Pengguna ${area.requester_id}`}
+                        </p>
+                      )}
                       <p className="text-xs text-gray-500">
                         {area.points.length} titik koordinat
                       </p>
@@ -630,6 +647,7 @@ const RouteHistoryPage = () => {
               tollways={tollways}
               zoom={12}
               onMapRef={(map) => (mapRef.current = map)}
+              requesterNames={requesterNames}
             />
           </div>
         </div>

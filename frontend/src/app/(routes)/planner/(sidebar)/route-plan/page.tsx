@@ -826,33 +826,6 @@ const BuatRutePage = () => {
           };
         }
       });
-      console.log("requester_id", requester_id);
-      console.log("avoidanceAreas", avoidanceAreas);
-
-      // const extras = {
-      //   waytype: {
-      //     values: segments.map((seg, idx) => {
-      //       // Kita tidak bisa lagi menggunakan indeks dari routeLatLngs
-      //       // Gunakan indeks berurutan dengan perkiraan panjang segmen
-      //       const segmentLength = seg.segment.length;
-      //       return [idx * 10, idx * 10 + segmentLength - 1, seg.typeValue];
-      //     }),
-      //     summary: [],
-      //   },
-      //   tollways: {
-      //     values: tollways.map((toll, idx) => {
-      //       // Menggunakan pendekatan yang sama untuk tollways
-      //       const tollLength = toll.segment.length;
-      //       // Gunakan offset besar untuk menghindari tumpang tindih dengan waytype
-      //       return [
-      //         segments.length * 10 + idx * 10,
-      //         segments.length * 10 + idx * 10 + tollLength - 1,
-      //         toll.tollwayValue,
-      //       ];
-      //     }),
-      //     summary: [],
-      //   },
-      // };
 
       // Handle format plat nomor
       let parts = vehiclePlate.split(" | ");

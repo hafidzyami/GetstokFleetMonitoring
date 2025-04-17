@@ -35,6 +35,7 @@ interface DriverMapProps {
       reason?: string;
       photoURL?: string;
       photoData?: string;
+      requesterID?: any;
     }>
   >;
   routePath?: Array<[number, number]>;
@@ -50,6 +51,7 @@ interface DriverMapProps {
   isMarkingMode?: boolean;
   onAddPoint?: (point: [number, number]) => void;
   newAvoidancePoints?: Array<[number, number]>;
+  requesterNames?: { [key: number]: string };
 }
 
 // Component to set the map view and handle map reference
@@ -64,13 +66,15 @@ const MapViewSetter = ({
 }) => {
   const map = useMap();
 
+  // useEffect dengan dependensi yang kosong, hanya dijalankan sekali
   useEffect(() => {
     map.setView(center, zoom);
     // Pass the map instance to the parent component if onMapRef is provided
     if (onMapRef) {
       onMapRef(map);
     }
-  }, [center, zoom, map, onMapRef]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Hanya jalankan sekali saat komponen di-mount
 
   return null;
 };
@@ -160,10 +164,68 @@ const DriverMap: React.FC<DriverMapProps> = ({
   isMarkingMode = false,
   onAddPoint,
   newAvoidancePoints = [],
+  requesterNames = {},
 }) => {
   const [mounted, setMounted] = useState(false);
   const waypointIcons = useRef<{ [key: number]: L.DivIcon }>({});
+  // State untuk menyimpan data nama requester
+  const [requesterNamesLocal, setRequesterNamesLocal] = useState<{ [key: number]: string }>({});
 
+  // Fungsi untuk mengambil data user dari API
+  const fetchUserName = async (userId: number) => {
+    try {
+      if (!userId) return;
+      
+      const response = await fetch(`/api/v1/users/${userId}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch user data");
+      }
+
+      const data = await response.json();
+      return data.data?.name || `Pengguna ${userId}`;
+    } catch (error) {
+      console.error("Error fetching user data:", error);
+      return `Pengguna ${userId}`;
+    }
+  };
+
+  useEffect(() => {
+    // Menggunakan requesterNames dari props jika tersedia
+    if (Object.keys(requesterNames).length > 0) {
+      setRequesterNamesLocal(requesterNames);
+    }
+  }, [requesterNames]);
+  
+  useEffect(() => {
+    // Ambil nama requester untuk setiap area avoidance jika tidak tersedia dari props
+    const getRequesterNames = async () => {
+      const newRequesterNames: { [key: number]: string } = {};
+      
+      for (const markerGroup of impassibleMarkers) {
+        if (markerGroup.length > 0) {
+          const requesterID = markerGroup[0]?.requesterID;
+          if (requesterID && !requesterNamesLocal[requesterID] && !requesterNames[requesterID]) {
+            const name = await fetchUserName(requesterID);
+            newRequesterNames[requesterID] = name;
+          }
+        }
+      }
+      
+      setRequesterNamesLocal((prev) => ({ ...prev, ...newRequesterNames }));
+    };
+    
+    if (mounted && impassibleMarkers.length > 0) {
+      getRequesterNames();
+    }
+  }, [mounted, impassibleMarkers, requesterNames]);
+  
   useEffect(() => {
     // Initialize icons once on client-side
     if (!mounted) {
@@ -345,6 +407,7 @@ const DriverMap: React.FC<DriverMapProps> = ({
         const polygonPositions = markerGroup.map((marker) => marker.position);
         const reason = markerGroup[0]?.reason || "Area yang dihindari";
         const photoData = markerGroup[0]?.photoData;
+        const requesterID = markerGroup[0]?.requesterID;
 
         // Calculate center for label
         const centerPosition = calculatePolygonCenter(polygonPositions);
@@ -395,6 +458,10 @@ const DriverMap: React.FC<DriverMapProps> = ({
 
                   <div className="mb-2">
                     <span className="font-semibold">Alasan:</span> {reason}
+                  </div>
+
+                  <div className="mb-2">
+                    <span className="font-semibold">Oleh:</span> {requesterID ? (requesterNamesLocal[requesterID] || requesterNames[requesterID] || `Pengguna ${requesterID}`) : JSON.parse(localStorage.getItem("user") as string).name}
                   </div>
 
                   {/* Prioritas menggunakan photoURL jika tersedia, fallback ke photoData */}

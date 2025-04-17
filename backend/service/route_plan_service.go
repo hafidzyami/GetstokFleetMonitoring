@@ -57,6 +57,7 @@ func (s *routePlanService) AddAvoidanceAreaToRoutePlan(routePlanID uint, areaReq
             RoutePlanID: routePlanID,
             Reason:      areaReq.Reason,
             IsPermanent: areaReq.IsPermanent,
+            RequesterID: areaReq.RequesterID,
             CreatedAt:   time.Now(),
             UpdatedAt:   time.Now(),
         }
@@ -205,6 +206,7 @@ func (s *routePlanService) CreateRoutePlan(req model.RoutePlanCreateRequest, pla
 			RoutePlanID: routePlan.ID,
 			Reason:      areaReq.Reason,
 			IsPermanent: areaReq.IsPermanent,
+			RequesterID: areaReq.RequesterID,
 			CreatedAt:   time.Now(),
 			UpdatedAt:   time.Now(),
 		}
@@ -343,6 +345,7 @@ func (s *routePlanService) GetRoutePlanByID(id uint) (*model.RoutePlanResponse, 
 		areaResponses[i] = model.AvoidanceAreaResponse{
 			ID:          area.ID,
 			Reason:      area.Reason,
+			RequesterID: area.RequesterID,
 			IsPermanent: area.IsPermanent,
 			PhotoURL:    photoURL,
 			Points:      pointResponses,
@@ -397,7 +400,7 @@ func (s *routePlanService) GetAllRoutePlans() ([]*model.RoutePlanResponse, error
 // UpdateRoutePlanStatus updates the status of a route plan
 func (s *routePlanService) UpdateRoutePlanStatus(id uint, status string) error {
 	// Validate status
-	validStatuses := []string{"planned", "active", "completed", "cancelled"}
+	validStatuses := []string{"planned", "active", "completed", "cancelled", "on confirmation"}
 	isValidStatus := false
 	for _, validStatus := range validStatuses {
 		if status == validStatus {

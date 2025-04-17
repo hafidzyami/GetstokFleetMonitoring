@@ -38,6 +38,7 @@ interface AvoidanceArea {
   is_permanent: boolean;
   has_photo: boolean;
   photo_url?: string;
+  requester_id?: number;
   points: AvoidancePointResponse[];
 }
 
@@ -87,6 +88,7 @@ interface AvoidanceMarker {
   position: [number, number];
   reason?: string;
   photoURL?: string;
+  requesterID?: number;
 }
 
 // Interface untuk area baru yang akan ditandai
@@ -125,6 +127,7 @@ const DriverRouteDetailPage = () => {
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [showSuccessMessage, setShowSuccessMessage] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [requesterNames, setRequesterNames] = useState<{ [key: number]: string }>({});
 
   // Load Map component dynamically to avoid SSR issues
   const DriverMap = useMemo(
@@ -192,18 +195,51 @@ const DriverRouteDetailPage = () => {
 
         // Process avoidance areas
         if (data.data.avoidance_areas && data.data.avoidance_areas.length > 0) {
-          const avoidanceMarkersGroups = data.data.avoidance_areas.map((area) =>
-            area.points.map((point) => ({
-              id: `avoidance-${area.id}-${point.id}`,
-              position: [point.latitude, point.longitude] as [number, number],
-              reason: area.reason,
-              photoURL: area.photo_url,
-            }))
-          );
+        const avoidanceMarkersGroups = data.data.avoidance_areas.map((area) =>
+        area.points.map((point) => ({
+        id: `avoidance-${area.id}-${point.id}`,
+        position: [point.latitude, point.longitude] as [number, number],
+        reason: area.reason,
+        photoURL: area.photo_url,
+          requesterID: area.requester_id,
+          }))
+        );
           setImpassibleMarkers(avoidanceMarkersGroups);
-        } else {
-          setImpassibleMarkers([]);
-        }
+        
+          // Fetch requester names
+            const fetchRequesterNames = async () => {
+              const newRequesterNames: { [key: number]: string } = {};
+              
+              for (const area of data.data.avoidance_areas) {
+                if (area.requester_id && !requesterNames[area.requester_id]) {
+                  try {
+                    const response = await fetch(`/api/v1/users/${area.requester_id}`, {
+                      headers: {
+                        Authorization: `Bearer ${token}`,
+                      },
+                    });
+                    
+                    if (response.ok) {
+                      const userData = await response.json();
+                      if (userData.data && userData.data.name) {
+                        newRequesterNames[area.requester_id] = userData.data.name;
+                      }
+                    }
+                  } catch (error) {
+                    console.error(`Error fetching user ${area.requester_id}:`, error);
+                  }
+                }
+              }
+              
+              if (Object.keys(newRequesterNames).length > 0) {
+                setRequesterNames(prev => ({ ...prev, ...newRequesterNames }));
+              }
+            };
+            
+            fetchRequesterNames();
+          } else {
+            setImpassibleMarkers([]);
+          }
 
         // Process route geometry and segments
         if (data.data.route_geometry) {
@@ -350,6 +386,25 @@ const DriverRouteDetailPage = () => {
         photoKey = uploadData.data.key;
       }
 
+      // Get current user ID from localStorage or decode from JWT
+      const userObj = localStorage.getItem("user");
+      let currentUserId = 0;
+      
+      if (userObj) {
+        try {
+          const userData = JSON.parse(userObj);
+          currentUserId = userData.id || 0;
+        } catch (e) {
+          console.error("Error parsing user data", e);
+        }
+      }
+      
+      // As fallback, get from userId directly
+      if (currentUserId === 0) {
+        const currentUserIdStr = localStorage.getItem("userId");
+        currentUserId = currentUserIdStr ? parseInt(currentUserIdStr) : 0;
+      }
+
       // Prepare update data
       const updateData = {
         avoidance_areas: [
@@ -357,7 +412,8 @@ const DriverRouteDetailPage = () => {
             reason: newAvoidanceArea.reason,
             is_permanent: newAvoidanceArea.isPermanent,
             photo_key: photoKey || undefined,
-            points: pointsData
+            points: pointsData,
+            requester_id: currentUserId
           }
         ]
       };
@@ -380,6 +436,16 @@ const DriverRouteDetailPage = () => {
       setShowSuccessMessage(true);
       setTimeout(() => setShowSuccessMessage(false), 5000);
       
+      // Update status to "on confirmation"
+      try {
+        await handleUpdateStatus("on confirmation");
+        // Update pesan sukses untuk memberitahu pengguna bahwa status sudah berubah
+        setShowSuccessMessage(true);
+        setTimeout(() => setShowSuccessMessage(false), 5000);
+      } catch (error) {
+        console.error("Error updating to on confirmation status:", error);
+        // Masih tampilkan pesan sukses untuk penyimpanan area
+      }
       // Add new area to current display
       const newArea = {
         id: `temp-area-${Date.now()}`,
@@ -526,6 +592,11 @@ const DriverRouteDetailPage = () => {
         bgColor: "bg-red-100",
         textColor: "text-red-800",
       },
+      "on confirmation": {
+        text: "Menunggu Konfirmasi",
+        bgColor: "bg-yellow-100",
+        textColor: "text-yellow-800",
+      },
     };
 
     const statusInfo = statusMap[status.toLowerCase()] || {
@@ -607,7 +678,7 @@ const DriverRouteDetailPage = () => {
       {/* Success message */}
       {showSuccessMessage && (
         <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded z-50 shadow-md">
-          <span className="font-bold">Berhasil!</span> Area yang tidak dapat dilewati telah ditambahkan.
+          <span className="font-bold">Berhasil!</span> Area yang tidak dapat dilewati telah ditambahkan dan status rute diubah menjadi "Menunggu Konfirmasi".
         </div>
       )}
       
@@ -634,7 +705,7 @@ const DriverRouteDetailPage = () => {
 
         <div className="flex flex-wrap gap-2">
           {/* Button untuk memulai rute */}
-          {routePlan.status === "planned" && (
+          {(routePlan.status === "planned" || routePlan.status === "on confirmation") && (
             <button 
               onClick={() => handleUpdateStatus("active")} 
               className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md flex items-center gap-2 transition-colors"
@@ -656,7 +727,7 @@ const DriverRouteDetailPage = () => {
           )}
           
           {/* Button untuk membatalkan rute */}
-          {(routePlan.status === "planned" || routePlan.status === "active") && (
+          {(routePlan.status === "planned" || routePlan.status === "active" || routePlan.status === "on confirmation") && (
             <button 
               onClick={() => handleUpdateStatus("cancelled")} 
               className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md flex items-center gap-2 transition-colors"
@@ -671,7 +742,7 @@ const DriverRouteDetailPage = () => {
             <button 
               onClick={() => setIsMarkingMode(true)} 
               className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-md flex items-center gap-2 transition-colors"
-              disabled={showAvoidanceForm || routePlan.status === "completed" || routePlan.status === "cancelled"}
+              disabled={showAvoidanceForm || routePlan.status === "completed" || routePlan.status === "cancelled" || routePlan.status === "on confirmation"}
             >
               <i className="bx bx-map-pin"></i>
               <span>Tandai Area</span>
@@ -829,6 +900,7 @@ const DriverRouteDetailPage = () => {
               isMarkingMode={isMarkingMode}
               onAddPoint={handleAddPoint}
               newAvoidancePoints={newAvoidanceArea.points}
+              requesterNames={requesterNames}
             />
           </div>
           

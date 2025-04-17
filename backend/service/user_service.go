@@ -12,6 +12,7 @@ import (
 type UserService interface {
 	GetAllUsers(role string) ([]*model.UserResponse, error)
 	ResetPassword(userID uint) error
+	GetUserByID(userID uint) (*model.UserResponse, error)
 }
 
 type userService struct {
@@ -72,4 +73,18 @@ func (s *userService) ResetPassword(userID uint) error {
 	user.PasswordChangedAt = time.Now()
 	
 	return s.userRepo.Update(user)
+}
+
+// GetUserByID returns user data by ID
+func (s *userService) GetUserByID(userID uint) (*model.UserResponse, error) {
+	// Find user by ID
+	user, err := s.userRepo.FindByID(userID)
+	if err != nil {
+		return nil, errors.New("user not found")
+	}
+	
+	// Convert to user response DTO
+	response := user.ToUserResponse()
+	
+	return &response, nil
 }

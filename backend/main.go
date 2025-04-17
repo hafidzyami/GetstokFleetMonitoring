@@ -211,8 +211,9 @@ func main() {
 
 	// User routes
 	users := api.Group("/users")
-	users.Use(middleware.RoleAuthorization("management", "planner"))
+	users.Use(middleware.RoleAuthorization("management", "planner", "driver"))
 	users.Get("/", userController.GetAllUsers)
+	users.Get("/:id", userController.GetUserByID)
 	users.Post("/reset-password", userController.ResetPassword)
 
 	// Add truck routes
