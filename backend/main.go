@@ -57,6 +57,10 @@ func main() {
 	// Websocket
 	websocket.InitHub()
 
+	// S3
+	s3Service, _ := service.NewS3Service()
+	uploadController := controller.NewUploadController(s3Service)
+
 	// Initialize services
 	authService := service.NewAuthService(userRepo)
 	truckService := service.NewTruckService(truckRepo)
@@ -196,7 +200,7 @@ func main() {
 		// Unregister client when function returns
 		hub.Unregister(client)
 	}))
-	
+
 	// Routes
 	api := app.Group("/api/v1")
 
@@ -233,6 +237,12 @@ func main() {
 	routePlans.Get("/:id", routePlanController.GetRoutePlanByID)
 	routePlans.Put("/:id/status", routePlanController.UpdateRoutePlanStatus)
 	routePlans.Delete("/:id", routePlanController.DeleteRoutePlan)
+
+	// Upload
+	uploads := api.Group("/uploads")
+	uploads.Use(middleware.Protected())
+	uploads.Post("/photo", uploadController.UploadPhoto)
+	uploads.Post("/photo/base64", uploadController.UploadBase64Photo)
 
 	// Protected routes
 	api.Get("/profile", middleware.Protected(), authController.GetProfile)
