@@ -240,6 +240,8 @@ func main() {
 	routePlans.Put("/:id/status", routePlanController.UpdateRoutePlanStatus)
 	routePlans.Delete("/:id", routePlanController.DeleteRoutePlan)
 	routePlans.Get("/driver/:driverID", routePlanController.GetRoutePlansByDriverID)
+	routePlans.Get("/avoidance/permanent", routePlanController.GetPermanentAvoidanceAreas)
+	routePlans.Get("/avoidance/non-permanent", routePlanController.GetNonPermanentAvoidanceAreas)
 	routePlans.Post("/:id/avoidance", routePlanController.AddAvoidanceArea)
 	routePlans.Put("/avoidance/:id/status", routePlanController.UpdateAvoidanceAreaStatus)
 	routePlans.Delete("/avoidance/:id", routePlanController.DeleteAvoidanceArea)

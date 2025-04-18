@@ -90,6 +90,8 @@ interface MapProps {
         markers: { id: string; position: LatLngTuple }[];
         reason: string;
         isPermanent: boolean;
+        photoURL?: string | null;
+        photoKey?: string | null;
         photo?: string | null;
         photoData?: string | null;
         timestamp?: string;
@@ -409,7 +411,7 @@ MapProps) => {
                     <>
                       <div className="mb-2">
                         <span className="font-semibold">Alasan:</span>{" "}
-                        {impassibleItem.reason}
+                        {impassibleItem.reason || "Tidak ada alasan"}
                       </div>
 
                       {impassibleItem.isPermanent && (
@@ -420,30 +422,23 @@ MapProps) => {
                         </div>
                       )}
 
-                      {impassibleItem.photo && (
+                      {/* Show the photo if available */}
+                      {impassibleItem.photoURL && (
                         <div className="mt-3">
                           <h4 className="font-semibold mb-1">Bukti Foto:</h4>
-                          <div className="border border-gray-300 rounded p-2 bg-gray-100">
-                            <p className="text-sm text-gray-600">
-                              {impassibleItem.photo}
-                            </p>
-
-                            {impassibleItem.photoData ? (
-                              <div className="mt-1">
-                                <img
-                                  src={impassibleItem.photoData}
-                                  alt="Bukti foto area yang dihindari"
-                                  className="max-w-full h-auto rounded"
-                                  style={{ maxHeight: "150px" }}
-                                />
-                              </div>
-                            ) : (
-                              <div className="text-center mt-1 p-2 bg-gray-200 rounded">
-                                <span className="text-xs text-gray-500">
-                                  Preview foto tidak tersedia
-                                </span>
-                              </div>
-                            )}
+                          <div className="mt-1">
+                            <img
+                              src={impassibleItem.photoURL}
+                              alt="Bukti foto area yang dihindari"
+                              className="max-w-full h-auto rounded"
+                              style={{ maxHeight: "150px" }}
+                              onClick={() => {
+                                // Open image in full size in a new tab
+                                if (impassibleItem.photoURL) {
+                                  window.open(impassibleItem.photoURL, '_blank');
+                                }
+                              }}
+                            />
                           </div>
                         </div>
                       )}

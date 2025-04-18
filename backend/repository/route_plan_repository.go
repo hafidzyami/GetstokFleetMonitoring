@@ -17,6 +17,7 @@ type RoutePlanRepository interface {
 	FindAvoidanceAreasByRoutePlanID(routePlanID uint) ([]*model.RouteAvoidanceArea, error)
 	FindAvoidancePointsByAreaID(areaID uint) ([]*model.RouteAvoidancePoint, error)
 	FindAvoidanceAreaByID(id uint) (*model.RouteAvoidanceArea, error)
+	FindAvoidanceAreasByPermanentStatus(isPermanent bool) ([]*model.RouteAvoidanceArea, error)
 	FindAll() ([]*model.RoutePlan, error)
 	Update(routePlan *model.RoutePlan) error
 	UpdateAvoidanceArea(area *model.RouteAvoidanceArea) error
@@ -199,4 +200,14 @@ func (r *routePlanRepository) Delete(id uint) error {
 		// Finally, delete the route plan
 		return tx.Delete(&model.RoutePlan{}, id).Error
 	})
+}
+
+// FindAvoidanceAreasByPermanentStatus finds avoidance areas by their permanent status
+func (r *routePlanRepository) FindAvoidanceAreasByPermanentStatus(isPermanent bool) ([]*model.RouteAvoidanceArea, error) {
+	var areas []*model.RouteAvoidanceArea
+	err := config.DB.Where("is_permanent = ?", isPermanent).Find(&areas).Error
+	if err != nil {
+		return nil, err
+	}
+	return areas, nil
 }

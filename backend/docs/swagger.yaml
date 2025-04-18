@@ -656,6 +656,62 @@ paths:
       summary: Update avoidance area status
       tags:
       - route-plans
+  /route-plans/avoidance/non-permanent:
+    get:
+      consumes:
+      - application/json
+      description: Get a list of all non-permanent avoidance areas
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Non-permanent avoidance areas data
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get all non-permanent avoidance areas
+      tags:
+      - route-plans
+  /route-plans/avoidance/permanent:
+    get:
+      consumes:
+      - application/json
+      description: Get a list of all permanent avoidance areas
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Permanent avoidance areas data
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get all permanent avoidance areas
+      tags:
+      - route-plans
   /route-plans/driver/{driverID}:
     get:
       consumes:

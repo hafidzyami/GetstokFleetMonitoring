@@ -469,3 +469,59 @@ func (c *RoutePlanController) DeleteAvoidanceArea(ctx *fiber.Ctx) error {
         map[string]string{"message": "Avoidance area deleted successfully"},
     ))
 }
+
+// GetPermanentAvoidanceAreas godoc
+// @Summary Get all permanent avoidance areas
+// @Description Get a list of all permanent avoidance areas
+// @Tags route-plans
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param Authorization header string true "Bearer token" default(Bearer <token>)
+// @Success 200 {object} model.BaseResponse "Permanent avoidance areas data"
+// @Failure 401 {object} model.BaseResponse "Unauthorized"
+// @Router /route-plans/avoidance/permanent [get]
+func (c *RoutePlanController) GetPermanentAvoidanceAreas(ctx *fiber.Ctx) error {
+    // Get all permanent avoidance areas
+    avoidanceAreas, err := c.routePlanService.GetAvoidanceAreasByPermanentStatus(true)
+    if err != nil {
+        return ctx.Status(fiber.StatusInternalServerError).JSON(model.SimpleErrorResponse(
+            fiber.StatusInternalServerError,
+            "Failed to get permanent avoidance areas: " + err.Error(),
+        ))
+    }
+
+    // Return response
+    return ctx.Status(fiber.StatusOK).JSON(model.SuccessResponse(
+        "route-plans.getPermanentAvoidanceAreas",
+        avoidanceAreas,
+    ))
+}
+
+// GetNonPermanentAvoidanceAreas godoc
+// @Summary Get all non-permanent avoidance areas
+// @Description Get a list of all non-permanent avoidance areas
+// @Tags route-plans
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param Authorization header string true "Bearer token" default(Bearer <token>)
+// @Success 200 {object} model.BaseResponse "Non-permanent avoidance areas data"
+// @Failure 401 {object} model.BaseResponse "Unauthorized"
+// @Router /route-plans/avoidance/non-permanent [get]
+func (c *RoutePlanController) GetNonPermanentAvoidanceAreas(ctx *fiber.Ctx) error {
+    // Get all non-permanent avoidance areas
+    avoidanceAreas, err := c.routePlanService.GetAvoidanceAreasByPermanentStatus(false)
+    if err != nil {
+        return ctx.Status(fiber.StatusInternalServerError).JSON(model.SimpleErrorResponse(
+            fiber.StatusInternalServerError,
+            "Failed to get non-permanent avoidance areas: " + err.Error(),
+        ))
+    }
+
+    // Return response
+    return ctx.Status(fiber.StatusOK).JSON(model.SuccessResponse(
+        "route-plans.getNonPermanentAvoidanceAreas",
+        avoidanceAreas,
+    ))
+}

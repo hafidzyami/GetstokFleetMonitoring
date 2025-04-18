@@ -21,6 +21,7 @@ type RoutePlanService interface {
 	DeleteRoutePlan(id uint) error
 	DeleteAvoidanceArea(id uint) error
 	AddAvoidanceAreaToRoutePlan(routePlanID uint, areaRequests []model.AvoidanceAreaRequest) (*model.RoutePlanResponse, error)
+	GetAvoidanceAreasByPermanentStatus(isPermanent bool) ([]model.AvoidanceAreaResponse, error)
 }
 
 type routePlanService struct {
@@ -490,4 +491,60 @@ func (s *routePlanService) DeleteRoutePlan(id uint) error {
 
 	// Delete route plan and related data from database
 	return s.routePlanRepo.Delete(id)
+}
+
+// GetAvoidanceAreasByPermanentStatus returns all avoidance areas filtered by permanent status
+func (s *routePlanService) GetAvoidanceAreasByPermanentStatus(isPermanent bool) ([]model.AvoidanceAreaResponse, error) {
+	// Get avoidance areas by permanent status
+	areas, err := s.routePlanRepo.FindAvoidanceAreasByPermanentStatus(isPermanent)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create responses
+	areaResponses := make([]model.AvoidanceAreaResponse, 0, len(areas))
+	for _, area := range areas {
+		// Get points for this area
+		points, err := s.routePlanRepo.FindAvoidancePointsByAreaID(area.ID)
+		if err != nil {
+			continue // Skip this area if points can't be fetched
+		}
+
+		pointResponses := make([]model.AvoidancePointResponse, len(points))
+		for j, point := range points {
+			pointResponses[j] = model.AvoidancePointResponse{
+				ID:        point.ID,
+				Latitude:  point.Latitude,
+				Longitude: point.Longitude,
+				Order:     point.Order,
+			}
+		}
+
+		// Regenerate URL if needed
+		photoURL := area.PhotoURL
+		if photoURL == "" && area.PhotoKey != "" && s.s3Service != nil {
+			// Generate fresh URL if we have the object key
+			newURL, err := s.s3Service.GeneratePresignedURL(area.PhotoKey)
+			if err == nil {
+				photoURL = newURL
+
+				// Update the URL in the database
+				area.PhotoURL = newURL
+				s.routePlanRepo.UpdateAvoidanceArea(area)
+			}
+		}
+
+		areaResponses = append(areaResponses, model.AvoidanceAreaResponse{
+			ID:          area.ID,
+			Reason:      area.Reason,
+			Status:      area.Status,
+			RequesterID: area.RequesterID,
+			IsPermanent: area.IsPermanent,
+			PhotoURL:    photoURL,
+			Points:      pointResponses,
+			CreatedAt:   area.CreatedAt,
+		})
+	}
+
+	return areaResponses, nil
 }
