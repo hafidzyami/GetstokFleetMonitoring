@@ -470,6 +470,71 @@ func (c *RoutePlanController) DeleteAvoidanceArea(ctx *fiber.Ctx) error {
     ))
 }
 
+// UpdateRoutePlan godoc
+// @Summary Update route plan geometry and extras
+// @Description Update the route geometry and extras data of a route plan
+// @Tags route-plans
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param Authorization header string true "Bearer token" default(Bearer <token>)
+// @Param id path int true "Route plan ID"
+// @Param request body model.RoutePlanUpdateRequest true "Route update details"
+// @Success 200 {object} model.BaseResponse "Success message"
+// @Failure 400 {object} model.BaseResponse "Bad request"
+// @Failure 401 {object} model.BaseResponse "Unauthorized"
+// @Failure 404 {object} model.BaseResponse "Not found"
+// @Router /route-plans/{id} [put]
+func (c *RoutePlanController) UpdateRoutePlan(ctx *fiber.Ctx) error {
+	// Get ID from params
+	idParam := ctx.Params("id")
+	id, err := strconv.ParseUint(idParam, 10, 32)
+	if err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(model.SimpleErrorResponse(
+			fiber.StatusBadRequest,
+			"Invalid route plan ID",
+		))
+	}
+
+	// Parse request body
+	var req model.RoutePlanUpdateRequest
+	if err := ctx.BodyParser(&req); err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(model.SimpleErrorResponse(
+			fiber.StatusBadRequest,
+			"Invalid request body: " + err.Error(),
+		))
+	}
+
+	// Validate request
+	if req.RouteGeometry == "" {
+		return ctx.Status(fiber.StatusBadRequest).JSON(model.SimpleErrorResponse(
+			fiber.StatusBadRequest,
+			"Route geometry is required",
+		))
+	}
+
+	// Update route plan
+	updatedRoutePlan, err := c.routePlanService.UpdateRoutePlan(uint(id), req.RouteGeometry, req.Extras)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return ctx.Status(fiber.StatusNotFound).JSON(model.SimpleErrorResponse(
+				fiber.StatusNotFound,
+				err.Error(),
+			))
+		}
+		return ctx.Status(fiber.StatusInternalServerError).JSON(model.SimpleErrorResponse(
+			fiber.StatusInternalServerError,
+			"Failed to update route plan: " + err.Error(),
+		))
+	}
+
+	// Return response
+	return ctx.Status(fiber.StatusOK).JSON(model.SuccessResponse(
+		"route-plans.update",
+		updatedRoutePlan,
+	))
+}
+
 // GetPermanentAvoidanceAreas godoc
 // @Summary Get all permanent avoidance areas
 // @Description Get a list of all permanent avoidance areas

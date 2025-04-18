@@ -43,7 +43,7 @@ const RutePage = () => {
   return (
     <div className="h-full px-6 -mt-[20px]">
       <button
-        onClick={() => route.push("/planner/buat-rute")}
+        onClick={() => route.push("/planner/route-plan")}
         className="bg-[#009EFF] text-white px-6 py-3 rounded-[8px] flex items-center gap-2 font-semibold mb-2"
       >
         <i className="bx bx-arrow-back text-lg"></i>

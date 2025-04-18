@@ -953,6 +953,7 @@ const BuatRutePage = () => {
               longitude: marker.position[1],
             })),
             requester_id: requester_id,
+            status: "approved"
           };
         }
       });

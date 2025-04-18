@@ -52,6 +52,25 @@ definitions:
         type: string
       params: {}
     type: object
+  model.DriverLocationRequest:
+    properties:
+      accuracy:
+        type: number
+      bearing:
+        type: number
+      latitude:
+        type: number
+      longitude:
+        type: number
+      speed:
+        type: number
+      timestamp:
+        type: string
+    required:
+    - latitude
+    - longitude
+    - timestamp
+    type: object
   model.ErrorData:
     properties:
       code:
@@ -136,6 +155,14 @@ definitions:
     - vehicle_plate
     - waypoints
     type: object
+  model.RoutePlanUpdateRequest:
+    properties:
+      extras:
+        additionalProperties: true
+        type: object
+      route_geometry:
+        type: string
+    type: object
   model.RoutingRequest:
     properties:
       coordinates:
@@ -159,6 +186,24 @@ definitions:
       options:
         additionalProperties: true
         type: object
+    type: object
+  model.TruckCreateRequest:
+    properties:
+      mac_id:
+        type: string
+      plate_number:
+        type: string
+      type:
+        type: string
+    type: object
+  model.TruckUpdateFullRequest:
+    properties:
+      mac_id:
+        type: string
+      plate_number:
+        type: string
+      type:
+        type: string
     type: object
   model.TruckUpdateRequest:
     properties:
@@ -470,6 +515,52 @@ paths:
       summary: Get route plan by ID
       tags:
       - route-plans
+    put:
+      consumes:
+      - application/json
+      description: Update the route geometry and extras data of a route plan
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Route plan ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Route update details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.RoutePlanUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success message
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Update route plan geometry and extras
+      tags:
+      - route-plans
   /route-plans/{id}/avoidance:
     post:
       consumes:
@@ -517,6 +608,163 @@ paths:
       summary: Add avoidance area to a route plan
       tags:
       - route-plans
+  /route-plans/{id}/location:
+    post:
+      consumes:
+      - application/json
+      description: Update the current location of a driver for a specific route
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Route plan ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Location details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.DriverLocationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully updated location
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Update driver location
+      tags:
+      - driver-locations
+  /route-plans/{id}/location/history:
+    delete:
+      consumes:
+      - application/json
+      description: Delete all location history for a route
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Route plan ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success message
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete location history
+      tags:
+      - driver-locations
+    get:
+      consumes:
+      - application/json
+      description: Get the location history of a driver for a specific route
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Route plan ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Driver location history data
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get driver location history
+      tags:
+      - driver-locations
+  /route-plans/{id}/location/latest:
+    get:
+      consumes:
+      - application/json
+      description: Get the latest location of a driver for a specific route
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Route plan ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Driver location data
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get latest driver location
+      tags:
+      - driver-locations
   /route-plans/{id}/status:
     put:
       consumes:
@@ -566,6 +814,38 @@ paths:
       summary: Update route plan status
       tags:
       - route-plans
+  /route-plans/active:
+    get:
+      consumes:
+      - application/json
+      description: Get the active route for a driver with their current location
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Active route data
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get active route
+      tags:
+      - driver-locations
   /route-plans/avoidance/{id}:
     delete:
       consumes:
@@ -814,6 +1094,43 @@ paths:
       summary: Get all trucks
       tags:
       - trucks
+    post:
+      consumes:
+      - application/json
+      description: Create a new truck with mac_id, type, and plate_number
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Truck creation information
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.TruckCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Success message
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a new truck
+      tags:
+      - trucks
   /trucks/{macID}:
     get:
       consumes:
@@ -977,6 +1294,53 @@ paths:
       security:
       - BearerAuth: []
       summary: Get truck position history
+      tags:
+      - trucks
+  /trucks/id/{id}:
+    put:
+      consumes:
+      - application/json
+      description: Update truck plate number, type, and MAC ID by truck ID
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: ID of the truck
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Truck update information
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.TruckUpdateFullRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success message
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Update truck information by ID
       tags:
       - trucks
   /uploads/photo:

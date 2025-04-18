@@ -187,7 +187,7 @@ const RiwayatRutePage = () => {
           />
         </label>
         <button
-          onClick={() => router.push("/planner/buat-rute")}
+          onClick={() => router.push("/planner/route-plan")}
           className="bg-[#009EFF] flex gap-2 text-white px-6 py-2.5 rounded-[8px] font-bold"
         >
           <i className="bx bx-plus text-2xl"></i>

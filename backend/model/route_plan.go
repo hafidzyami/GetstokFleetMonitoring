@@ -159,6 +159,12 @@ type AvoidancePointResponse struct {
 	Order      int     `json:"order"`
 }
 
+// RoutePlanUpdateRequest used for updating route geometry and extras
+type RoutePlanUpdateRequest struct {
+	RouteGeometry string                   `json:"route_geometry"`
+	Extras        map[string]interface{}  `json:"extras"`
+}
+
 func (r *RoutePlan) SetExtras(extras *RouteExtras) error {
 	if extras == nil {
 		r.ExtrasData = ""

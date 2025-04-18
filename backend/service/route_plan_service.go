@@ -22,6 +22,7 @@ type RoutePlanService interface {
 	DeleteAvoidanceArea(id uint) error
 	AddAvoidanceAreaToRoutePlan(routePlanID uint, areaRequests []model.AvoidanceAreaRequest) (*model.RoutePlanResponse, error)
 	GetAvoidanceAreasByPermanentStatus(isPermanent bool) ([]model.AvoidanceAreaResponse, error)
+	UpdateRoutePlan(id uint, routeGeometry string, extras map[string]interface{}) (*model.RoutePlanResponse, error)
 }
 
 type routePlanService struct {
@@ -547,4 +548,37 @@ func (s *routePlanService) GetAvoidanceAreasByPermanentStatus(isPermanent bool) 
 	}
 
 	return areaResponses, nil
+}
+
+// UpdateRoutePlan updates the route geometry and extras of a route plan
+func (s *routePlanService) UpdateRoutePlan(id uint, routeGeometry string, extras map[string]interface{}) (*model.RoutePlanResponse, error) {
+	// Get route plan
+	routePlan, err := s.routePlanRepo.FindByID(id)
+	if err != nil {
+		return nil, errors.New("route plan not found")
+	}
+
+	// Update route geometry
+	routePlan.RouteGeometry = routeGeometry
+	routePlan.UpdatedAt = time.Now()
+
+	// Update extras if provided
+	if extras != nil {
+		// Convert generic map to RouteExtras struct
+		extrasBytes, err := json.Marshal(extras)
+		if err != nil {
+			return nil, errors.New("invalid extras format")
+		}
+
+		// Store as JSON string
+		routePlan.ExtrasData = string(extrasBytes)
+	}
+
+	// Save updates
+	if err := s.routePlanRepo.Update(routePlan); err != nil {
+		return nil, err
+	}
+
+	// Return updated route plan
+	return s.GetRoutePlanByID(id)
 }

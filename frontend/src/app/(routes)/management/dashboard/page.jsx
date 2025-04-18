@@ -396,10 +396,10 @@ const DashboardPage = () => {
                     <i className="bx bx-car rounded-full bg-[#009EFF] text-white text-xl p-2 flex items-center justify-center"></i>
                     <div className="flex flex-col w-full">
                       <h3 className="font-medium">
-                        {truck.plate_number || `Truck ${truck.mac_id}`}
+                        {truck.plate_number}
                       </h3>
                       <span className="text-xs text-gray-500">
-                        {truck.type || "Unknown Type"}
+                        {`${truck.mac_id} | ${truck.type}`}
                       </span>
                     </div>
                   </div>

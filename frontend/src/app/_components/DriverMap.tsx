@@ -89,7 +89,7 @@ const MapClickHandler = ({
   onAddPoint?: (point: [number, number]) => void;
 }) => {
   const map = useMapEvents({
-    click: (e) => {
+    click: (e : any) => {
       if (isMarkingMode && onAddPoint) {
         onAddPoint([e.latlng.lat, e.latlng.lng]);
       }
