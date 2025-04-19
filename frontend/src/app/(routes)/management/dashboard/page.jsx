@@ -3,6 +3,9 @@
 import React, { useEffect, useState, useRef } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from "react-leaflet";
 import { getLatLngsForMap } from "@/app/utils/polylineDecoder";
+import { getRouteColor, debugTruckRouteMatch } from "@/app/utils/colorUtils";
+import { initLeafletIcons } from "@/app/utils/leafletIcons";
+import WaypointMarkers from "@/app/_components/WaypointMarkers";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import Image from "next/image";
@@ -28,15 +31,56 @@ const truckIcon = new L.Icon({
   popupAnchor: [0, -32],
 });
 
-// Component to automatically center map on active truck
-function MapController({ activePosition }) {
+// Component to automatically center map on active truck and route
+function MapController({ activePosition, activeTruck, activeRoutePlans }) {
   const map = useMap();
 
   useEffect(() => {
+    // Jika ada truck yang aktif dengan posisi, fokus ke posisi truck
     if (activePosition && activePosition.latitude && activePosition.longitude) {
-      map.setView([activePosition.latitude, activePosition.longitude], 15);
+      // Default zoom level untuk posisi truck
+      const defaultZoom = 15;
+      
+      // Jika ada truck yang aktif, cari rute yang sesuai dengan truck tersebut
+      if (activeTruck && activeRoutePlans && activeRoutePlans.length > 0) {
+        // Filter rute yang milik truck aktif
+        const activeTruckRoutes = activeRoutePlans.filter(routePlan => {
+          const routePlanPlate = routePlan.vehicle_plate ? routePlan.vehicle_plate.split('/')[0] : '';
+          const routePlanMacId = routePlan.vehicle_plate ? routePlan.vehicle_plate.split('/')[1] : '';
+          return (routePlanPlate === activeTruck.plate_number || routePlanMacId === activeTruck.mac_id);
+        });
+        
+        // Jika ada rute untuk truck aktif, buat bounds dari polyline
+        if (activeTruckRoutes.length > 0) {
+          try {
+            // Ambil rute pertama yang sesuai
+            const route = activeTruckRoutes[0];
+            const positions = getLatLngsForMap(route.route_geometry);
+            
+            if (positions && positions.length > 0) {
+              // Buat bounds dari semua posisi di rute
+              const bounds = L.latLngBounds(positions);
+              
+              // Tambahkan posisi truck ke bounds
+              bounds.extend([activePosition.latitude, activePosition.longitude]);
+              
+              // Fitkan peta ke bounds dengan padding
+              map.fitBounds(bounds, {
+                padding: [50, 50],
+                maxZoom: defaultZoom
+              });
+              return;
+            }
+          } catch (error) {
+            console.error("Error creating bounds from route:", error);
+          }
+        }
+      }
+      
+      // Jika tidak ada rute yang valid atau terjadi error, fokus ke posisi truck saja
+      map.setView([activePosition.latitude, activePosition.longitude], defaultZoom);
     }
-  }, [activePosition, map]);
+  }, [activePosition, activeTruck, activeRoutePlans, map]);
 
   return null;
 }
@@ -85,27 +129,23 @@ const DashboardPage = () => {
   // Fungsi untuk mendapatkan warna berdasarkan truck ID dan status aktif
   const getTruckRouteColor = (routePlan) => {
     // Warna default untuk rute yang tidak aktif (abu-abu muda)
-    const defaultColor = "#cccccc";
-    
-    // Warna-warna untuk rute aktif
-    const colors = ["#3388ff", "#33cc33", "#ff3300", "#9933ff", "#ff9900", "#00ccff"];
+    const defaultColor = "#dddddd";
     
     // Jika ada truck yang aktif/dipilih
     if (activeTruck) {
       // Cek apakah route plan milik truck yang aktif
-      const routePlanPlate = routePlan.vehicle_plate ? routePlan.vehicle_plate.split('/')[0] : '';
-      const routePlanMacId = routePlan.vehicle_plate ? routePlan.vehicle_plate.split('/')[1] : '';
+      const isActiveTruckRoute = debugTruckRouteMatch(activeTruck, routePlan);
       
-      // Jika plate number atau mac_id cocok dengan truck yang aktif
-      if (routePlanPlate === activeTruck.plate_number || routePlanMacId === activeTruck.mac_id) {
-        return colors[routePlan.id % colors.length];
+      // Jika milik truck yang aktif, berikan warna berdasarkan ID
+      if (isActiveTruckRoute) {
+        return getRouteColor(routePlan);
       } else {
         // Jika bukan milik truck yang aktif, tampilkan abu-abu
         return defaultColor;
       }
     } else {
       // Jika tidak ada truck yang dipilih, tampilkan semua rute dengan warna berbeda
-      return colors[routePlan.id % colors.length];
+      return getRouteColor(routePlan);
     }
   };
 
@@ -157,6 +197,9 @@ const DashboardPage = () => {
 
   // Refresh active route plans secara periodik
   useEffect(() => {
+    // Inisialisasi icon Leaflet
+    initLeafletIcons();
+    
     // Fetch route plans
     fetchActiveRoutePlans();
 
@@ -433,19 +476,9 @@ const DashboardPage = () => {
     // Log data truck dan route plans untuk debug
     console.log('Checking active route for truck:', truck.mac_id, truck.plate_number);
     
-    // Coba cari berdasarkan plate_number jika ada (dari frontend)
-    if (truck.plate_number) {
-      const routeByPlate = activeRoutePlans.some(routePlan => {
-        const truckPlate = routePlan.vehicle_plate ? routePlan.vehicle_plate.split('/')[0] : '';
-        return truckPlate === truck.plate_number;
-      });
-      if (routeByPlate) return true;
-    }
-    
-    // Coba cari berdasarkan mac_id jika id tidak cocok
+    // Iterate through all route plans and check if any matches this truck
     return activeRoutePlans.some(routePlan => {
-      const truckMacId = routePlan.vehicle_plate ? routePlan.vehicle_plate.split('/')[1] : '';
-      return truckMacId === truck.mac_id;
+      return debugTruckRouteMatch(truck, routePlan);
     });
   };
 
@@ -496,58 +529,45 @@ const DashboardPage = () => {
       <div className="flex justify-between mb-4">
         {/* Legend untuk active routes */}
         {activeRoutePlans.length > 0 && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 bg-white p-2 rounded shadow-sm">
             <span className="text-sm font-medium">Active Routes:</span>
             {/* Jika ada truck yang dipilih, hanya tampilkan rute dari truck tersebut di legenda */}
             {activeTruck ? (
               // Filter hanya rute milik truck yang sedang aktif
-              // Filter hanya rute milik truck yang sedang aktif
               activeRoutePlans.filter(routePlan => {
                 if (!activeTruck) return false;
-                
-                // Get data from route plan
-                const routePlanPlate = routePlan.vehicle_plate ? routePlan.vehicle_plate.split('/')[0] : '';
-                const routePlanMacId = routePlan.vehicle_plate ? routePlan.vehicle_plate.split('/')[1] : '';
-                
-                // Check if matches active truck
-                return (routePlanPlate === activeTruck.plate_number || routePlanMacId === activeTruck.mac_id);
+                return debugTruckRouteMatch(activeTruck, routePlan);
               }).length > 0 ? (
                 // Tampilkan rute truck yang aktif
                 activeRoutePlans
                   .filter(routePlan => {
                     if (!activeTruck) return false;
-                    
-                    // Get data from route plan
-                    const routePlanPlate = routePlan.vehicle_plate ? routePlan.vehicle_plate.split('/')[0] : '';
-                    const routePlanMacId = routePlan.vehicle_plate ? routePlan.vehicle_plate.split('/')[1] : '';
-                    
-                    // Check if matches active truck
-                    return (routePlanPlate === activeTruck.plate_number || routePlanMacId === activeTruck.mac_id);
+                    return debugTruckRouteMatch(activeTruck, routePlan);
                   })
                   .map((routePlan, index) => (
-                    <div key={`legend-${routePlan.id}`} className="flex items-center gap-1">
+                    <div key={`legend-${routePlan.id}`} className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded">
                       <div 
                         className="w-4 h-4 rounded" 
-                        style={{ backgroundColor: getTruckRouteColor(routePlan) }}
+                        style={{ backgroundColor: getRouteColor(routePlan) }}
                       ></div>
-                      <span className="text-xs">
+                      <span className="text-xs font-medium">
                         {routePlan.vehicle_plate ? routePlan.vehicle_plate.split('/')[0] : `Route ${routePlan.id}`}
                       </span>
                     </div>
                   ))
               ) : (
                 // Tampilkan pesan jika tidak ada rute aktif untuk truck yang dipilih
-                <span className="text-xs text-gray-500 italic">No active routes for selected truck</span>
+                <span className="text-xs text-gray-500 italic bg-gray-100 px-2 py-1 rounded">No active routes for selected truck</span>
               )
             ) : (
               // Tampilkan semua rute jika tidak ada truck yang dipilih
               activeRoutePlans.map((routePlan, index) => (
-                <div key={`legend-${routePlan.id}`} className="flex items-center gap-1">
+                <div key={`legend-${routePlan.id}`} className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded">
                   <div 
                     className="w-4 h-4 rounded" 
-                    style={{ backgroundColor: getTruckRouteColor(routePlan) }}
+                    style={{ backgroundColor: getRouteColor(routePlan) }}
                   ></div>
-                  <span className="text-xs">
+                  <span className="text-xs font-medium">
                     {routePlan.vehicle_plate ? routePlan.vehicle_plate.split('/')[0] : `Route ${routePlan.id}`}
                   </span>
                 </div>
@@ -558,10 +578,11 @@ const DashboardPage = () => {
         
         {/* Connection Status */}
         <div
-          className={`px-3 py-1 rounded-full text-sm font-medium text-white ${
+          className={`px-3 py-1 rounded-full text-sm font-medium text-white flex items-center gap-1 ${
             connected ? "bg-green-500" : "bg-red-500"
           }`}
         >
+          <span className={`w-2 h-2 rounded-full ${connected ? "bg-white animate-pulse" : "bg-gray-200"}`}></span>
           {connected ? "Connected" : "Disconnected"}
         </div>
       </div>
@@ -583,9 +604,9 @@ const DashboardPage = () => {
                   key={truck.mac_id}
                   className={`bg-white rounded-lg p-3 border cursor-pointer transition duration-200 hover:shadow-md ${
                     activeTruck && activeTruck.mac_id === truck.mac_id
-                      ? "border-l-4 border-[#009EFF] bg-[#E6F5FF]"
+                      ? "border-l-4 border-[#009EFF] bg-[#E6F5FF] shadow-md"
                       : truckHasActiveRoute(truck) 
-                        ? "border-l-4 border-green-500 border-opacity-50" 
+                        ? "border-l-4 border-green-500 border-opacity-70" 
                         : "border-gray-200"
                   }`}
                   onClick={() => handleTruckSelect(truck)}
@@ -690,23 +711,55 @@ const DashboardPage = () => {
               )}
 
               {activeTruck && activeTruck.latitude && activeTruck.longitude && (
-                <MapController activePosition={activeTruck} />
+                <MapController 
+                  activePosition={activeTruck} 
+                  activeTruck={activeTruck}
+                  activeRoutePlans={activeRoutePlans}
+                />
               )}
 
-              {/* Render polylines untuk semua active route plans */}
-              {activeRoutePlans.map((routePlan) => {
+               {/* Render polylines dan markers untuk semua active route plans */}
+              {activeRoutePlans.map((routePlan, index) => {
                 // Decode route geometry dengan decoder yang benar
                 const positions = decodeRouteGeometry(routePlan.route_geometry);
                 if (!positions || positions.length === 0) return null;
                 
+                // Tentukan apakah route plan ini milik truck yang aktif
+                let isMatch = false;
+                if (activeTruck) {
+                  const routePlanPlate = routePlan.vehicle_plate?.split('/')[0] || '';
+                  const routePlanMacId = routePlan.vehicle_plate?.split('/')[1] || '';
+                  isMatch = (routePlanPlate === activeTruck.plate_number || routePlanMacId === activeTruck.mac_id);
+                }
+                
+                // Tentukan warna berdasarkan truck aktif
+                const color = activeTruck 
+                  ? (isMatch ? getRouteColor(routePlan) : "#dddddd") 
+                  : getRouteColor(routePlan);
+                
+                // Tentukan ketebalan dan opasitas berdasarkan status
+                const weight = activeTruck ? (isMatch ? 5 : 2) : 5;
+                const opacity = activeTruck ? (isMatch ? 0.9 : 0.3) : 0.7;
+                
                 return (
-                  <Polyline
-                    key={`route-${routePlan.id}`}
-                    positions={positions}
-                    color={getTruckRouteColor(routePlan)}
-                    weight={5}
-                    opacity={0.7}
-                  />
+                  <React.Fragment key={`route-${routePlan.id}`}>
+                    {/* Render polyline untuk rute */}
+                    <Polyline
+                      positions={positions}
+                      pathOptions={{
+                        color: color,
+                        weight: weight, 
+                        opacity: opacity,
+                        dashArray: !isMatch && activeTruck ? "5, 5" : null
+                      }}
+                      zIndex={isMatch ? 1000 : 100}
+                    />
+                    
+                    {/* Render markers untuk waypoints jika tidak ada truck yang dipilih atau jika ini adalah truck yang dipilih */}
+                    {(!activeTruck || isMatch) && (
+                      <WaypointMarkers routePlan={routePlan} />  
+                    )}
+                  </React.Fragment>
                 );
               })}
             </MapContainer>
