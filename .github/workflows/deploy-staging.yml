@@ -46,10 +46,45 @@ jobs:
         working-directory: ./backend
         args: --timeout=5m
 
+  build_and_push:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+      
+    - name: Login to DockerHub
+      uses: docker/login-action@v2
+      with:
+        username: hafidzyami
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        
+    - name: Build and push Frontend
+      uses: docker/build-push-action@v4
+      with:
+        context: ./frontend
+        push: true
+        tags: hafidzyami/getstok-frontend:latest
+        cache-from: type=registry,ref=hafidzyami/getstok-frontend:latest
+        cache-to: type=inline
+        
+    - name: Build and push Backend
+      uses: docker/build-push-action@v4
+      with:
+        context: ./backend
+        push: true
+        tags: hafidzyami/getstok-backend:latest
+        cache-from: type=registry,ref=hafidzyami/getstok-backend:latest
+        cache-to: type=inline
+
   deploy:
     name: Deploy to Staging EC2
     runs-on: ubuntu-latest
-    # Deploy akan tetap berjalan meskipun lint check gagal
+    needs: build_and_push
     
     steps:
     - name: Checkout code
@@ -171,7 +206,7 @@ jobs:
             echo "Stopping existing containers..."
             docker-compose down
             
-            # Aggressive cleanup before building (remove all unused resources)
+            # Aggressive cleanup before deployment
             echo "Performing aggressive Docker cleanup before building..."
             # Remove all stopped containers
             docker container prune -f
@@ -186,20 +221,19 @@ jobs:
             # Remove all build
             docker builder prune -a -f
             
-            # Build and start containers
-            echo "Building and starting containers..."
-            export COMPOSE_BAKE=true
-            echo "Buiding MQTT Broker..."
+            # Pull and start containers
+            echo "Pulling and starting containers..."
+            # Pull latest images
+            docker-compose pull
+            
+            # Build only local services (MQTT broker, notification-service)
+            echo "Building MQTT Broker..."
             docker-compose build mqtt-broker --no-cache
-            echo "Buiding Postgres..."
-            docker-compose build postgres --no-cache
-            echo "Buiding Notification Service..."
+            echo "Building Notification Service..."
             docker-compose build notification-service --no-cache
-            echo "Buiding Backend..."
-            docker-compose build backend --no-cache
-            echo "Buiding Frontend..."
-            docker-compose build frontend --no-cache
-            echo "Composing up..."
+            
+            # Start all services
+            echo "Starting all services..."
             docker-compose up -d
             
             # Thorough cleanup after deployment
