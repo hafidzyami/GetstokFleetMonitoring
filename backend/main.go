@@ -257,6 +257,7 @@ func main() {
 	routePlans.Get("/", routePlanController.GetAllRoutePlans)
 	// Endpoint untuk rute aktif - HARUS sebelum /:id agar tidak bentrok
 	routePlans.Get("/active", driverLocationController.GetActiveRoute)
+	routePlans.Get("/active/all", routePlanController.GetAllActiveRoutePlans)
 	routePlans.Get("/:id", routePlanController.GetRoutePlanByID)
 	routePlans.Put("/:id", routePlanController.UpdateRoutePlan)
 	// Route untuk tracking lokasi driver

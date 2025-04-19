@@ -19,6 +19,8 @@ type RoutePlanRepository interface {
 	FindAvoidanceAreaByID(id uint) (*model.RouteAvoidanceArea, error)
 	FindAvoidanceAreasByPermanentStatus(isPermanent bool) ([]*model.RouteAvoidanceArea, error)
 	FindAll() ([]*model.RoutePlan, error)
+	FindAllActiveRoutePlans() ([]*model.RoutePlan, error)
+	FindActiveRoutePlansByTruckID(truckID uint) (*model.RoutePlan, error)
 	Update(routePlan *model.RoutePlan) error
 	UpdateAvoidanceArea(area *model.RouteAvoidanceArea) error
 	UpdateAvoidanceAreaStatus(id uint, status string) error

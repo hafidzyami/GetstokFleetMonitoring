@@ -846,6 +846,34 @@ paths:
       summary: Get active route
       tags:
       - driver-locations
+  /route-plans/active/all:
+    get:
+      consumes:
+      - application/json
+      description: Get a list of all route plans with status "active"
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Active route plans data
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get all active route plans
+      tags:
+      - route-plans
   /route-plans/avoidance/{id}:
     delete:
       consumes:

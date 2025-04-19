@@ -16,6 +16,7 @@ type RoutePlanService interface {
 	GetRoutePlansByDriverID(driverID uint) ([]*model.RoutePlanResponse, error)
 	GetRoutePlanByID(id uint) (*model.RoutePlanResponse, error)
 	GetAllRoutePlans() ([]*model.RoutePlanResponse, error)
+	GetAllActiveRoutePlans() ([]*model.RoutePlanResponse, error)
 	UpdateRoutePlanStatus(id uint, status string) error
 	UpdateAvoidanceAreaStatus(id uint, status string) error
 	DeleteRoutePlan(id uint) error
