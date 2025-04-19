@@ -16,9 +16,15 @@ type RoutePlanRepository interface {
 	FindWaypointsByRoutePlanID(routePlanID uint) ([]*model.RouteWaypoint, error)
 	FindAvoidanceAreasByRoutePlanID(routePlanID uint) ([]*model.RouteAvoidanceArea, error)
 	FindAvoidancePointsByAreaID(areaID uint) ([]*model.RouteAvoidancePoint, error)
+	FindAvoidanceAreaByID(id uint) (*model.RouteAvoidanceArea, error)
+	FindAvoidanceAreasByPermanentStatus(isPermanent bool) ([]*model.RouteAvoidanceArea, error)
 	FindAll() ([]*model.RoutePlan, error)
+	FindAllActiveRoutePlans() ([]*model.RoutePlan, error)
+	FindActiveRoutePlansByTruckID(truckID uint) (*model.RoutePlan, error)
 	Update(routePlan *model.RoutePlan) error
 	UpdateAvoidanceArea(area *model.RouteAvoidanceArea) error
+	UpdateAvoidanceAreaStatus(id uint, status string) error
+	DeleteAvoidanceArea(id uint) error
 	Delete(id uint) error
 	AddAvoidanceAreaWithPoints(area *model.RouteAvoidanceArea, points []*model.RouteAvoidancePoint) error
 }
@@ -139,6 +145,34 @@ func (r *routePlanRepository) UpdateAvoidanceArea(area *model.RouteAvoidanceArea
 	return config.DB.Save(area).Error
 }
 
+// FindAvoidanceAreaByID finds an avoidance area by ID
+func (r *routePlanRepository) FindAvoidanceAreaByID(id uint) (*model.RouteAvoidanceArea, error) {
+	var area model.RouteAvoidanceArea
+	err := config.DB.First(&area, id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &area, nil
+}
+
+// UpdateAvoidanceAreaStatus updates the status of an avoidance area
+func (r *routePlanRepository) UpdateAvoidanceAreaStatus(id uint, status string) error {
+	return config.DB.Model(&model.RouteAvoidanceArea{}).Where("id = ?", id).Update("status", status).Error
+}
+
+// DeleteAvoidanceArea deletes an avoidance area by ID and its associated points
+func (r *routePlanRepository) DeleteAvoidanceArea(id uint) error {
+	return config.DB.Transaction(func(tx *gorm.DB) error {
+		// First, delete all avoidance points for this area
+		if err := tx.Where("route_avoidance_area_id = ?", id).Delete(&model.RouteAvoidancePoint{}).Error; err != nil {
+			return err
+		}
+
+		// Then, delete the avoidance area
+		return tx.Delete(&model.RouteAvoidanceArea{}, id).Error
+	})
+}
+
 // Delete deletes a route plan by ID
 func (r *routePlanRepository) Delete(id uint) error {
 	return config.DB.Transaction(func(tx *gorm.DB) error {
@@ -168,4 +202,14 @@ func (r *routePlanRepository) Delete(id uint) error {
 		// Finally, delete the route plan
 		return tx.Delete(&model.RoutePlan{}, id).Error
 	})
+}
+
+// FindAvoidanceAreasByPermanentStatus finds avoidance areas by their permanent status
+func (r *routePlanRepository) FindAvoidanceAreasByPermanentStatus(isPermanent bool) ([]*model.RouteAvoidanceArea, error) {
+	var areas []*model.RouteAvoidanceArea
+	err := config.DB.Where("is_permanent = ?", isPermanent).Find(&areas).Error
+	if err != nil {
+		return nil, err
+	}
+	return areas, nil
 }

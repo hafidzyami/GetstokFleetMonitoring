@@ -262,6 +262,11 @@ const LayoutManagement = ({ children }: { children: React.ReactNode }) => {
       href: "/management/user-list",
     },
     {
+      icon: "bx-car",
+      name: "Daftar Truk",
+      href: "/management/truck-list",
+    },
+    {
       icon: "bx-bell",
       name: "Notifikasi",
       onclick: () => toggleNotificationPanel(),

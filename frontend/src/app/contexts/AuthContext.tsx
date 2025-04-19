@@ -58,6 +58,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     // Clear localStorage
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    localStorage.removeItem("userId");
 
     // Reset state
     setToken(null);
@@ -142,6 +143,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       // Simpan di localStorage dan state
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(userData));
+      localStorage.setItem("userId", userData.id.toString());
 
       setToken(token);
       setUser(userData);

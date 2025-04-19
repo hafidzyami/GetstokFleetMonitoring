@@ -35,6 +35,7 @@ interface DetailMapProps {
       photoURL?: string;
       photoData?: string;
       requesterID?: any;
+      status?: string;
     }>
   >;
   routePath?: Array<[number, number]>;
@@ -47,6 +48,13 @@ interface DetailMapProps {
     tollwayValue: number;
   }>;
   onMapRef?: (map: L.Map) => void;
+  requesterNames?: { [key: number]: string };
+  isPlanner?: boolean;
+  onAvoidanceAreaConfirm?: (areaId: number) => void;
+  onAvoidanceAreaReject?: (areaId: number) => void;
+  routeStatus?: string;
+  requesterRoles?: { [key: number]: string };
+  userRole?: string;
 }
 
 // Component to set the map view and handle map reference
@@ -123,10 +131,74 @@ const DetailMap: React.FC<DetailMapProps> = ({
   segments = [],
   tollways = [],
   onMapRef,
+  requesterNames = {},
+  isPlanner = false,
+  onAvoidanceAreaConfirm,
+  onAvoidanceAreaReject,
+  routeStatus = "",
+  requesterRoles = {},
+  userRole = "",
 }) => {
   const [mounted, setMounted] = useState(false);
   const hoverMarkerRef = useRef<L.Marker | null>(null);
   const waypointIcons = useRef<{ [key: number]: L.DivIcon }>({});
+  // State untuk menyimpan data nama requester
+  const [requesterNamesLocal, setRequesterNamesLocal] = useState<{ [key: number]: string }>({});
+
+  // Fungsi untuk mengambil data user dari API
+  const fetchUserName = async (userId: number) => {
+    try {
+      if (!userId) return;
+      
+      const response = await fetch(`/api/v1/users/${userId}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch user data");
+      }
+
+      const data = await response.json();
+      return data.data?.name || `Pengguna ${userId}`;
+    } catch (error) {
+      console.error("Error fetching user data:", error);
+      return `Pengguna ${userId}`;
+    }
+  };
+
+  useEffect(() => {
+    // Menggunakan requesterNames dari props jika tersedia
+    if (Object.keys(requesterNames).length > 0) {
+      setRequesterNamesLocal(requesterNames);
+    }
+  }, [requesterNames]);
+  
+  useEffect(() => {
+    // Ambil nama requester untuk setiap area avoidance jika tidak tersedia dari props
+    const getRequesterNames = async () => {
+      const newRequesterNames: { [key: number]: string } = {};
+      
+      for (const markerGroup of impassibleMarkers) {
+        if (markerGroup.length > 0) {
+          const requesterID = markerGroup[0]?.requesterID;
+          if (requesterID && !requesterNamesLocal[requesterID] && !requesterNames[requesterID]) {
+            const name = await fetchUserName(requesterID);
+            newRequesterNames[requesterID] = name;
+          }
+        }
+      }
+      
+      setRequesterNamesLocal((prev) => ({ ...prev, ...newRequesterNames }));
+    };
+    
+    if (mounted && impassibleMarkers.length > 0) {
+      getRequesterNames();
+    }
+  }, [mounted, impassibleMarkers, requesterNames]);
 
   useEffect(() => {
     // Initialize icons once on client-side
@@ -431,8 +503,60 @@ const DetailMap: React.FC<DetailMapProps> = ({
                     <span className="font-semibold">Alasan:</span> {reason}
                   </div>
                   <div className="mb-2">
-                    <span className="font-semibold">Oleh:</span> {requesterID}
+                    <span className="font-semibold">Oleh:</span> {requesterID ? (requesterNamesLocal[requesterID] || requesterNames[requesterID] || `Pengguna ${requesterID}`) : "Pengguna tidak diketahui"}
                   </div>
+
+                  {markerGroup[0]?.status && (
+                    <div className="mb-2">
+                      <span className="font-semibold">Status:</span> {
+                        markerGroup[0].status === "pending" ? "Menunggu" :
+                        markerGroup[0].status === "approved" ? "Disetujui" :
+                        markerGroup[0].status === "rejected" ? "Ditolak" :
+                        markerGroup[0].status
+                      }
+                    </div>
+                  )}
+                  
+                  {/* Tombol hanya ditampilkan jika requesterID memiliki role driver */}
+                  {requesterRoles[requesterID] === "driver" && markerGroup[0]?.status === "pending" && (
+                    <div className="mt-3 mb-3 space-y-2">
+                      <div className="font-semibold text-yellow-600">Area dikirim oleh driver:</div>
+                      <div className="flex space-x-2">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onAvoidanceAreaConfirm) {
+                              // Ekstrak ID area dari id marker
+                              const idParts = markerGroup[0].id.split('-');
+                              if (idParts.length >= 2) {
+                                const areaId = parseInt(idParts[1]);
+                                onAvoidanceAreaConfirm(areaId);
+                              }
+                            }
+                          }}
+                          className="px-3 py-1 bg-green-500 hover:bg-green-600 text-white text-sm rounded-md transition-colors"
+                        >
+                          Setujui
+                        </button>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onAvoidanceAreaReject) {
+                              // Ekstrak ID area dari id marker
+                              const idParts = markerGroup[0].id.split('-');
+                              if (idParts.length >= 2) {
+                                const areaId = parseInt(idParts[1]);
+                                onAvoidanceAreaReject(areaId);
+                              }
+                            }
+                          }}
+                          className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white text-sm rounded-md transition-colors"
+                        >
+                          Tolak
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Prioritas menggunakan photoURL jika tersedia, fallback ke photoData */}
                   {(markerGroup[0]?.photoURL || photoData) && (

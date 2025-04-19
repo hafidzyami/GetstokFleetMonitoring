@@ -17,6 +17,7 @@ import (
 	"github.com/gofiber/swagger"
 	_ "github.com/hafidzyami/GetstokFleetMonitoring/backend/docs" // Import generated docs
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/model"
+	"github.com/hafidzyami/GetstokFleetMonitoring/backend/migration"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/seed"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/utils"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/websocket"
@@ -39,6 +40,11 @@ func main() {
 
 	// Connect to database
 	config.ConnectDB()
+
+	// Run migrations
+	if err := migration.CreateDriverLocationsTable(); err != nil {
+		log.Printf("Error creating driver_locations table: %v", err)
+	}
 
 	// Seed
 	seed.SeedUsers(config.DB)
@@ -68,6 +74,16 @@ func main() {
 	routingSerivce := service.NewRoutingService()
 	userService := service.NewUserService(userRepo)
 	routingPlanService := service.NewRoutePlanService(routePlanRepo, truckRepo, userRepo)
+	
+	// Initialize driver location repository and service
+	driverLocationRepo := repository.NewDriverLocationRepository()
+	driverLocationService := service.NewDriverLocationService(
+		driverLocationRepo,
+		routePlanRepo,
+		userRepo,
+		routingPlanService,
+	)
+	
 
 	// Initialize controllers
 	authController := controller.NewAuthController(authService)
@@ -76,6 +92,7 @@ func main() {
 	routingController := controller.NewRoutingController(routingSerivce)
 	userController := controller.NewUserController(userService)
 	routePlanController := controller.NewRoutePlanController(routingPlanService)
+	driverLocationController := controller.NewDriverLocationController(driverLocationService)
 
 	// Initialize Fiber app
 	app := fiber.New(fiber.Config{
@@ -211,8 +228,10 @@ func main() {
 
 	// User routes
 	users := api.Group("/users")
-	users.Use(middleware.RoleAuthorization("management", "planner"))
+	users.Use(middleware.RoleAuthorization("management", "planner", "driver"))
 	users.Get("/", userController.GetAllUsers)
+	users.Get("/:id", userController.GetUserByID)
+	users.Get("/:id/role", userController.GetUserRoleByID)
 	users.Post("/reset-password", userController.ResetPassword)
 
 	// Add truck routes
@@ -221,6 +240,8 @@ func main() {
 	trucks.Get("/", truckController.GetAllTrucks)
 	trucks.Get("/:macID", truckController.GetTruckByMacID)
 	trucks.Put("/:macID", truckController.UpdateTruckInfo)
+	trucks.Put("/id/:id", truckController.UpdateTruckInfoByID)
+	trucks.Post("/", truckController.CreateTruck)
 	// Add truck history routes
 	trucks.Get("/:truckID/positions", truckHistoryController.GetPositionHistory)
 	trucks.Get("/:truckID/fuel", truckHistoryController.GetFuelHistory)
@@ -234,11 +255,25 @@ func main() {
 	routePlans.Use(middleware.Protected())
 	routePlans.Post("/", routePlanController.CreateRoutePlan)
 	routePlans.Get("/", routePlanController.GetAllRoutePlans)
+	// Endpoint untuk rute aktif - HARUS sebelum /:id agar tidak bentrok
+	routePlans.Get("/active", driverLocationController.GetActiveRoute)
+	routePlans.Get("/active/all", routePlanController.GetAllActiveRoutePlans)
 	routePlans.Get("/:id", routePlanController.GetRoutePlanByID)
+	routePlans.Put("/:id", routePlanController.UpdateRoutePlan)
+	// Route untuk tracking lokasi driver
+	routePlans.Post("/:id/location", driverLocationController.UpdateDriverLocation)
+	routePlans.Get("/:id/location/latest", driverLocationController.GetLatestDriverLocation)
+	routePlans.Get("/:id/location/history", driverLocationController.GetDriverLocationHistory)
+	routePlans.Delete("/:id/location/history", driverLocationController.DeleteLocationHistory)
 	routePlans.Put("/:id/status", routePlanController.UpdateRoutePlanStatus)
 	routePlans.Delete("/:id", routePlanController.DeleteRoutePlan)
 	routePlans.Get("/driver/:driverID", routePlanController.GetRoutePlansByDriverID)
+	routePlans.Get("/avoidance/permanent", routePlanController.GetPermanentAvoidanceAreas)
+	routePlans.Get("/avoidance/non-permanent", routePlanController.GetNonPermanentAvoidanceAreas)
 	routePlans.Post("/:id/avoidance", routePlanController.AddAvoidanceArea)
+	routePlans.Put("/avoidance/:id/status", routePlanController.UpdateAvoidanceAreaStatus)
+	routePlans.Delete("/avoidance/:id", routePlanController.DeleteAvoidanceArea)
+	routePlans.Put("/:id", routePlanController.UpdateRoutePlan)
 
 	// Upload
 	uploads := api.Group("/uploads")

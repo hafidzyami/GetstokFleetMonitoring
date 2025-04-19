@@ -95,6 +95,12 @@ const BuatRutePage = () => {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [showPermanentAvoidance, setShowPermanentAvoidance] = useState<boolean>(false);
+  const [showNonPermanentAvoidance, setShowNonPermanentAvoidance] = useState<boolean>(false);
+  const [permanentAvoidanceAreas, setPermanentAvoidanceAreas] = useState<AvoidanceInfo[]>([]);
+  const [nonPermanentAvoidanceAreas, setNonPermanentAvoidanceAreas] = useState<AvoidanceInfo[]>([]);
+  const [isLoadingAvoidanceAreas, setIsLoadingAvoidanceAreas] = useState<boolean>(false);
+
   const [drivers, setDrivers] = useState<Array<{ id: string; name: string }>>(
     []
   );
@@ -208,10 +214,116 @@ const BuatRutePage = () => {
     }
   };
 
+  const fetchPermanentAvoidanceAreas = async () => {
+    setIsLoadingAvoidanceAreas(true);
+    try {
+      const response = await fetch("/api/v1/route-plans/avoidance/permanent", {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const responseJson = await response.json();
+      const data = responseJson.data || [];
+
+      // Convert response data to AvoidanceInfo format
+      const formattedAreas: AvoidanceInfo[] = data.map((area: any) => {
+        const markers: Marker[] = area.points.map((point: any, index: number) => ({
+          id: `perm-${area.id}-${index}`,
+          position: [point.latitude, point.longitude] as LatLngTuple,
+        }));
+
+        return {
+          markers,
+          reason: area.reason,
+          isPermanent: area.is_permanent,
+          photoURL: area.photo_url || null,
+          photoKey: null, // We don't need the key on the frontend
+          timestamp: area.created_at,
+        };
+      });
+
+      setPermanentAvoidanceAreas(formattedAreas);
+    } catch (error) {
+      console.error("Error fetching permanent avoidance areas:", error);
+    } finally {
+      setIsLoadingAvoidanceAreas(false);
+    }
+  };
+
+  const fetchNonPermanentAvoidanceAreas = async () => {
+    setIsLoadingAvoidanceAreas(true);
+    try {
+      const response = await fetch("/api/v1/route-plans/avoidance/non-permanent", {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const responseJson = await response.json();
+      const data = responseJson.data || [];
+
+      // Convert response data to AvoidanceInfo format
+      const formattedAreas: AvoidanceInfo[] = data.map((area: any) => {
+        // Here we're using the same ID format as permanent areas, just with a different prefix
+        const markers: Marker[] = area.points.map((point: any, index: number) => ({
+          id: `non-perm-${area.id}-${index}`,
+          position: [point.latitude, point.longitude] as LatLngTuple,
+        }));
+
+        return {
+          markers,
+          reason: area.reason,
+          isPermanent: area.is_permanent,
+          photoURL: area.photo_url || null,
+          photoKey: null, // We don't need the key on the frontend
+          timestamp: area.created_at,
+        };
+      });
+
+      setNonPermanentAvoidanceAreas(formattedAreas);
+    } catch (error) {
+      console.error("Error fetching non-permanent avoidance areas:", error);
+    } finally {
+      setIsLoadingAvoidanceAreas(false);
+    }
+  };
+
   useEffect(() => {
     fetchDrivers();
     fetchTrucks();
   }, []);
+  
+  // Update listOfImpassibleMarkers when showing permanent or non-permanent areas
+  useEffect(() => {
+    let newList = [...listOfImpassibleMarkers.filter(area => 
+      // Filter out any items that were added through the show buttons
+      Array.isArray(area) || 
+      (!(area as AvoidanceInfo).markers.some(marker => 
+        marker.id.startsWith('perm-') || marker.id.startsWith('non-perm-')
+      ))
+    )];
+    
+    // Add permanent avoidance areas if enabled
+    if (showPermanentAvoidance) {
+      newList = [...newList, ...permanentAvoidanceAreas];
+    }
+    
+    // Add non-permanent avoidance areas if enabled
+    if (showNonPermanentAvoidance) {
+      newList = [...newList, ...nonPermanentAvoidanceAreas];
+    }
+    
+    setListOfImpassibleMarkers(newList);
+  }, [showPermanentAvoidance, showNonPermanentAvoidance, permanentAvoidanceAreas, nonPermanentAvoidanceAreas]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -586,6 +698,24 @@ const BuatRutePage = () => {
     }
   };
 
+  // Function to center map on avoidance area
+  const centerMapOnAvoidanceArea = (markers: Marker[]) => {
+    if (!mapRef.current || markers.length === 0) return;
+    
+    // Calculate the center of the polygon
+    const lats = markers.map(marker => marker.position[0]);
+    const lngs = markers.map(marker => marker.position[1]);
+    
+    const avgLat = lats.reduce((a, b) => a + b, 0) / lats.length;
+    const avgLng = lngs.reduce((a, b) => a + b, 0) / lngs.length;
+    
+    // Create a bounds to fit all points
+    const bounds = L.latLngBounds(markers.map(marker => L.latLng(marker.position[0], marker.position[1])));
+    
+    // Set view to the center of the polygon and zoom to fit all points
+    mapRef.current.fitBounds(bounds, { padding: [50, 50] });
+  };
+
   // Marker management
   const addMarker = (latlng: LatLngTuple) => {
     const newMarker = {
@@ -823,36 +953,10 @@ const BuatRutePage = () => {
               longitude: marker.position[1],
             })),
             requester_id: requester_id,
+            status: "approved"
           };
         }
       });
-      console.log("requester_id", requester_id);
-      console.log("avoidanceAreas", avoidanceAreas);
-
-      // const extras = {
-      //   waytype: {
-      //     values: segments.map((seg, idx) => {
-      //       // Kita tidak bisa lagi menggunakan indeks dari routeLatLngs
-      //       // Gunakan indeks berurutan dengan perkiraan panjang segmen
-      //       const segmentLength = seg.segment.length;
-      //       return [idx * 10, idx * 10 + segmentLength - 1, seg.typeValue];
-      //     }),
-      //     summary: [],
-      //   },
-      //   tollways: {
-      //     values: tollways.map((toll, idx) => {
-      //       // Menggunakan pendekatan yang sama untuk tollways
-      //       const tollLength = toll.segment.length;
-      //       // Gunakan offset besar untuk menghindari tumpang tindih dengan waytype
-      //       return [
-      //         segments.length * 10 + idx * 10,
-      //         segments.length * 10 + idx * 10 + tollLength - 1,
-      //         toll.tollwayValue,
-      //       ];
-      //     }),
-      //     summary: [],
-      //   },
-      // };
 
       // Handle format plat nomor
       let parts = vehiclePlate.split(" | ");
@@ -1087,7 +1191,7 @@ const BuatRutePage = () => {
             )}
           </button>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button
               onClick={callApiForDirections}
               className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg"
@@ -1122,6 +1226,49 @@ const BuatRutePage = () => {
                 Area Dihindari
               </button>
             )}
+            
+            {/* Buttons for showing permanent/non-permanent avoidance areas */}
+            <div className="flex mt-2 md:mt-0">
+              <button
+                onClick={() => {
+                  if (!showPermanentAvoidance) {
+                    fetchPermanentAvoidanceAreas();
+                  }
+                  setShowPermanentAvoidance(!showPermanentAvoidance);
+                }}
+                className={`px-3 py-2 ${showPermanentAvoidance ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-500 hover:bg-gray-600'} text-white text-sm font-medium rounded-lg mr-2 flex items-center`}
+                disabled={isLoadingAvoidanceAreas}
+                type="button"
+              >
+                {isLoadingAvoidanceAreas && showPermanentAvoidance ? (
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                ) : null}
+                {showPermanentAvoidance ? 'Sembunyikan Area Permanen' : 'Tampilkan Area Permanen'}
+              </button>
+              
+              <button
+                onClick={() => {
+                  if (!showNonPermanentAvoidance) {
+                    fetchNonPermanentAvoidanceAreas();
+                  }
+                  setShowNonPermanentAvoidance(!showNonPermanentAvoidance);
+                }}
+                className={`px-3 py-2 ${showNonPermanentAvoidance ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-500 hover:bg-gray-600'} text-white text-sm font-medium rounded-lg flex items-center`}
+                disabled={isLoadingAvoidanceAreas}
+                type="button"
+              >
+                {isLoadingAvoidanceAreas && showNonPermanentAvoidance ? (
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                ) : null}
+                {showNonPermanentAvoidance ? 'Sembunyikan Area Sementara' : 'Tampilkan Area Sementara'}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1333,13 +1480,19 @@ const BuatRutePage = () => {
                     ? (avoidanceInfo as AvoidanceInfo).markers
                     : (avoidanceInfo as Marker[]);
 
+                  // Get photo URL if available
+                  const photoURL = isNewFormat ? (avoidanceInfo as AvoidanceInfo).photoURL : null;
+
                   return (
                     <div
                       key={polygonIndex}
                       className="mb-3 pb-2 border-b border-gray-200"
                     >
                       <div className="flex justify-between items-center mb-1">
-                        <h3 className="font-semibold text-sm">
+                        <h3 
+                          className="font-semibold text-sm cursor-pointer hover:text-blue-600 transition-colors"
+                          onClick={() => centerMapOnAvoidanceArea(markersArray)}
+                        >
                           Area {polygonIndex + 1}
                         </h3>
                         <button
@@ -1363,7 +1516,10 @@ const BuatRutePage = () => {
                           </svg>
                         </button>
                       </div>
-                      <div className="text-xs ml-1 mb-1">
+                      <div 
+                        className="text-xs ml-1 mb-1 cursor-pointer hover:text-blue-600 transition-colors"
+                        onClick={() => centerMapOnAvoidanceArea(markersArray)}
+                      >
                         {isNewFormat && (
                           <div className="text-gray-700 font-medium">
                             {(avoidanceInfo as AvoidanceInfo).reason
@@ -1382,7 +1538,7 @@ const BuatRutePage = () => {
                               </span>
                             )}
                           {isNewFormat &&
-                            (avoidanceInfo as AvoidanceInfo).photo && (
+                            (avoidanceInfo as AvoidanceInfo).photoURL && (
                               <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-0.5 rounded">
                                 Dengan Foto
                               </span>

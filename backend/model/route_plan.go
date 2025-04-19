@@ -63,6 +63,7 @@ type RouteAvoidanceArea struct {
 	PhotoURL         string         `json:"photo_url,omitempty"`     // S3 URL for the photo
 	PhotoKey         string         `json:"photo_key,omitempty"`     // S3 object key for the photo
 	RequesterID      uint           `json:"requester_id"` // ID of the user who requested the avoidance area
+	Status           string         `json:"status" gorm:"default:'pending'"` // Status: pending, approved, rejected
 	CreatedAt        time.Time      `json:"created_at"`
 	UpdatedAt        time.Time      `json:"updated_at"`
 	DeletedAt        gorm.DeletedAt `json:"-" gorm:"index"`
@@ -102,6 +103,7 @@ type AvoidanceAreaRequest struct {
 	Reason      string               `json:"reason" validate:"required"`
 	IsPermanent bool                 `json:"is_permanent"`
 	RequesterID uint                 `json:"requester_id"` // ID of the user who requested the avoidance area
+	Status      string               `json:"status,omitempty"` // Status of the area: pending, approved, rejected
 	Photo       string               `json:"photo,omitempty"` // Base64 encoded image (deprecated)
 	PhotoKey    string               `json:"photo_key,omitempty"` // S3 object key yang sudah diupload
 	Points      []AvoidancePointRequest `json:"points" validate:"required,min=3"`
@@ -144,6 +146,7 @@ type AvoidanceAreaResponse struct {
 	RequesterID uint                    `json:"requester_id"`
 	IsPermanent bool                    `json:"is_permanent"`
 	PhotoURL    string                  `json:"photo_url,omitempty"`
+	Status      string                  `json:"status"`
 	Points      []AvoidancePointResponse `json:"points"`
 	CreatedAt   time.Time               `json:"created_at"`
 }
@@ -154,6 +157,12 @@ type AvoidancePointResponse struct {
 	Latitude   float64 `json:"latitude"`
 	Longitude  float64 `json:"longitude"`
 	Order      int     `json:"order"`
+}
+
+// RoutePlanUpdateRequest used for updating route geometry and extras
+type RoutePlanUpdateRequest struct {
+	RouteGeometry string                   `json:"route_geometry"`
+	Extras        map[string]interface{}  `json:"extras"`
 }
 
 func (r *RoutePlan) SetExtras(extras *RouteExtras) error {

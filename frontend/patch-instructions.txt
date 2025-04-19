@@ -1,0 +1,64 @@
+Untuk memperbaiki masalah sinkronisasi warna antara polyline di peta dan legend active routes, serta mendukung banyak truck dengan warna berbeda, ikuti langkah-langkah berikut:
+
+1. Pastikan file utilitas baru `colorUtils.js` telah dibuat di folder `src/app/utils/`
+
+2. Buka file `page.jsx` di folder `src/app/(routes)/management/dashboard/`
+
+3. Import fungsi dari colorUtils.js di bagian atas file:
+```javascript
+import { getRouteColor, debugTruckRouteMatch } from "@/app/utils/colorUtils";
+```
+
+4. Hapus konstan routeColors dan fungsi debugTruckRouteMatch yang ada di file page.jsx, karena sekarang sudah dipindahkan ke colorUtils.js
+
+5. Ubah fungsi getTruckRouteColor menjadi:
+```javascript
+// Fungsi untuk mendapatkan warna berdasarkan truck ID dan status aktif
+const getTruckRouteColor = (routePlan) => {
+  // Warna default untuk rute yang tidak aktif (abu-abu muda)
+  const defaultColor = "#dddddd";
+  
+  // Jika ada truck yang aktif/dipilih
+  if (activeTruck) {
+    // Cek apakah route plan milik truck yang aktif
+    const isActiveTruckRoute = debugTruckRouteMatch(activeTruck, routePlan);
+    
+    // Jika milik truck yang aktif, berikan warna berdasarkan ID
+    if (isActiveTruckRoute) {
+      return getRouteColor(routePlan);
+    } else {
+      // Jika bukan milik truck yang aktif, tampilkan abu-abu
+      return defaultColor;
+    }
+  } else {
+    // Jika tidak ada truck yang dipilih, tampilkan semua rute dengan warna berbeda
+    return getRouteColor(routePlan);
+  }
+};
+```
+
+6. Di bagian rendering polylines, ubah kode untuk menggunakan fungsi getRouteColor:
+```javascript
+if (!activeTruck) {
+  // Jika tidak ada truck aktif, gunakan warna-warna berbeda untuk tiap truck
+  color = getRouteColor(routePlan);
+  weight = 5;
+  opacity = 0.7;
+} else {
+  // ...
+  if (isMatch) {
+    // Gunakan warna asli untuk truck yang aktif
+    color = getRouteColor(routePlan);
+    weight = 5;
+    opacity = 0.9;
+    // ...
+  }
+}
+```
+
+7. Di bagian rendering legend, ubah properti style untuk menggunakan getRouteColor:
+```javascript
+style={{ backgroundColor: getRouteColor(routePlan) }}
+```
+
+Dengan perubahan ini, warna yang sama akan digunakan secara konsisten baik untuk polyline di peta maupun untuk indikator di legend, dan kita memiliki 56 warna berbeda yang dapat digunakan untuk banyak truck.

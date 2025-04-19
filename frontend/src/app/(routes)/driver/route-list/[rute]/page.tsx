@@ -38,6 +38,8 @@ interface AvoidanceArea {
   is_permanent: boolean;
   has_photo: boolean;
   photo_url?: string;
+  requester_id?: number;
+  status?: string;
   points: AvoidancePointResponse[];
 }
 
@@ -87,6 +89,8 @@ interface AvoidanceMarker {
   position: [number, number];
   reason?: string;
   photoURL?: string;
+  requesterID?: number;
+  status?: string;
 }
 
 // Interface untuk area baru yang akan ditandai
@@ -105,13 +109,19 @@ const DriverRouteDetailPage = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [markers, setMarkers] = useState<MapMarker[]>([]);
-  const [impassibleMarkers, setImpassibleMarkers] = useState<AvoidanceMarker[][]>([]);
+  const [impassibleMarkers, setImpassibleMarkers] = useState<
+    AvoidanceMarker[][]
+  >([]);
   const [center, setCenter] = useState<[number, number]>([-6.8904, 107.6102]); // Default to Bandung
   const [routeLatLngs, setRouteLatLngs] = useState<[number, number][]>([]);
   const mapRef = useRef<any>(null);
-  const [segments, setSegments] = useState<{ segment: [number, number][]; typeValue: number }[]>([]);
-  const [tollways, setTollways] = useState<{ segment: [number, number][]; tollwayValue: number }[]>([]);
-  
+  const [segments, setSegments] = useState<
+    { segment: [number, number][]; typeValue: number }[]
+  >([]);
+  const [tollways, setTollways] = useState<
+    { segment: [number, number][]; tollwayValue: number }[]
+  >([]);
+
   // States untuk mode menandai area
   const [isMarkingMode, setIsMarkingMode] = useState<boolean>(false);
   const [newAvoidanceArea, setNewAvoidanceArea] = useState<NewAvoidanceArea>({
@@ -119,12 +129,18 @@ const DriverRouteDetailPage = () => {
     reason: "",
     isPermanent: false,
     photo: null,
-    photoPreview: undefined
+    photoPreview: undefined,
   });
   const [showAvoidanceForm, setShowAvoidanceForm] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [showSuccessMessage, setShowSuccessMessage] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [requesterNames, setRequesterNames] = useState<{
+    [key: number]: string;
+  }>({});
+  const [requesterRoles, setRequesterRoles] = useState<{
+    [key: number]: string;
+  }>({});
 
   // Load Map component dynamically to avoid SSR issues
   const DriverMap = useMemo(
@@ -198,9 +214,53 @@ const DriverRouteDetailPage = () => {
               position: [point.latitude, point.longitude] as [number, number],
               reason: area.reason,
               photoURL: area.photo_url,
+              requesterID: area.requester_id,
+              status: area.status,
             }))
           );
           setImpassibleMarkers(avoidanceMarkersGroups);
+
+          // Fetch requester names
+          const fetchRequesterNames = async () => {
+            const newRequesterNames: { [key: number]: string } = {};
+            const newRequesterRoles: { [key: number]: string } = {};
+
+            for (const area of data.data.avoidance_areas) {
+              if (area.requester_id && !requesterNames[area.requester_id]) {
+                try {
+                  const response = await fetch(
+                    `/api/v1/users/${area.requester_id}`,
+                    {
+                      headers: {
+                        Authorization: `Bearer ${token}`,
+                      },
+                    }
+                  );
+
+                  if (response.ok) {
+                    const userData = await response.json();
+                    if (userData.data && userData.data.name) {
+                      newRequesterNames[area.requester_id] = userData.data.name;
+                      newRequesterRoles[area.requester_id] =
+                        userData.data.role || "unknown";
+                    }
+                  }
+                } catch (error) {
+                  console.error(
+                    `Error fetching user ${area.requester_id}:`,
+                    error
+                  );
+                }
+              }
+            }
+
+            if (Object.keys(newRequesterNames).length > 0) {
+              setRequesterNames((prev) => ({ ...prev, ...newRequesterNames }));
+              setRequesterRoles((prev) => ({ ...prev, ...newRequesterRoles }));
+            }
+          };
+
+          fetchRequesterNames();
         } else {
           setImpassibleMarkers([]);
         }
@@ -264,9 +324,9 @@ const DriverRouteDetailPage = () => {
   // Function untuk menambahkan point ke new avoidance area
   const handleAddPoint = (point: [number, number]) => {
     if (isMarkingMode) {
-      setNewAvoidanceArea(prev => ({
+      setNewAvoidanceArea((prev) => ({
         ...prev,
-        points: [...prev.points, point]
+        points: [...prev.points, point],
       }));
     }
   };
@@ -274,9 +334,9 @@ const DriverRouteDetailPage = () => {
   // Function untuk menghapus point terakhir
   const handleRemoveLastPoint = () => {
     if (newAvoidanceArea.points.length > 0) {
-      setNewAvoidanceArea(prev => ({
+      setNewAvoidanceArea((prev) => ({
         ...prev,
-        points: prev.points.slice(0, -1)
+        points: prev.points.slice(0, -1),
       }));
     }
   };
@@ -288,10 +348,10 @@ const DriverRouteDetailPage = () => {
       // Create preview
       const reader = new FileReader();
       reader.onloadend = () => {
-        setNewAvoidanceArea(prev => ({
+        setNewAvoidanceArea((prev) => ({
           ...prev,
           photo: file,
-          photoPreview: reader.result as string
+          photoPreview: reader.result as string,
         }));
       };
       reader.readAsDataURL(file);
@@ -320,12 +380,12 @@ const DriverRouteDetailPage = () => {
 
       // Prepare the data
       const formData = new FormData();
-      
+
       // Convert points to format yang dibutuhkan API
       const pointsData = newAvoidanceArea.points.map((point, index) => ({
         latitude: point[0],
         longitude: point[1],
-        order: index
+        order: index,
       }));
 
       // Upload photo jika ada
@@ -333,21 +393,40 @@ const DriverRouteDetailPage = () => {
       if (newAvoidanceArea.photo) {
         const photoForm = new FormData();
         photoForm.append("photo", newAvoidanceArea.photo);
-        
+
         const uploadResponse = await fetch("/api/v1/uploads/photo", {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${token}`,
           },
-          body: photoForm
+          body: photoForm,
         });
-        
+
         if (!uploadResponse.ok) {
           throw new Error("Failed to upload photo");
         }
-        
+
         const uploadData = await uploadResponse.json();
         photoKey = uploadData.data.key;
+      }
+
+      // Get current user ID from localStorage or decode from JWT
+      const userObj = localStorage.getItem("user");
+      let currentUserId = 0;
+
+      if (userObj) {
+        try {
+          const userData = JSON.parse(userObj);
+          currentUserId = userData.id || 0;
+        } catch (e) {
+          console.error("Error parsing user data", e);
+        }
+      }
+
+      // As fallback, get from userId directly
+      if (currentUserId === 0) {
+        const currentUserIdStr = localStorage.getItem("userId");
+        currentUserId = currentUserIdStr ? parseInt(currentUserIdStr) : 0;
       }
 
       // Prepare update data
@@ -357,20 +436,25 @@ const DriverRouteDetailPage = () => {
             reason: newAvoidanceArea.reason,
             is_permanent: newAvoidanceArea.isPermanent,
             photo_key: photoKey || undefined,
-            points: pointsData
-          }
-        ]
+            points: pointsData,
+            requester_id: currentUserId,
+            status: "pending",
+          },
+        ],
       };
 
       // Send to API
-      const response = await fetch(`/api/v1/route-plans/${params.rute}/avoidance`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(updateData)
-      });
+      const response = await fetch(
+        `/api/v1/route-plans/${params.rute}/avoidance`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(updateData),
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`Error: ${response.statusText}`);
@@ -379,7 +463,17 @@ const DriverRouteDetailPage = () => {
       // Show success message and reset form
       setShowSuccessMessage(true);
       setTimeout(() => setShowSuccessMessage(false), 5000);
-      
+
+      // Update status to "on confirmation"
+      try {
+        await handleUpdateStatus("on confirmation");
+        // Update pesan sukses untuk memberitahu pengguna bahwa status sudah berubah
+        setShowSuccessMessage(true);
+        setTimeout(() => setShowSuccessMessage(false), 5000);
+      } catch (error) {
+        console.error("Error updating to on confirmation status:", error);
+        // Masih tampilkan pesan sukses untuk penyimpanan area
+      }
       // Add new area to current display
       const newArea = {
         id: `temp-area-${Date.now()}`,
@@ -387,51 +481,82 @@ const DriverRouteDetailPage = () => {
         is_permanent: newAvoidanceArea.isPermanent,
         has_photo: !!newAvoidanceArea.photo,
         photo_url: newAvoidanceArea.photoPreview,
-        points: pointsData.map(p => ({
+        points: pointsData.map((p) => ({
           id: 0,
           latitude: p.latitude,
           longitude: p.longitude,
-          order: p.order
-        }))
+          order: p.order,
+        })),
       };
-      
-      setRoutePlan(prev => {
-        if (!prev) return null;
+
+      // setRoutePlan(prev => {
+      //   if (!prev) return null;
+      //   return {
+      //     ...prev,
+      //     avoidance_areas: [
+      //   ...prev.avoidance_areas,
+      //   {
+      //     ...newArea,
+      //     id: typeof newArea.id === "string" ? Date.now() : newArea.id,
+      //   },
+      //     ],
+      //   };
+      // });
+
+      setRoutePlan((prev): any => {
+        // If prev doesn't exist, create a new route plan
+        if (!prev) {
+          return {
+            avoidance_areas: [
+              {
+                ...newArea,
+                id: typeof newArea.id === "string" ? Date.now() : newArea.id,
+              },
+            ],
+            // Add other required route plan properties with default values here
+          };
+        }
+
+        // If prev exists but avoidance_areas is not iterable (undefined, null, etc.)
+        // Initialize it as an empty array
+        const existingAreas = Array.isArray(prev.avoidance_areas)
+          ? prev.avoidance_areas
+          : [];
+
         return {
           ...prev,
           avoidance_areas: [
-        ...prev.avoidance_areas,
-        {
-          ...newArea,
-          id: typeof newArea.id === "string" ? Date.now() : newArea.id,
-        },
+            ...existingAreas,
+            {
+              ...newArea,
+              id: typeof newArea.id === "string" ? Date.now() : newArea.id,
+            },
           ],
         };
       });
-      
+
       // Add to map markers
       const newMapMarkers = newAvoidanceArea.points.map((point, idx) => ({
         id: `new-avoidance-${Date.now()}-${idx}`,
         position: point as [number, number],
         reason: newAvoidanceArea.reason,
-        photoURL: newAvoidanceArea.photoPreview
+        photoURL: newAvoidanceArea.photoPreview,
       }));
-      
-      setImpassibleMarkers(prev => [...prev, newMapMarkers]);
-      
+
+      setImpassibleMarkers((prev) => [...prev, newMapMarkers]);
+
       // Reset avoidance area
       setNewAvoidanceArea({
         points: [],
         reason: "",
         isPermanent: false,
         photo: null,
-        photoPreview: undefined
+        photoPreview: undefined,
       });
-      
+
       // Exit marking mode
       setIsMarkingMode(false);
       setShowAvoidanceForm(false);
-      
     } catch (err) {
       console.error("Error saving avoidance area:", err);
       alert("Gagal menyimpan area. Silakan coba lagi.");
@@ -449,7 +574,7 @@ const DriverRouteDetailPage = () => {
       reason: "",
       isPermanent: false,
       photo: null,
-      photoPreview: undefined
+      photoPreview: undefined,
     });
   };
 
@@ -473,14 +598,17 @@ const DriverRouteDetailPage = () => {
         return;
       }
 
-      const response = await fetch(`/api/v1/route-plans/${routePlan.id}/status`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ status: newStatus }),
-      });
+      const response = await fetch(
+        `/api/v1/route-plans/${routePlan.id}/status`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ status: newStatus }),
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`Error updating status: ${response.statusText}`);
@@ -491,9 +619,6 @@ const DriverRouteDetailPage = () => {
         ...routePlan,
         status: newStatus,
       });
-      
-      // Show success message
-      alert(`Status rute berhasil diubah menjadi: ${newStatus}`);
     } catch (err) {
       console.error("Error updating status:", err);
       alert("Gagal mengubah status rute. Silakan coba lagi.");
@@ -525,6 +650,11 @@ const DriverRouteDetailPage = () => {
         text: "Dibatalkan",
         bgColor: "bg-red-100",
         textColor: "text-red-800",
+      },
+      "on confirmation": {
+        text: "Menunggu Konfirmasi",
+        bgColor: "bg-yellow-100",
+        textColor: "text-yellow-800",
       },
     };
 
@@ -576,7 +706,7 @@ const DriverRouteDetailPage = () => {
             Coba Lagi
           </button>
           <button
-            onClick={() => router.push("/driver/routes")}
+            onClick={() => router.push("/driver/route-list")}
             className="px-4 py-2 bg-gray-500 text-white rounded-md"
           >
             Kembali
@@ -593,7 +723,7 @@ const DriverRouteDetailPage = () => {
         <p className="text-xl font-semibold mb-2">Data Tidak Ditemukan</p>
         <p className="mb-4">Route plan dengan ID tersebut tidak ditemukan</p>
         <button
-          onClick={() => router.push("/driver/routes")}
+          onClick={() => router.push("/driver/route-list")}
           className="px-4 py-2 bg-blue-500 text-white rounded-md"
         >
           Kembali ke Daftar Rute
@@ -607,15 +737,17 @@ const DriverRouteDetailPage = () => {
       {/* Success message */}
       {showSuccessMessage && (
         <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded z-50 shadow-md">
-          <span className="font-bold">Berhasil!</span> Area yang tidak dapat dilewati telah ditambahkan.
+          <span className="font-bold">Berhasil!</span> Area yang tidak dapat
+          dilewati telah ditambahkan dan status rute diubah menjadi "Menunggu
+          Konfirmasi".
         </div>
       )}
-      
+
       {/* Header with back button and route info */}
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
         <div className="flex items-center">
           <button
-            onClick={() => router.push("/driver/routes")}
+            onClick={() => router.push("/driver/route-list")}
             className="mr-4 flex items-center justify-center w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
           >
             <i className="bx bx-arrow-back text-xl"></i>
@@ -635,56 +767,68 @@ const DriverRouteDetailPage = () => {
         <div className="flex flex-wrap gap-2">
           {/* Button untuk memulai rute */}
           {routePlan.status === "planned" && (
-            <button 
-              onClick={() => handleUpdateStatus("active")} 
+            <button
+              onClick={() => {
+                handleUpdateStatus("active").then(() => {
+                  router.push("/driver/route");
+                });
+              }}
               className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md flex items-center gap-2 transition-colors"
             >
               <i className="bx bx-play"></i>
               <span>Mulai Rute</span>
             </button>
           )}
-          
+
           {/* Button untuk menyelesaikan rute */}
           {routePlan.status === "active" && (
-            <button 
-              onClick={() => handleUpdateStatus("completed")} 
+            <button
+              onClick={() => handleUpdateStatus("completed")}
               className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md flex items-center gap-2 transition-colors"
             >
               <i className="bx bx-check"></i>
               <span>Selesaikan Rute</span>
             </button>
           )}
-          
+
           {/* Button untuk membatalkan rute */}
-          {(routePlan.status === "planned" || routePlan.status === "active") && (
-            <button 
-              onClick={() => handleUpdateStatus("cancelled")} 
+          {(routePlan.status === "planned" ||
+            routePlan.status === "active" ||
+            routePlan.status === "on confirmation") && (
+            <button
+              onClick={() => handleUpdateStatus("cancelled")}
               className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md flex items-center gap-2 transition-colors"
             >
               <i className="bx bx-x"></i>
               <span>Batalkan Rute</span>
             </button>
           )}
-          
+
           {/* Button untuk menandai area */}
-          {!isMarkingMode ? (
-            <button 
-              onClick={() => setIsMarkingMode(true)} 
-              className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-md flex items-center gap-2 transition-colors"
-              disabled={showAvoidanceForm || routePlan.status === "completed" || routePlan.status === "cancelled"}
-            >
-              <i className="bx bx-map-pin"></i>
-              <span>Tandai Area</span>
-            </button>
-          ) : (
-            <button 
-              onClick={handleCancelMarking} 
-              className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md flex items-center gap-2 transition-colors"
-            >
-              <i className="bx bx-x"></i>
-              <span>Batal</span>
-            </button>
-          )}
+          {routePlan.status !== "completed" &&
+            routePlan.status !== "cancelled" &&
+            (!isMarkingMode ? (
+              <button
+                onClick={() => setIsMarkingMode(true)}
+                className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-md flex items-center gap-2 transition-colors"
+                disabled={
+                  showAvoidanceForm ||
+                  routePlan.status === "completed" ||
+                  routePlan.status === "cancelled"
+                }
+              >
+                <i className="bx bx-map-pin"></i>
+                <span>Tandai Area</span>
+              </button>
+            ) : (
+              <button
+                onClick={handleCancelMarking}
+                className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md flex items-center gap-2 transition-colors"
+              >
+                <i className="bx bx-x"></i>
+                <span>Batal</span>
+              </button>
+            ))}
         </div>
       </div>
 
@@ -773,44 +917,119 @@ const DriverRouteDetailPage = () => {
           </div>
 
           {/* Avoidance Areas */}
-          {routePlan.avoidance_areas && routePlan.avoidance_areas.length > 0 && (
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="font-semibold text-lg text-gray-800">
-                  Area Dihindari
-                </h2>
-                <span className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">
-                  {routePlan.avoidance_areas.length} area
-                </span>
-              </div>
+          {routePlan.avoidance_areas &&
+            routePlan.avoidance_areas.length > 0 && (
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="font-semibold text-lg text-gray-800">
+                    Area Dihindari
+                  </h2>
+                  <span className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">
+                    {routePlan.avoidance_areas.length} area
+                  </span>
+                </div>
 
-              <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
-                {routePlan.avoidance_areas.map((area, index) => (
-                  <div
-                    key={area.id}
-                    className="border border-gray-200 rounded-lg p-4"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-medium text-gray-800">
-                        Area {index + 1}
-                      </h3>
-                      {area.is_permanent && (
-                        <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded">
-                          Permanen
-                        </span>
-                      )}
+                <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
+                  {routePlan.avoidance_areas.map((area, index) => (
+                    <div
+                      key={area.id}
+                      className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                      onClick={() => {
+                        if (
+                          mapRef.current &&
+                          area.points &&
+                          area.points.length > 0
+                        ) {
+                          // Hitung center dari area
+                          const latSum = area.points.reduce(
+                            (sum, p) => sum + p.latitude,
+                            0
+                          );
+                          const lngSum = area.points.reduce(
+                            (sum, p) => sum + p.longitude,
+                            0
+                          );
+                          const centerLat = latSum / area.points.length;
+                          const centerLng = lngSum / area.points.length;
+
+                          // Set center map ke area yang dipilih
+                          mapRef.current.setView([centerLat, centerLng], 15);
+
+                          // Cari marker yang sesuai dan buka popupnya
+                          const areaMarkers = impassibleMarkers.find(
+                            (markerGroup) => {
+                              if (markerGroup.length > 0) {
+                                const idParts = markerGroup[0].id.split("-");
+                                return (
+                                  idParts.length >= 2 &&
+                                  parseInt(idParts[1]) === area.id
+                                );
+                              }
+                              return false;
+                            }
+                          );
+
+                          // Jika marker ditemukan, tampilkan popup
+                          if (areaMarkers && areaMarkers.length > 0) {
+                            // Kita perlu menunggu sedikit agar peta selesai digerakkan
+                            setTimeout(() => {
+                              // Cari layer yang sesuai untuk area ini
+                              mapRef.current.eachLayer((layer: any) => {
+                                if (layer._icon && layer._popup) {
+                                  const iconEl = layer._icon;
+                                  if (iconEl.innerText === `A${index + 1}`) {
+                                    layer.openPopup();
+                                  }
+                                }
+                              });
+                            }, 500);
+                          }
+                        }
+                      }}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="font-medium text-gray-800">
+                          Area {index + 1}
+                        </h3>
+                        <div className="flex items-center gap-2">
+                          {area.is_permanent && (
+                            <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded">
+                              Permanen
+                            </span>
+                          )}
+                          {area.status &&
+                            (!area.requester_id ||
+                              requesterRoles[area.requester_id] !==
+                                "planner") && (
+                              <span
+                                className={`px-2 py-0.5 text-xs rounded ${
+                                  area.status === "approved"
+                                    ? "bg-green-100 text-green-700"
+                                    : area.status === "rejected"
+                                    ? "bg-red-100 text-red-700"
+                                    : "bg-yellow-100 text-yellow-700"
+                                }`}
+                              >
+                                {area.status === "approved"
+                                  ? "Disetujui"
+                                  : area.status === "rejected"
+                                  ? "Ditolak"
+                                  : "Menunggu"}
+                              </span>
+                            )}
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-600 mb-2">
+                        {area.reason}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {area.points.length} titik koordinat
+                      </p>
                     </div>
-                    <p className="text-sm text-gray-600 mb-2">
-                      {area.reason}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {area.points.length} titik koordinat
-                    </p>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
         </div>
 
         {/* Right column - Map and form */}
@@ -825,43 +1044,54 @@ const DriverRouteDetailPage = () => {
               segments={segments}
               tollways={tollways}
               zoom={12}
-              onMapRef={(map : any) => (mapRef.current = map)}
+              onMapRef={(map: any) => (mapRef.current = map)}
               isMarkingMode={isMarkingMode}
               onAddPoint={handleAddPoint}
               newAvoidancePoints={newAvoidanceArea.points}
+              requesterNames={requesterNames}
             />
           </div>
-          
+
           {/* Marking Instructions */}
           {isMarkingMode && !showAvoidanceForm && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-              <h3 className="font-medium text-blue-800 mb-2">Mode Penandaan Area</h3>
+              <h3 className="font-medium text-blue-800 mb-2">
+                Mode Penandaan Area
+              </h3>
               <p className="text-sm text-blue-600 mb-3">
-                Klik pada peta untuk menandai titik-titik area yang tidak dapat dilewati. 
-                Minimal 3 titik diperlukan untuk membentuk area.
+                Klik pada peta untuk menandai titik-titik area yang tidak dapat
+                dilewati. Minimal 3 titik diperlukan untuk membentuk area.
               </p>
-              
+
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={handleCompletePolygon}
                   disabled={newAvoidanceArea.points.length < 3}
                   className={`px-4 py-2 rounded-md text-white text-sm flex items-center gap-1
-                    ${newAvoidanceArea.points.length < 3 ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-500 hover:bg-green-600'}`}
+                    ${
+                      newAvoidanceArea.points.length < 3
+                        ? "bg-gray-400 cursor-not-allowed"
+                        : "bg-green-500 hover:bg-green-600"
+                    }`}
                 >
                   <i className="bx bx-check"></i>
                   <span>Selesai ({newAvoidanceArea.points.length} titik)</span>
                 </button>
-                
+
                 <button
                   onClick={handleRemoveLastPoint}
                   disabled={newAvoidanceArea.points.length === 0}
                   className={`px-4 py-2 rounded-md text-white text-sm flex items-center gap-1
-                    ${newAvoidanceArea.points.length === 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600'}`}
+                    ${
+                      newAvoidanceArea.points.length === 0
+                        ? "bg-gray-400 cursor-not-allowed"
+                        : "bg-red-500 hover:bg-red-600"
+                    }`}
                 >
                   <i className="bx bx-undo"></i>
                   <span>Hapus Titik Terakhir</span>
                 </button>
-                
+
                 <button
                   onClick={handleCancelMarking}
                   className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md text-sm flex items-center gap-1"
@@ -872,43 +1102,65 @@ const DriverRouteDetailPage = () => {
               </div>
             </div>
           )}
-          
+
           {/* Avoidance Area Form */}
           {showAvoidanceForm && (
             <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-              <h3 className="font-medium text-gray-800 mb-4">Detail Area yang Tidak Dapat Dilewati</h3>
-              
+              <h3 className="font-medium text-gray-800 mb-4">
+                Detail Area yang Tidak Dapat Dilewati
+              </h3>
+
               <div className="space-y-4">
                 <div>
-                  <label htmlFor="reason" className="block text-sm font-medium text-gray-700 mb-1">
-                    Alasan Tidak Dapat Dilewati <span className="text-red-500">*</span>
+                  <label
+                    htmlFor="reason"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    Alasan Tidak Dapat Dilewati{" "}
+                    <span className="text-red-500">*</span>
                   </label>
                   <textarea
                     id="reason"
                     value={newAvoidanceArea.reason}
-                    onChange={(e) => setNewAvoidanceArea(prev => ({...prev, reason: e.target.value}))}
+                    onChange={(e) =>
+                      setNewAvoidanceArea((prev) => ({
+                        ...prev,
+                        reason: e.target.value,
+                      }))
+                    }
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     rows={3}
                     placeholder="Contoh: Jalan rusak, banjir, longsor, dll."
                     required
                   />
                 </div>
-                
+
                 <div className="flex items-center">
                   <input
                     type="checkbox"
                     id="isPermanent"
                     checked={newAvoidanceArea.isPermanent}
-                    onChange={(e) => setNewAvoidanceArea(prev => ({...prev, isPermanent: e.target.checked}))}
+                    onChange={(e) =>
+                      setNewAvoidanceArea((prev) => ({
+                        ...prev,
+                        isPermanent: e.target.checked,
+                      }))
+                    }
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
-                  <label htmlFor="isPermanent" className="ml-2 block text-sm text-gray-700">
+                  <label
+                    htmlFor="isPermanent"
+                    className="ml-2 block text-sm text-gray-700"
+                  >
                     Area ini secara permanen tidak dapat dilewati
                   </label>
                 </div>
-                
+
                 <div>
-                  <label htmlFor="photo" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    htmlFor="photo"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
                     Unggah Foto (Opsional)
                   </label>
                   <input
@@ -928,29 +1180,33 @@ const DriverRouteDetailPage = () => {
                       Pilih Foto
                     </button>
                     <span className="text-sm text-gray-500">
-                      {newAvoidanceArea.photo ? newAvoidanceArea.photo.name : "Tidak ada foto dipilih"}
+                      {newAvoidanceArea.photo
+                        ? newAvoidanceArea.photo.name
+                        : "Tidak ada foto dipilih"}
                     </span>
                   </div>
-                  
+
                   {newAvoidanceArea.photoPreview && (
                     <div className="mt-3">
-                      <p className="text-sm font-medium text-gray-700 mb-1">Preview:</p>
-                      <img 
-                        src={newAvoidanceArea.photoPreview} 
-                        alt="Preview" 
-                        className="max-h-40 rounded-md border border-gray-300" 
+                      <p className="text-sm font-medium text-gray-700 mb-1">
+                        Preview:
+                      </p>
+                      <img
+                        src={newAvoidanceArea.photoPreview}
+                        alt="Preview"
+                        className="max-h-40 rounded-md border border-gray-300"
                       />
                     </div>
                   )}
                 </div>
-                
+
                 <div className="flex gap-3 pt-2">
                   <button
                     onClick={handleSaveAvoidanceArea}
                     disabled={isSaving || newAvoidanceArea.reason.trim() === ""}
                     className={`px-4 py-2 rounded-md text-white flex-1 ${
-                      isSaving || newAvoidanceArea.reason.trim() === "" 
-                        ? "bg-blue-300 cursor-not-allowed" 
+                      isSaving || newAvoidanceArea.reason.trim() === ""
+                        ? "bg-blue-300 cursor-not-allowed"
                         : "bg-blue-500 hover:bg-blue-600"
                     }`}
                   >
@@ -963,7 +1219,7 @@ const DriverRouteDetailPage = () => {
                       "Simpan Area"
                     )}
                   </button>
-                  
+
                   <button
                     onClick={handleCancelMarking}
                     disabled={isSaving}
@@ -979,5 +1235,5 @@ const DriverRouteDetailPage = () => {
       </div>
     </div>
   );
-}
+};
 export default DriverRouteDetailPage;

@@ -40,6 +40,18 @@ type TruckUpdateRequest struct {
 	Type        string `json:"type"`
 }
 
+type TruckUpdateFullRequest struct {
+	MacID       string `json:"mac_id"`
+	PlateNumber string `json:"plate_number"`
+	Type        string `json:"type"`
+}
+
+type TruckCreateRequest struct {
+	MacID       string `json:"mac_id"`
+	PlateNumber string `json:"plate_number"`
+	Type        string `json:"type"`
+}
+
 // ToTruckResponse converts Truck model to TruckResponse DTO
 func (t *Truck) ToTruckResponse() TruckResponse {
 	return TruckResponse{
