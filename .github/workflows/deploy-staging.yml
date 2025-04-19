@@ -68,8 +68,8 @@ jobs:
       with:
         context: ./frontend
         push: true
-        tags: hafidzyami/getstok-frontend:staging
-        cache-from: type=registry,ref=hafidzyami/getstok-frontend:staging
+        tags: hafidzyami/getstok-frontend:latest
+        cache-from: type=registry,ref=hafidzyami/getstok-frontend:latest
         cache-to: type=inline
         
     - name: Build and push Backend
@@ -77,8 +77,8 @@ jobs:
       with:
         context: ./backend
         push: true
-        tags: hafidzyami/getstok-backend:staging
-        cache-from: type=registry,ref=hafidzyami/getstok-backend:staging
+        tags: hafidzyami/getstok-backend:latest
+        cache-from: type=registry,ref=hafidzyami/getstok-backend:latest
         cache-to: type=inline
 
   deploy:
@@ -201,11 +201,6 @@ jobs:
               echo "ERROR: docker-compose.yml not found in repository"
               exit 1
             fi
-            
-            # Modifikasi docker-compose.yml untuk menggunakan image dari DockerHub
-            echo "Modifying docker-compose.yml to use DockerHub images..."
-            sed -i "s/build:\\n\\s*context: .\\/frontend/image: hafidzyami\\/getstok-frontend:staging/" docker-compose.yml
-            sed -i "s/build:\\n\\s*context: .\\/backend/image: hafidzyami\\/getstok-backend:staging/" docker-compose.yml
             
             # Stop all containers
             echo "Stopping existing containers..."
