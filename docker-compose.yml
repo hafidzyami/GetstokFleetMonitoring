@@ -8,9 +8,7 @@ name: getstok-fleet-monitoring
 services:
   # Frontend service
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    image: hafidzyami/getstok-frontend:latest
     container_name: getstok-frontend
     restart: unless-stopped
     ports:
@@ -45,9 +43,7 @@ services:
       retries: 5
 
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: hafidzyami/getstok-backend:latest
     container_name: getstok_api
     restart: unless-stopped
     ports:
@@ -86,12 +82,12 @@ services:
   # MQTT Broker service
   mqtt-broker:
     build:
-      context: ./mqtt_broker  # Menggunakan context dari direktori mqtt_broker
+      context: ./mqtt_broker # Menggunakan context dari direktori mqtt_broker
     container_name: getstok-mqtt
     restart: unless-stopped
     ports:
-      - "1883:1883"  # MQTT default port
-      - "9001:9001"  # WebSockets port
+      - "1883:1883" # MQTT default port
+      - "9001:9001" # WebSockets port
     networks:
       - getstok-network
 
