@@ -31,7 +31,7 @@ import (
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/mqtt"
 )
 
-// @host ${SERVER_HOST}
+// @host localhost:8080
 // @BasePath /api/v1
 // @schemes http https
 func main() {
