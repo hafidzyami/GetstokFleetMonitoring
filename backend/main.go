@@ -16,8 +16,8 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/swagger"
 	_ "github.com/hafidzyami/GetstokFleetMonitoring/backend/docs" // Import generated docs
-	"github.com/hafidzyami/GetstokFleetMonitoring/backend/migration"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/model"
+	"github.com/hafidzyami/GetstokFleetMonitoring/backend/migration"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/seed"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/utils"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/websocket"
@@ -31,17 +31,12 @@ import (
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/mqtt"
 )
 
-// @host localhost:8080
+// @host 54.169.106.52:8080
 // @BasePath /api/v1
-// @schemes http https
+// @schemes http
 func main() {
 	// Load environment variables
 	config.LoadEnv()
-
-	serverHost := os.Getenv("SERVER_HOST")
-	if serverHost == "" {
-		serverHost = "localhost:8080" // default fallback jika tidak ada di .env
-	}
 
 	// Connect to database
 	config.ConnectDB()
@@ -79,7 +74,7 @@ func main() {
 	routingSerivce := service.NewRoutingService()
 	userService := service.NewUserService(userRepo)
 	routingPlanService := service.NewRoutePlanService(routePlanRepo, truckRepo, userRepo)
-
+	
 	// Initialize driver location repository and service
 	driverLocationRepo := repository.NewDriverLocationRepository()
 	driverLocationService := service.NewDriverLocationService(
@@ -88,6 +83,7 @@ func main() {
 		userRepo,
 		routingPlanService,
 	)
+	
 
 	// Initialize controllers
 	authController := controller.NewAuthController(authService)
@@ -129,10 +125,7 @@ func main() {
 	app.Use(cors.New())    // CORS middleware
 
 	// Swagger route
-	swaggerConfig := swagger.Config{
-		URL: fmt.Sprintf("http://%s/swagger/doc.json", serverHost),
-	}
-	app.Get("/swagger/*", swagger.New(swaggerConfig))
+	app.Get("/swagger/*", swagger.HandlerDefault)
 
 	// Websocket Middleware
 	app.Use("/ws", func(c *fiber.Ctx) error {
