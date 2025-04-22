@@ -129,7 +129,10 @@ func main() {
 	app.Use(cors.New())    // CORS middleware
 
 	// Swagger route
-	app.Get("/swagger/*", swagger.HandlerDefault)
+	swaggerConfig := swagger.Config{
+		URL: fmt.Sprintf("http://%s/swagger/doc.json", serverHost),
+	}
+	app.Get("/swagger/*", swagger.New(swaggerConfig))
 
 	// Websocket Middleware
 	app.Use("/ws", func(c *fiber.Ctx) error {
