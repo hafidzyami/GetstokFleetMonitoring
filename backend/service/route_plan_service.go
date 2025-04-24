@@ -472,6 +472,8 @@ func (s *routePlanService) DeleteAvoidanceArea(id uint) error {
 		_ = s.s3Service.DeleteObject(area.PhotoKey)
 	}
 
+	s.UpdateAvoidanceAreaStatus(id, "rejected")
+
 	// Delete from database
 	return s.routePlanRepo.DeleteAvoidanceArea(id)
 }
