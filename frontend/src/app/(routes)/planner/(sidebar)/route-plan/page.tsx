@@ -1,15 +1,17 @@
 "use client";
-import { useRouter } from "next/navigation";
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import dynamic from "next/dynamic";
-import { LatLngTuple } from "leaflet";
-import { getLatLngsForMap } from "@/app/utils/polylineDecoder";
-import ElevationProfile from "@/app/_components/ElevationProfile";
-import L from "leaflet";
+
+import "leaflet-geosearch/dist/geosearch.css"; // Make sure to include the CSS
 
 // Import search-related dependencies directly to ensure they're available
 import { GeoSearchControl, OpenStreetMapProvider } from "leaflet-geosearch";
-import "leaflet-geosearch/dist/geosearch.css"; // Make sure to include the CSS
+import React, { useEffect, useMemo, useRef, useState } from "react";
+
+import ElevationProfile from "@/app/_components/ElevationProfile";
+import L from "leaflet";
+import { LatLngTuple } from "leaflet";
+import dynamic from "next/dynamic";
+import { getLatLngsForMap } from "@/app/utils/polylineDecoder";
+import { useRouter } from "next/navigation";
 
 interface ExtrasType {
   waytype?: any;
@@ -1057,7 +1059,7 @@ const BuatRutePage = () => {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="h-full px-8 overflow-y-auto">
+      <div className="h-full overflow-y-auto">
         {/* Driver selection */}
         <div className="flex flex-col gap-1 w-full text-[#545454] mb-4">
           <div className="flex gap-1 text-sm items-center font-semibold">
@@ -1202,7 +1204,7 @@ const BuatRutePage = () => {
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={callApiForDirections}
-              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg"
+              className="px-4 py-2 sm:w-auto w-full bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg"
               type="button"
             >
               Buat Rute
@@ -1212,14 +1214,14 @@ const BuatRutePage = () => {
               <>
                 <button
                   onClick={handleDone}
-                  className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-medium rounded-lg"
+                  className="px-4 py-2 sm:w-auto w-full bg-green-500 hover:bg-green-600 text-white font-medium rounded-lg"
                   type="button"
                 >
                   Selesai
                 </button>
                 <button
                   onClick={handleCancel}
-                  className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg"
+                  className="px-4 py-2 sm:w-auto w-full bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg"
                   type="button"
                 >
                   Batal
@@ -1228,7 +1230,7 @@ const BuatRutePage = () => {
             ) : (
               <button
                 onClick={() => setFlagImpassible(true)}
-                className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg"
+                className="px-4 sm:w-auto w-full py-2 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg"
                 type="button"
               >
                 Area Dihindari
