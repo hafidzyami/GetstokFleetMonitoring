@@ -1,121 +1,238 @@
 "use client";
-import React from "react";
+
 import "boxicons/css/boxicons.min.css";
+
 import Image from "next/image";
+import React from "react";
 import { useRouter } from "next/navigation";
 
 const daftarRute = [
-  {
-    alamatAsal: "Bogor",
-    platNomor: "B 1234 SSUV",
-    status: "Menunggu",
-  },
-
-  {
-    alamatAsal: "Bogor",
-    platNomor: "B 1234 SSUV",
-    status: "Menunggu",
-  },
-
-  {
-    alamatAsal: "Bogor",
-    platNomor: "B 1234 SSUV",
-    status: "Disetujui",
-  },
-  {
-    alamatAsal: "Bogor",
-    platNomor: "B 1234 SSUV",
-    status: "Disetujui",
-  },
-  {
-    alamatAsal: "Bogor",
-    platNomor: "B 1234 SSUV",
-    status: "Disetujui",
-  },
-  {
-    alamatAsal: "Bogor",
-    platNomor: "B 1234 SSUV",
-    status: "Disetujui",
-  },
-  {
-    alamatAsal: "Bogor",
-    platNomor: "B 1234 SSUV",
-    status: "Disetujui",
-  },
-  {
-    alamatAsal: "Bogor",
-    platNomor: "B 1234 SSUV",
-    status: "Disetujui",
-  },
-  {
-    alamatAsal: "Bogor",
-    platNomor: "B 1234 SSUV",
-    status: "Disetujui",
-  },
+	{
+		alamatAsal: "Bogor",
+		platNomor: "B 1234 SSUV",
+		status: "Menunggu",
+	},
+	{
+		alamatAsal: "Bogor",
+		platNomor: "B 1234 SSUV",
+		status: "Menunggu",
+	},
+	{
+		alamatAsal: "Bogor",
+		platNomor: "B 1234 SSUV",
+		status: "Disetujui",
+	},
+	{
+		alamatAsal: "Jakarta",
+		platNomor: "B 5678 XYZ",
+		status: "Disetujui",
+	},
+	{
+		alamatAsal: "Bandung",
+		platNomor: "D 9012 ABC",
+		status: "Disetujui",
+	},
+	{
+		alamatAsal: "Surabaya",
+		platNomor: "L 3456 DEF",
+		status: "Disetujui",
+	},
+	{
+		alamatAsal: "Yogyakarta",
+		platNomor: "AB 7890 GHI",
+		status: "Disetujui",
+	},
+	{
+		alamatAsal: "Bali",
+		platNomor: "DK 1234 JKL",
+		status: "Disetujui",
+	},
+	{
+		alamatAsal: "Medan",
+		platNomor: "BK 5678 MNO",
+		status: "Disetujui",
+	},
 ];
 
 const ValidasiRutePage = () => {
- const route = useRouter(); 
+	const router = useRouter();
 
-  return (
-    <div className="h-full px-8">
-      <div className="bg-white w-full justify-between flex items-center">
-        <label className="relative px-6 py-3 rounded-[8px] border-[1px] border-[#F1F1F1] flex items-center gap-2">
-          <i className="bx bx-search text-2xl text-[#009EFF]"></i>
-          <input type="text" className="" placeholder="Cari Rute" />
-        </label>
-      </div>
+	return (
+		<div className="h-full">
+			<div className="bg-white w-full flex justify-between items-center mb-6">
+				<label className="relative w-full max-w-md px-4 py-2 rounded-lg border border-gray-200 flex items-center gap-3 shadow-sm">
+					<i className="bx bx-search text-2xl text-blue-500"></i>
+					<input
+						type="text"
+						className="w-full outline-none"
+						placeholder="Cari Rute"
+					/>
+				</label>
+			</div>
 
-      <div className="w-full mt-6 flex flex-col gap-2 h-[450px] overflow-y-auto">
-        {daftarRute.map((user, index) => (
-          <div
-            key={index}
-            className="px-5 py-2 flex gap-5 bg-orange-50 rounded-[8px]"
-          >
-            <Image
-              src={"/icons/PlusComment.svg"}
-              alt="Comment plus"
-              width={25}
-              height={25}
-              className="bg-[#E2A052] rounded-full flex items-center justify-center p-2 w-fit h-fit self-center"
-            />
-            <div className="flex w-full gap-[300px] text-sm items-center  ">
-              <div className="flex flex-col items-center self-start">
-                No
-                <p className="text-[#707070]">{index + 1}</p>
-              </div>
-              <div className="flex flex-col font-semibold items-center">
-                Alamat Asal
-                <p className="text-[#707070]">{user.alamatAsal}</p>
-              </div>
-              <div className="flex flex-col font-semibold items-center">
-                Plat Nomor
-                <p className="text-[#707070]">{user.platNomor}</p>
-              </div>
-            </div>
+			{/* <div className="w-full overflow-hidden rounded-xl border border-gray-200 shadow-sm">
+				
+				<div className="grid grid-cols-12 bg-gray-50 p-4 font-semibold text-sm text-gray-700 border-b border-gray-200">
+					<div className="col-span-1 text-center">No</div>
+					<div className="col-span-3 text-center">Alamat Asal</div>
+					<div className="col-span-3 text-center">Plat Nomor</div>
+					<div className="col-span-3 text-center">Status</div>
+					<div className="col-span-2 text-center">Aksi</div>
+				</div>
 
-            <div className="flex gap-10">
-              <button onClick={() => route.push('/planner/validasi-rute/1')} className="px-3 py-1 rounded-[8px] w-[145px] text-sm flex justify-center items-center  bg-[#E2A052] text-white font-semibold">
-                Lihat Detail
-              </button>
+				<div className="h-[450px] overflow-y-auto">
+					{daftarRute.map((rute, index) => (
+						<div
+							key={index}
+							className="grid grid-cols-12 items-center p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors"
+						>
+							<div className="col-span-1 text-center text-gray-600">
+								{index + 1}
+							</div>
+							<div className="col-span-3 text-center text-gray-600">
+								{rute.alamatAsal}
+							</div>
+							<div className="col-span-3 text-center text-gray-600">
+								{rute.platNomor}
+							</div>
+							<div className="col-span-3 flex justify-center">
+								<span
+									className={`px-3 py-1 rounded-full text-sm font-medium ${
+										rute.status === "Menunggu"
+											? "bg-yellow-100 text-yellow-800"
+											: "bg-green-100 text-green-800"
+									}`}
+								>
+									{rute.status}
+								</span>
+							</div>
+							<div className="col-span-2 flex justify-center">
+								<button
+									onClick={() =>
+										router.push("/planner/route-validation/1")
+									}
+									className="px-4 py-2 rounded-lg bg-orange-500 text-white font-medium hover:bg-orange-600 transition-colors text-sm flex items-center gap-2"
+								>
+									<i className="bx bx-show text-lg"></i>
+									Detail
+								</button>
+							</div>
+						</div>
+					))}
+				</div>
+			</div> */}
+			<div className="my-6 w-full">
+				{/* Desktop Table (hidden on mobile) */}
+				<div className="hidden md:block overflow-hidden rounded-xl border border-gray-200 shadow-sm">
+					{/* Table Header */}
+					<div className="grid grid-cols-12 bg-gray-50 p-4 font-semibold text-sm text-gray-700 border-b border-gray-200">
+						<div className="col-span-1 text-center">No</div>
+						<div className="col-span-3 text-center">Alamat Asal</div>
+						<div className="col-span-3 text-center">Plat Nomor</div>
+						<div className="col-span-3 text-center">Status</div>
+						<div className="col-span-2 text-center">Aksi</div>
+					</div>
 
-              <div
-                className={` rounded-[8px] text-sm flex justify-center items-center w-[130px] font-semibold ${
-                  user.status === "Menunggu"
-                    ? "text-[#B58F07]"
-                    : "bg-[#E6F5E9] text-[#09844D]"
-                }`}
-              >
-                {user.status === "Menunggu" ? "Menunggu" : "Disetujui"}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+					{/* Table Body */}
+					<div className="h-[450px] overflow-y-auto">
+						{daftarRute.map((rute, index) => (
+							<div
+								key={index}
+								className="grid grid-cols-12 items-center p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors"
+							>
+								<div className="col-span-1 text-center text-gray-600">
+									{index + 1}
+								</div>
+								<div className="col-span-3 text-center text-gray-600">
+									{rute.alamatAsal}
+								</div>
+								<div className="col-span-3 text-center text-gray-600">
+									{rute.platNomor}
+								</div>
+								<div className="col-span-3 flex justify-center">
+									<span
+										className={`px-3 py-1 rounded-full text-sm font-medium ${
+											rute.status === "Menunggu"
+												? "bg-yellow-100 text-yellow-800"
+												: "bg-green-100 text-green-800"
+										}`}
+									>
+										{rute.status}
+									</span>
+								</div>
+								<div className="col-span-2 flex justify-center">
+									<button
+										onClick={() =>
+											router.push("/planner/route-validation/1")
+										}
+										className="px-4 py-2 rounded-lg bg-orange-500 text-white font-medium hover:bg-orange-600 transition-colors text-sm flex items-center gap-2"
+									>
+										<i className="bx bx-show text-lg"></i>
+										<span>Detail</span>
+									</button>
+								</div>
+							</div>
+						))}
+					</div>
+				</div>
 
-     
-    </div>
-  );
+				{/* Mobile Cards (shown only on mobile) */}
+				<div className="md:hidden space-y-3">
+					{daftarRute.map((rute, index) => (
+						<div
+							key={index}
+							className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm"
+						>
+							<div className="flex justify-between items-start mb-3">
+								<div className="flex items-center gap-2">
+									<span className="text-gray-700 font-medium">
+										No.
+									</span>
+									<span className="text-gray-600">{index + 1}</span>
+								</div>
+
+								<span
+									className={`px-3 py-1 rounded-full text-sm font-medium ${
+										rute.status === "Menunggu"
+											? "bg-yellow-100 text-yellow-800"
+											: "bg-green-100 text-green-800"
+									}`}
+								>
+									{rute.status}
+								</span>
+							</div>
+
+							<div className="space-y-2">
+								<div>
+									<p className="text-gray-500 text-sm">Alamat Asal</p>
+									<p className="text-gray-700 font-medium">
+										{rute.alamatAsal}
+									</p>
+								</div>
+
+								<div>
+									<p className="text-gray-500 text-sm">Plat Nomor</p>
+									<p className="text-gray-700 font-medium">
+										{rute.platNomor}
+									</p>
+								</div>
+							</div>
+
+							<button
+								onClick={() =>
+									router.push("/planner/route-validation/1")
+								}
+								className="w-full mt-4 px-4 py-2 rounded-lg bg-orange-500 text-white font-medium hover:bg-orange-600 transition-colors text-sm flex items-center justify-center gap-2"
+							>
+								<i className="bx bx-show text-lg"></i>
+								<span>Lihat Detail</span>
+							</button>
+						</div>
+					))}
+				</div>
+			</div>
+		</div>
+	);
 };
 
 export default ValidasiRutePage;

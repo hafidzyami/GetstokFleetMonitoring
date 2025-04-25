@@ -1,9 +1,10 @@
 "use client";
 
+import { Filter, MapPin, Truck, User } from "lucide-react";
 import { useEffect, useState } from "react";
-import { MapPin, Truck, User, Filter } from "lucide-react";
-import { format } from "date-fns";
+
 import Link from "next/link";
+import { format } from "date-fns";
 
 // Type definitions
 export type User = {
@@ -156,7 +157,7 @@ export default function DriverRouteList() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-6xl">
+    <div className="container max-w-6xl">
       <div className="mb-6">
         <h1 className="text-xl md:text-2xl font-bold">My Route Plans</h1>
         <p className="text-gray-500 text-sm md:text-base">View all your assigned routes</p>
@@ -234,7 +235,7 @@ export default function DriverRouteList() {
               </button>
             </>
           ) : (
-            <p className="mt-1 text-gray-500">You don't have any assigned routes at the moment.</p>
+            <p className="mt-1 text-gray-500">You don&apos;t have any assigned routes at the moment.</p>
           )}
         </div>
       ) : (

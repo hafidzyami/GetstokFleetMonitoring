@@ -1,12 +1,15 @@
 "use client";
-import React, { useEffect, useState, useMemo, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
-import dynamic from "next/dynamic";
-import { format } from "date-fns";
-import { id } from "date-fns/locale";
+
 import "leaflet";
 import "boxicons/css/boxicons.min.css";
+
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+
+import dynamic from "next/dynamic";
+import { format } from "date-fns";
 import { getLatLngsForMap } from "@/app/utils/polylineDecoder";
+import { id } from "date-fns/locale";
 
 // Interfaces
 interface RouteExtras {

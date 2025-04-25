@@ -1,16 +1,18 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from "react-leaflet";
-import { getLatLngsForMap } from "@/app/utils/polylineDecoder";
-import { getRouteColor, debugTruckRouteMatch } from "@/app/utils/colorUtils";
-import { initLeafletIcons } from "@/app/utils/leafletIcons";
-import WaypointMarkers from "@/app/_components/WaypointMarkers";
-import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import Image from "next/image";
-import { useAuth } from "@/app/contexts/AuthContext";
+
+import { MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from "react-leaflet";
+import React, { useEffect, useRef, useState } from "react";
+import { debugTruckRouteMatch, getRouteColor } from "@/app/utils/colorUtils";
+
 import ApexCharts from "apexcharts";
+import Image from "next/image";
+import L from "leaflet";
+import WaypointMarkers from "@/app/_components/WaypointMarkers";
+import { getLatLngsForMap } from "@/app/utils/polylineDecoder";
+import { initLeafletIcons } from "@/app/utils/leafletIcons";
+import { useAuth } from "@/app/contexts/AuthContext";
 
 // Fix Leaflet icon issue
 delete L.Icon.Default.prototype._getIconUrl;
@@ -524,7 +526,7 @@ const DashboardPage = () => {
   }
 
   return (
-    <div className="px-4 md:px-8">
+    <div className="">
       {/* Connection Status and Route Legend */}
       <div className="flex justify-between mb-4">
         {/* Legend untuk active routes */}

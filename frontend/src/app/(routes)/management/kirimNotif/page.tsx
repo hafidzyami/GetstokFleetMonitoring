@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { useRoleProtection } from "@/app/hooks/useRoleProtection";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { useNotification } from "@/app/contexts/NotificationContext";
+import { useRoleProtection } from "@/app/hooks/useRoleProtection";
+import { useState } from "react";
 
 export default function ManagementDashboard() {
   // Protect this page for management role only
@@ -83,7 +83,7 @@ export default function ManagementDashboard() {
   }
 
   return (
-    <div className="p-8">
+    <div className="">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-2xl font-bold">Management Dashboard</h1>
         <div className="flex items-center gap-4">

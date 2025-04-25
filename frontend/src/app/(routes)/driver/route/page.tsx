@@ -1,10 +1,13 @@
 "use client";
-import React, { useEffect, useState, useRef, useMemo } from "react";
-import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
+
 import "leaflet/dist/leaflet.css";
 import "boxicons/css/boxicons.min.css";
+
+import React, { useEffect, useMemo, useRef, useState } from "react";
+
+import dynamic from "next/dynamic";
 import { getLatLngsForMap } from "@/app/utils/polylineDecoder";
+import { useRouter } from "next/navigation";
 
 // Tambahkan style global untuk peta
 const mapStyle = `
@@ -535,7 +538,7 @@ const DriverActiveRoutePage = () => {
   // No data state
   if (!routePlan) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center text-gray-700">
+      <div className="h-full flex flex-col items-center justify-center text-gray-700">
         <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full text-center">
           <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-6">
             <i className="bx bx-map text-blue-500 text-4xl"></i>
