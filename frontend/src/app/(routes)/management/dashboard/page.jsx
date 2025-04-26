@@ -3,7 +3,7 @@
 import "leaflet/dist/leaflet.css";
 
 import { MapContainer, Marker, Polyline, Popup, TileLayer, useMap, Circle } from "react-leaflet";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import { debugTruckRouteMatch, getRouteColor } from "@/app/utils/colorUtils";
 
 import ApexCharts from "apexcharts";
@@ -141,10 +141,31 @@ const DashboardPage = () => {
   const componentMountedRef = useRef(true);
   const chartRef = useRef(null);
   const mapRef = useRef(null);
+  const markerRefs = useRef({});
   const { user } = useAuth();
 
-  // Default center of the map (Jakarta)
-  const defaultCenter = [-6.2, 106.816666];
+  // Default center of the map (Jakarta as fallback)
+  const [defaultCenter, setDefaultCenter] = useState([-6.2, 106.816666]);
+  
+  // Effect to get user's current location
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          console.log('User location obtained:', latitude, longitude);
+          setDefaultCenter([latitude, longitude]);
+        },
+        (error) => {
+          console.error('Error getting user location:', error.message);
+          // Keep the default Jakarta location on error
+        },
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      );
+    } else {
+      console.log('Geolocation is not supported by this browser.');
+    }
+  }, []);
   
   // Fungsi untuk decode polyline dari routeGeometry
   const decodeRouteGeometry = (encoded) => {
@@ -462,6 +483,27 @@ const DashboardPage = () => {
   }, []);
 
   // Initialize chart when activeTruck changes
+  // Effect to handle popup opening/closing when active truck changes
+  useEffect(() => {
+    // Close all popups first
+    Object.values(markerRefs.current).forEach(marker => {
+      if (marker && marker.closePopup) {
+        marker.closePopup();
+      }
+    });
+    
+    // If there's an active truck, open its popup
+    if (activeTruck) {
+      // Short delay to ensure the map has updated
+      setTimeout(() => {
+        const markerRef = markerRefs.current[activeTruck.mac_id];
+        if (markerRef) {
+          markerRef.openPopup();
+        }
+      }, 50);
+    }
+  }, [activeTruck]);
+
   useEffect(() => {
     if (!activeTruck) return;
 
@@ -614,6 +656,7 @@ const DashboardPage = () => {
     } else {
       // Otherwise select the new truck
       setActiveTruck(truck);
+      // Popup will be opened by the useEffect that watches activeTruck
     }
   };
 
@@ -848,45 +891,23 @@ const DashboardPage = () => {
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
 
-              {Object.values(trucks).map((truck) =>
-                truck.latitude && truck.longitude ? (
-                  <Marker
+              {Object.values(trucks).map((truck) => {
+                // For each truck with position data, create a marker with popup
+                if (!truck.latitude || !truck.longitude) return null;
+                
+                // Create marker element with TruckMarker component
+                return (
+                  <TruckMarker 
                     key={truck.mac_id}
-                    position={[truck.latitude, truck.longitude]}
-                    icon={deviatingTrucks[truck.mac_id] ? deviatingTruckIcon : truckIcon}
-                    eventHandlers={{
-                      click: () => handleMarkerClick(truck),
-                    }}
-                  >
-                    <Popup>
-                      <div>
-                        <h3 className="font-bold">
-                          {truck.plate_number || `Truck ${truck.mac_id}`}
-                          {deviatingTrucks[truck.mac_id] && (
-                            <span className="ml-2 text-red-500 text-sm">(Off Route!)</span>
-                          )}
-                        </h3>
-                        <p>Type: {truck.type || "Unknown"}</p>
-                        <p>
-                          Fuel:{" "}
-                          {truck.fuel !== undefined
-                            ? `${truck.fuel.toFixed(2)}%`
-                            : "N/A"}
-                        </p>
-                        <p>
-                          Position: {truck.latitude.toFixed(6)},{" "}
-                          {truck.longitude.toFixed(6)}
-                        </p>
-                        {deviatingTrucks[truck.mac_id] && (
-                          <p className="text-red-500 font-medium mt-2">
-                            Off route by {deviatingTrucks[truck.mac_id].distance.toFixed(0)} meters!
-                          </p>
-                        )}
-                      </div>
-                    </Popup>
-                  </Marker>
-                ) : null
-              )}
+                    truck={truck}
+                    isDeviating={!!deviatingTrucks[truck.mac_id]}
+                    deviation={deviatingTrucks[truck.mac_id]}
+                    isActive={activeTruck && activeTruck.mac_id === truck.mac_id}
+                    onClick={handleMarkerClick}
+                    markerRefs={markerRefs}
+                  />
+                );
+              })}
 
               {/* Visualisasi Titik Referensi dan Deviasi */}
               {Object.entries(deviationReferences).map(([mac_id, deviationInfo]) => (
@@ -1143,5 +1164,70 @@ const DashboardPage = () => {
     </div>
   );
 };
+
+// Helper component to handle marker and popup management
+function TruckMarker({ truck, isDeviating, deviation, isActive, onClick, markerRefs }) {
+  // Create reference for this marker
+  const popupRef = useRef();
+  
+  // Store marker reference when it's created
+  const eventHandlers = useMemo(() => ({
+    add: (e) => {
+      markerRefs.current[truck.mac_id] = e.target;
+    },
+    remove: () => {
+      delete markerRefs.current[truck.mac_id];
+    }
+  }), [truck.mac_id, markerRefs]);
+  
+  // Effect to handle popup when active state changes
+  useEffect(() => {
+    if (!popupRef.current) return;
+    
+    if (isActive) {
+      popupRef.current.openPopup();
+    } else {
+      popupRef.current.closePopup();
+    }
+  }, [isActive]);
+  
+  return (
+    <Marker
+      position={[truck.latitude, truck.longitude]}
+      icon={isDeviating ? deviatingTruckIcon : truckIcon}
+      eventHandlers={{
+        ...eventHandlers,
+        click: () => onClick(truck)
+      }}
+    >
+      <Popup ref={popupRef}>
+        <div>
+          <h3 className="font-bold">
+            {truck.plate_number || `Truck ${truck.mac_id}`}
+            {isDeviating && (
+              <span className="ml-2 text-red-500 text-sm">(Off Route!)</span>
+            )}
+          </h3>
+          <p>Type: {truck.type || "Unknown"}</p>
+          <p>
+            Fuel:{" "}
+            {truck.fuel !== undefined
+              ? `${truck.fuel.toFixed(2)}%`
+              : "N/A"}
+          </p>
+          <p>
+            Position: {truck.latitude.toFixed(6)},{" "}
+            {truck.longitude.toFixed(6)}
+          </p>
+          {isDeviating && deviation && (
+            <p className="text-red-500 font-medium mt-2">
+              Off route by {deviation.distance.toFixed(0)} meters!
+            </p>
+          )}
+        </div>
+      </Popup>
+    </Marker>
+  );
+}
 
 export default DashboardPage;
