@@ -22,9 +22,9 @@ DEFAULT_PORT = 1883
 DEFAULT_TOPIC_PREFIX = "getstokfms"
 
 # Jakarta area coordinates for reference
-JAKARTA_CENTER_LAT = -6.2
-JAKARTA_CENTER_LONG = 106.8
-SPREAD_RADIUS = 0.1  # Roughly 10km spread
+JAKARTA_CENTER_LAT = -6.890562
+JAKARTA_CENTER_LONG = 107.613235
+SPREAD_RADIUS = 0.001  
 
 class TruckSimulator:
     def __init__(self, truck_id, broker_url, port, topic_prefix, interval=5):

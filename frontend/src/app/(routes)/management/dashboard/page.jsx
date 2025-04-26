@@ -7,12 +7,12 @@ import React, { useEffect, useRef, useState } from "react";
 import { debugTruckRouteMatch, getRouteColor } from "@/app/utils/colorUtils";
 
 import ApexCharts from "apexcharts";
-import Image from "next/image";
 import L from "leaflet";
 import WaypointMarkers from "@/app/_components/WaypointMarkers";
 import { getLatLngsForMap } from "@/app/utils/polylineDecoder";
 import { initLeafletIcons } from "@/app/utils/leafletIcons";
 import { useAuth } from "@/app/contexts/AuthContext";
+import { calculateDistanceToPolyline } from "@/app/utils/distanceUtils";
 
 // Fix Leaflet icon issue
 delete L.Icon.Default.prototype._getIconUrl;
@@ -28,6 +28,14 @@ L.Icon.Default.mergeOptions({
 // Custom truck icon
 const truckIcon = new L.Icon({
   iconUrl: "/truck-icon.png", // Make sure this file exists in public folder
+  iconSize: [32, 32],
+  iconAnchor: [16, 32],
+  popupAnchor: [0, -32],
+});
+
+// Custom truck icon for deviating trucks
+const deviatingTruckIcon = new L.Icon({
+  iconUrl: "/truck-icon.png", // Create this icon in red or with alert symbol
   iconSize: [32, 32],
   iconAnchor: [16, 32],
   popupAnchor: [0, -32],
@@ -107,6 +115,9 @@ const DashboardPage = () => {
   const [error, setError] = useState(null);
   const [activeRoutePlans, setActiveRoutePlans] = useState([]);
   const [loadingRoutePlans, setLoadingRoutePlans] = useState(false);
+  const [deviatingTrucks, setDeviatingTrucks] = useState({});
+  const [showDeviationAlert, setShowDeviationAlert] = useState(false);
+  const [deviationThreshold] = useState(35); // Deviation threshold in meters
   const socketRef = useRef(null);
   const componentMountedRef = useRef(true);
   const chartRef = useRef(null);
@@ -214,6 +225,23 @@ const DashboardPage = () => {
 
     return () => clearInterval(interval);
   }, []);
+  
+  // Effect untuk memeriksa deviasi truck ketika data truck atau rute berubah
+  useEffect(() => {
+    // Hanya periksa jika ada truck dan ada route plans
+    if (Object.keys(trucks).length > 0 && activeRoutePlans.length > 0) {
+      checkTruckDeviation();
+      
+      // Set interval untuk memeriksa deviasi setiap 15 detik
+      const deviationInterval = setInterval(() => {
+        if (componentMountedRef.current) {
+          checkTruckDeviation();
+        }
+      }, 15000);
+      
+      return () => clearInterval(deviationInterval);
+    }
+  }, [trucks, activeRoutePlans]);
 
   useEffect(() => {
     // This ensures we can track if the component is still mounted
@@ -483,6 +511,61 @@ const DashboardPage = () => {
       return debugTruckRouteMatch(truck, routePlan);
     });
   };
+  
+  // Fungsi untuk mengecek deviasi truck dari rute yang ditentukan
+  const checkTruckDeviation = () => {
+    // Buat objek untuk menyimpan status deviasi setiap truck
+    const newDeviatingTrucks = {};
+    let anyTruckDeviating = false;
+    
+    // Periksa setiap truck yang memiliki posisi
+    Object.values(trucks).forEach(truck => {
+      // Skip jika tidak ada posisi latitude/longitude
+      if (!truck.latitude || !truck.longitude) return;
+      
+      // Cari rute yang sesuai dengan truck ini
+      const truckRoutes = activeRoutePlans.filter(routePlan => {
+        return debugTruckRouteMatch(truck, routePlan);
+      });
+      
+      // Skip jika tidak memiliki rute aktif
+      if (truckRoutes.length === 0) return;
+      
+      // Periksa jarak truck ke rute terdekat
+      truckRoutes.forEach(routePlan => {
+        try {
+          // Decode polyline rute
+          const routePolyline = getLatLngsForMap(routePlan.route_geometry);
+          if (!routePolyline || routePolyline.length === 0) return;
+          
+          // Hitung jarak dari posisi truck ke polyline rute
+          const distanceToRoute = calculateDistanceToPolyline(
+            [truck.latitude, truck.longitude],
+            routePolyline
+          );
+          
+          console.log(`Truck ${truck.plate_number || truck.mac_id} deviation: ${distanceToRoute.toFixed(2)}m`);
+          
+          // Check if truck deviates more than the threshold
+          if (distanceToRoute >= deviationThreshold) {
+            newDeviatingTrucks[truck.mac_id] = {
+              truck: truck,
+              routePlan: routePlan,
+              distance: distanceToRoute,
+              timestamp: new Date()
+            };
+            anyTruckDeviating = true;
+          }
+        } catch (error) {
+          console.error(`Error checking deviation for truck ${truck.plate_number || truck.mac_id}:`, error);
+        }
+      });
+    });
+    
+    // Update state dengan truck-truck yang menyimpang
+    setDeviatingTrucks(newDeviatingTrucks);
+    setShowDeviationAlert(anyTruckDeviating);
+  };
 
   // Modified to toggle selection when clicking the same truck
   const handleTruckSelect = (truck) => {
@@ -527,6 +610,48 @@ const DashboardPage = () => {
 
   return (
     <div className="">
+      {/* Deviation Alert Notification */}
+      {showDeviationAlert && (
+        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded shadow-md">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <i className="bx bx-error-circle text-2xl text-red-500"></i>
+            </div>
+            <div className="ml-3">
+              <p className="font-bold">Route Deviation Alert</p>
+              <p className="text-sm">
+                {Object.keys(deviatingTrucks).length === 1 
+                  ? `1 truck is deviating from its assigned route by more than ${deviationThreshold} meters.` 
+                  : `${Object.keys(deviatingTrucks).length} trucks are deviating from their assigned routes by more than ${deviationThreshold} meters.`
+                }
+              </p>
+            </div>
+            <div className="ml-auto">
+              <button 
+                onClick={() => setShowDeviationAlert(false)}
+                className="text-red-500 hover:text-red-700 focus:outline-none"
+              >
+                <i className="bx bx-x text-xl"></i>
+              </button>
+            </div>
+          </div>
+          <div className="mt-2 max-h-32 overflow-y-auto">
+            {Object.values(deviatingTrucks).map(({truck, distance}) => (
+              <div key={truck.mac_id} className="flex justify-between items-center text-sm mt-1 border-t border-red-200 pt-1">
+                <span className="font-medium">{truck.plate_number || truck.mac_id}</span>
+                <span>Off route by <span className="font-bold">{distance.toFixed(0)}m</span></span>
+                <button 
+                  onClick={() => handleTruckSelect(truck)} 
+                  className="px-2 py-1 bg-red-200 hover:bg-red-300 rounded text-xs"
+                >
+                  View
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      
       {/* Connection Status and Route Legend */}
       <div className="flex justify-between mb-4">
         {/* Legend untuk active routes */}
@@ -607,9 +732,11 @@ const DashboardPage = () => {
                   className={`bg-white rounded-lg p-3 border cursor-pointer transition duration-200 hover:shadow-md ${
                     activeTruck && activeTruck.mac_id === truck.mac_id
                       ? "border-l-4 border-[#009EFF] bg-[#E6F5FF] shadow-md"
-                      : truckHasActiveRoute(truck) 
-                        ? "border-l-4 border-green-500 border-opacity-70" 
-                        : "border-gray-200"
+                      : deviatingTrucks[truck.mac_id]
+                        ? "border-l-4 border-red-500 bg-red-50" 
+                        : truckHasActiveRoute(truck) 
+                          ? "border-l-4 border-green-500 border-opacity-70" 
+                          : "border-gray-200"
                   }`}
                   onClick={() => handleTruckSelect(truck)}
                 >
@@ -622,6 +749,12 @@ const DashboardPage = () => {
                         </h3>
                         {truckHasActiveRoute(truck) && (
                           <span className="w-2 h-2 rounded-full bg-green-500" title="Has active route"></span>
+                        )}
+                        {deviatingTrucks[truck.mac_id] && (
+                          <span className="flex items-center text-xs text-red-500 font-bold ml-1 animate-pulse" title={`Off route by ${deviatingTrucks[truck.mac_id].distance.toFixed(0)}m`}>
+                            <i className="bx bxs-error-circle mr-1"></i>
+                            Off Route!
+                          </span>
                         )}
                       </div>
                       <span className="text-xs text-gray-500">
@@ -685,7 +818,7 @@ const DashboardPage = () => {
                   <Marker
                     key={truck.mac_id}
                     position={[truck.latitude, truck.longitude]}
-                    icon={truckIcon}
+                    icon={deviatingTrucks[truck.mac_id] ? deviatingTruckIcon : truckIcon}
                     eventHandlers={{
                       click: () => handleMarkerClick(truck),
                     }}
@@ -694,6 +827,9 @@ const DashboardPage = () => {
                       <div>
                         <h3 className="font-bold">
                           {truck.plate_number || `Truck ${truck.mac_id}`}
+                          {deviatingTrucks[truck.mac_id] && (
+                            <span className="ml-2 text-red-500 text-sm">(Off Route!)</span>
+                          )}
                         </h3>
                         <p>Type: {truck.type || "Unknown"}</p>
                         <p>
@@ -706,6 +842,11 @@ const DashboardPage = () => {
                           Position: {truck.latitude.toFixed(6)},{" "}
                           {truck.longitude.toFixed(6)}
                         </p>
+                        {deviatingTrucks[truck.mac_id] && (
+                          <p className="text-red-500 font-medium mt-2">
+                            Off route by {deviatingTrucks[truck.mac_id].distance.toFixed(0)} meters!
+                          </p>
+                        )}
                       </div>
                     </Popup>
                   </Marker>
