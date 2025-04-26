@@ -1246,6 +1246,44 @@ paths:
     get:
       consumes:
       - application/json
+      description: Get historical fuel data for a truck from the last 30 days, grouped
+        by date
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Truck ID
+        in: path
+        name: truckID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Fuel history grouped by date
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get truck fuel history for last 30 days
+      tags:
+      - trucks
+  /trucks/{truckID}/fuel/limited:
+    get:
+      consumes:
+      - application/json
       description: Get historical fuel data for a truck
       parameters:
       - default: Bearer <token>
@@ -1284,6 +1322,44 @@ paths:
       tags:
       - trucks
   /trucks/{truckID}/positions:
+    get:
+      consumes:
+      - application/json
+      description: Get historical position data for a truck from the last 30 days,
+        grouped by date
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Truck ID
+        in: path
+        name: truckID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Position history grouped by date
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get truck position history for last 30 days
+      tags:
+      - trucks
+  /trucks/{truckID}/positions/limited:
     get:
       consumes:
       - application/json

@@ -31,7 +31,7 @@ import (
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/mqtt"
 )
 
-// @host 54.169.106.52:8080
+// @host localhost:8080
 // @BasePath /api/v1
 // @schemes http
 func main() {
@@ -243,8 +243,10 @@ func main() {
 	trucks.Put("/id/:id", truckController.UpdateTruckInfoByID)
 	trucks.Post("/", truckController.CreateTruck)
 	// Add truck history routes
-	trucks.Get("/:truckID/positions", truckHistoryController.GetPositionHistory)
-	trucks.Get("/:truckID/fuel", truckHistoryController.GetFuelHistory)
+	trucks.Get("/:truckID/positions", truckHistoryController.GetPositionHistoryLast30Days)
+	trucks.Get("/:truckID/fuel", truckHistoryController.GetFuelHistoryLast30Days)
+	trucks.Get("/:truckID/positions/limited", truckHistoryController.GetPositionHistory)
+	trucks.Get("/:truckID/fuel/limited", truckHistoryController.GetFuelHistory)
 
 	// Routing routes
 	routing := api.Group("/routing")
