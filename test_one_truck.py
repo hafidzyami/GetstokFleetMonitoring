@@ -17,11 +17,10 @@ fuel_payload = {
     "Fuel": 21.0
 }
 
-
 position_payload = {
     "Timestamp": timestamp,
-    "Latitude": -6.8804582750200405,
-    "Longitude": 107.61318441988006
+    "Latitude": -6.881644473995715,
+    "Longitude": 107.61256547847621
 }
 
 # Connect and publish

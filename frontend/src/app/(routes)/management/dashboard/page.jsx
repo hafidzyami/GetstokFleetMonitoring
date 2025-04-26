@@ -2,7 +2,7 @@
 
 import "leaflet/dist/leaflet.css";
 
-import { MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from "react-leaflet";
+import { MapContainer, Marker, Polyline, Popup, TileLayer, useMap, Circle } from "react-leaflet";
 import React, { useEffect, useRef, useState } from "react";
 import { debugTruckRouteMatch, getRouteColor } from "@/app/utils/colorUtils";
 
@@ -40,6 +40,24 @@ const deviatingTruckIcon = new L.Icon({
   iconAnchor: [16, 32],
   popupAnchor: [0, -32],
 });
+
+// Reference point icon
+const referencePointIcon = new L.Icon({
+  iconUrl: "/marker-icon.png", // Create a small dot/marker icon
+  iconSize: [16, 16],
+  iconAnchor: [8, 8],
+  popupAnchor: [0, -8],
+});
+
+// Custom divIcon for showing deviation distance
+const createDeviationLabelIcon = (distance) => {
+  return L.divIcon({
+    className: 'deviation-label',
+    html: `<div class="bg-red-500 text-white px-2 py-1 rounded text-xs font-bold">${distance.toFixed(0)}m</div>`,
+    iconSize: [40, 20],
+    iconAnchor: [20, 10]
+  });
+};
 
 // Component to automatically center map on active truck and route
 function MapController({ activePosition, activeTruck, activeRoutePlans }) {
@@ -118,6 +136,7 @@ const DashboardPage = () => {
   const [deviatingTrucks, setDeviatingTrucks] = useState({});
   const [showDeviationAlert, setShowDeviationAlert] = useState(false);
   const [deviationThreshold] = useState(35); // Deviation threshold in meters
+  const [deviationReferences, setDeviationReferences] = useState({});
   const socketRef = useRef(null);
   const componentMountedRef = useRef(true);
   const chartRef = useRef(null);
@@ -216,12 +235,12 @@ const DashboardPage = () => {
     // Fetch route plans
     fetchActiveRoutePlans();
 
-    // Set interval untuk refresh data setiap 30 detik
+    // Set interval untuk refresh data setiap 60 detik
     const interval = setInterval(() => {
       if (componentMountedRef.current) {
         fetchActiveRoutePlans();
       }
-    }, 30000);
+    }, 60000);
 
     return () => clearInterval(interval);
   }, []);
@@ -232,12 +251,12 @@ const DashboardPage = () => {
     if (Object.keys(trucks).length > 0 && activeRoutePlans.length > 0) {
       checkTruckDeviation();
       
-      // Set interval untuk memeriksa deviasi setiap 15 detik
+      // Set interval untuk memeriksa deviasi setiap 60 detik
       const deviationInterval = setInterval(() => {
         if (componentMountedRef.current) {
           checkTruckDeviation();
         }
-      }, 15000);
+      }, 60000);
       
       return () => clearInterval(deviationInterval);
     }
@@ -516,6 +535,7 @@ const DashboardPage = () => {
   const checkTruckDeviation = () => {
     // Buat objek untuk menyimpan status deviasi setiap truck
     const newDeviatingTrucks = {};
+    const newDeviationReferences = {};
     let anyTruckDeviating = false;
     
     // Periksa setiap truck yang memiliki posisi
@@ -539,10 +559,14 @@ const DashboardPage = () => {
           if (!routePolyline || routePolyline.length === 0) return;
           
           // Hitung jarak dari posisi truck ke polyline rute
-          const distanceToRoute = calculateDistanceToPolyline(
+          const result = calculateDistanceToPolyline(
             [truck.latitude, truck.longitude],
             routePolyline
           );
+          
+          const distanceToRoute = result.distance;
+          const referencePoint = result.referencePoint;
+          const segmentIndex = result.segmentIndex;
           
           console.log(`Truck ${truck.plate_number || truck.mac_id} deviation: ${distanceToRoute.toFixed(2)}m`);
           
@@ -554,6 +578,16 @@ const DashboardPage = () => {
               distance: distanceToRoute,
               timestamp: new Date()
             };
+            
+            // Simpan referensi untuk visualisasi
+            newDeviationReferences[truck.mac_id] = {
+              truckPosition: [truck.latitude, truck.longitude],
+              referencePoint: referencePoint,
+              segmentIndex: segmentIndex,
+              distance: distanceToRoute,
+              routeId: routePlan.id
+            };
+            
             anyTruckDeviating = true;
           }
         } catch (error) {
@@ -564,6 +598,7 @@ const DashboardPage = () => {
     
     // Update state dengan truck-truck yang menyimpang
     setDeviatingTrucks(newDeviatingTrucks);
+    setDeviationReferences(newDeviationReferences);
     setShowDeviationAlert(anyTruckDeviating);
   };
 
@@ -852,6 +887,51 @@ const DashboardPage = () => {
                   </Marker>
                 ) : null
               )}
+
+              {/* Visualisasi Titik Referensi dan Deviasi */}
+              {Object.entries(deviationReferences).map(([mac_id, deviationInfo]) => (
+                <React.Fragment key={`deviation-vis-${mac_id}`}>
+                  {/* Titik referensi pada polyline */}
+                  <Marker
+                    position={deviationInfo.referencePoint}
+                    icon={referencePointIcon}
+                  >
+                    <Popup>
+                      <div>
+                        <h3 className="font-bold text-sm">Reference Point</h3>
+                        <p className="text-xs">This is the closest point on the route to truck {trucks[mac_id]?.plate_number || mac_id}</p>
+                        <p className="text-xs mt-1">
+                          Position: {deviationInfo.referencePoint[0].toFixed(6)}, {deviationInfo.referencePoint[1].toFixed(6)}
+                        </p>
+                      </div>
+                    </Popup>
+                  </Marker>
+                  
+                  {/* Garis yang menunjukkan deviasi */}
+                  <Polyline
+                    positions={[
+                      deviationInfo.truckPosition,
+                      deviationInfo.referencePoint
+                    ]}
+                    pathOptions={{
+                      color: 'red',
+                      weight: 2,
+                      dashArray: '5, 5',
+                      opacity: 0.7
+                    }}
+                  />
+                  
+                  {/* Label jarak di tengah garis */}
+                  <Marker
+                    position={[
+                      (deviationInfo.truckPosition[0] + deviationInfo.referencePoint[0]) / 2,
+                      (deviationInfo.truckPosition[1] + deviationInfo.referencePoint[1]) / 2
+                    ]}
+                    icon={createDeviationLabelIcon(deviationInfo.distance)}
+                    interactive={false}
+                  />
+                </React.Fragment>
+              ))}
 
               {activeTruck && activeTruck.latitude && activeTruck.longitude && (
                 <MapController 

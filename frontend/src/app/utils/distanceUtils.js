@@ -27,12 +27,15 @@ export function calculateHaversineDistance(point1, point2) {
  * @param {Array} point [lat, lng] coordinates
  * @param {Array} polylinePoint1 [lat, lng] coordinates of first polyline point
  * @param {Array} polylinePoint2 [lat, lng] coordinates of second polyline point
- * @returns {number} Distance in meters
+ * @returns {Object} Object with distance and reference point
  */
 function calculateDistanceToSegment(point, polylinePoint1, polylinePoint2) {
   // If segment is a point, just calculate distance to that point
   if (polylinePoint1[0] === polylinePoint2[0] && polylinePoint1[1] === polylinePoint2[1]) {
-    return calculateHaversineDistance(point, polylinePoint1);
+    return {
+      distance: calculateHaversineDistance(point, polylinePoint1),
+      referencePoint: polylinePoint1
+    };
   }
 
   // Calculate projection of point onto line segment
@@ -68,10 +71,18 @@ function calculateDistanceToSegment(point, polylinePoint1, polylinePoint2) {
     // Closest point is p1
     closestX = x1;
     closestY = y1;
+    return {
+      distance: calculateHaversineDistance(point, polylinePoint1),
+      referencePoint: polylinePoint1
+    };
   } else if (projection > 1) {
     // Closest point is p2
     closestX = x2;
     closestY = y2;
+    return {
+      distance: calculateHaversineDistance(point, polylinePoint2),
+      referencePoint: polylinePoint2
+    };
   } else {
     // Closest point is on segment
     closestX = x1 + projection * dx;
@@ -81,40 +92,54 @@ function calculateDistanceToSegment(point, polylinePoint1, polylinePoint2) {
   // Convert back from flat Cartesian
   const closestLng = closestY / Math.cos(closestX * Math.PI / 180);
   
+  // Reference point on the polyline
+  const referencePoint = [closestX, closestLng];
+  
   // Calculate Haversine distance to closest point
-  return calculateHaversineDistance(point, [closestX, closestLng]);
+  return {
+    distance: calculateHaversineDistance(point, referencePoint),
+    referencePoint: referencePoint
+  };
 }
 
 /**
  * Calculate shortest distance from a point to a polyline
  * @param {Array} point [lat, lng] coordinates
  * @param {Array} polyline Array of [lat, lng] coordinates forming the polyline
- * @returns {number} Distance in meters
+ * @returns {Object} Object containing distance in meters and reference point coordinates
  */
 export function calculateDistanceToPolyline(point, polyline) {
   if (!point || point.length !== 2) {
     console.error('calculateDistanceToPolyline: Invalid point:', point);
-    return Infinity;
+    return { distance: Infinity, referencePoint: null, segmentIndex: -1 };
   }
 
   if (!polyline || !Array.isArray(polyline) || polyline.length === 0) {
     console.error('calculateDistanceToPolyline: Empty or invalid polyline:', polyline);
-    return Infinity;
+    return { distance: Infinity, referencePoint: null, segmentIndex: -1 };
   }
   
   if (polyline.length === 1) {
     console.log('calculateDistanceToPolyline: Single point polyline');
-    return calculateHaversineDistance(point, polyline[0]);
+    return { 
+      distance: calculateHaversineDistance(point, polyline[0]), 
+      referencePoint: polyline[0],
+      segmentIndex: 0
+    };
   }
   
   let minDistance = Infinity;
+  let closestReferencePoint = null;
+  let closestSegmentIndex = -1;
   
   // Check distance to each segment in polyline
   for (let i = 0; i < polyline.length - 1; i++) {
     try {
-      const distance = calculateDistanceToSegment(point, polyline[i], polyline[i + 1]);
-      if (distance < minDistance) {
-        minDistance = distance;
+      const result = calculateDistanceToSegment(point, polyline[i], polyline[i + 1]);
+      if (result.distance < minDistance) {
+        minDistance = result.distance;
+        closestReferencePoint = result.referencePoint;
+        closestSegmentIndex = i;
       }
     } catch (error) {
       console.error(`Error calculating distance to segment ${i}:`, error);
@@ -122,5 +147,9 @@ export function calculateDistanceToPolyline(point, polyline) {
   }
   
   console.log(`Distance from [${point[0].toFixed(6)}, ${point[1].toFixed(6)}] to polyline (${polyline.length} points): ${minDistance.toFixed(2)}m`);
-  return minDistance;
+  return { 
+    distance: minDistance, 
+    referencePoint: closestReferencePoint,
+    segmentIndex: closestSegmentIndex
+  };
 }
