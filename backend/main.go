@@ -54,18 +54,7 @@ func main() {
 	truckRepo := repository.NewTruckRepository()
 	truckHistoryRepo := repository.NewTruckHistoryRepository()
 	routePlanRepo := repository.NewRoutePlanRepository()
-
-	// Set user repository in utils and mqtt package
-	utils.SetUserRepository(userRepo)
-	mqtt.SetTruckRepository(truckRepo)
-	mqtt.SetTruckHistoryRepository(truckHistoryRepo)
-
-	// Websocket
-	websocket.InitHub()
-
-	// S3
-	s3Service, _ := service.NewS3Service()
-	uploadController := controller.NewUploadController(s3Service)
+	deviationRepo := repository.NewRouteDeviationRepository()
 
 	// Initialize services
 	authService := service.NewAuthService(userRepo)
@@ -74,6 +63,12 @@ func main() {
 	routingSerivce := service.NewRoutingService()
 	userService := service.NewUserService(userRepo)
 	routingPlanService := service.NewRoutePlanService(routePlanRepo, truckRepo, userRepo)
+	deviationService := service.NewRouteDeviationService(
+		truckRepo, 
+		routePlanRepo, 
+		deviationRepo,
+		userRepo, // Add userRepo here so we can get driver names
+	)
 	
 	// Initialize driver location repository and service
 	driverLocationRepo := repository.NewDriverLocationRepository()
@@ -84,6 +79,20 @@ func main() {
 		routingPlanService,
 	)
 	
+	// Set repositories and services for MQTT handlers
+	utils.SetUserRepository(userRepo)
+	mqtt.SetTruckRepository(truckRepo)
+	mqtt.SetTruckHistoryRepository(truckHistoryRepo)
+	mqtt.SetRoutePlanRepository(routePlanRepo)
+	mqtt.SetRouteDeviationRepository(deviationRepo)
+	mqtt.SetRouteDeviationService(deviationService)
+
+	// Websocket
+	websocket.InitHub()
+
+	// S3
+	s3Service, _ := service.NewS3Service()
+	uploadController := controller.NewUploadController(s3Service)
 
 	// Initialize controllers
 	authController := controller.NewAuthController(authService)
@@ -139,7 +148,7 @@ func main() {
 
 	// WebSocket endpoint
 	app.Get("/ws", ws.New(func(c *ws.Conn) {
-		log.Println("New WebSocket client connected")
+		// log.Println("New WebSocket client connected")
 
 		// Register client
 		client := &websocket.Client{Conn: c, LastPing: time.Now()}
@@ -176,7 +185,7 @@ func main() {
 					pingJSON, _ := json.Marshal(pingMsg)
 
 					if err := c.WriteMessage(ws.TextMessage, pingJSON); err != nil {
-						log.Printf("Error sending ping: %v", err)
+						// log.Printf("Error sending ping: %v", err)
 						close(done)
 						return
 					}
@@ -190,12 +199,12 @@ func main() {
 		for {
 			_, message, err := c.ReadMessage()
 			if err != nil {
-				log.Printf("Read error: %v", err)
+				// log.Printf("Read error: %v", err)
 				break
 			}
 
 			// Process incoming messages
-			log.Printf("Received message: %s", message)
+			// log.Printf("Received message: %s", message)
 
 			// Update the client's LastPing time when we receive any message
 			client.LastPing = time.Now()
@@ -204,7 +213,7 @@ func main() {
 			var msg map[string]interface{}
 			if err := json.Unmarshal(message, &msg); err == nil {
 				if msgType, ok := msg["type"].(string); ok && msgType == "pong" {
-					log.Printf("Received pong from client, updating LastPing")
+					// log.Printf("Received pong from client, updating LastPing")
 					// Explicitly update LastPing in the hub
 					hub.UpdateClientPing(client)
 				}

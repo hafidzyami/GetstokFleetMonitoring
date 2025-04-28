@@ -16,12 +16,24 @@ fuel_payload = {
     "Timestamp": timestamp,
     "Fuel": 21.0
 }
-
+# JAKARTA
+# LATITUDE: -6.1944
+# LONGITUDE: 106.8229
 position_payload = {
     "Timestamp": timestamp,
-    "Latitude": -6.881644473995715,
-    "Longitude": 107.61256547847621
+    "Latitude": -6.1944,
+    "Longitude": 106.8229
 }
+
+# BANDUNG
+# LATITUDE: -6.881644473995715
+# LONGITUDE: 107.61256547847621
+
+# position_payload = {
+#     "Timestamp": timestamp,
+#     "Latitude": -6.881644473995715,
+#     "Longitude": 107.61256547847621
+# }
 
 # Connect and publish
 client = mqtt.Client()

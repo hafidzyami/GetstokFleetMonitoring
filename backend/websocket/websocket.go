@@ -51,7 +51,7 @@ func (h *Hub) Run() {
             client.LastPing = time.Now() // Set initial ping time
             h.clients[client] = true
             h.mu.Unlock()
-            log.Println("New client connected, total clients:", len(h.clients))
+            // log.Println("New client connected, total clients:", len(h.clients))
             
         case client := <-h.unregister:
             h.mu.Lock()
@@ -60,7 +60,7 @@ func (h *Hub) Run() {
                 close(client.Send)
             }
             h.mu.Unlock()
-            log.Println("Client disconnected, total clients:", len(h.clients))
+            // log.Println("Client disconnected, total clients:", len(h.clients))
             
         case message := <-h.broadcast:
             h.mu.Lock()
