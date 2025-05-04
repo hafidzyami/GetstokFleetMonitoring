@@ -99,7 +99,7 @@ const DriverActiveRoutePage = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [markers, setMarkers] = useState<MapMarker[]>([]);
-  const [center, setCenter] = useState<[number, number]>([-6.8904, 107.6102]); // Default to Bandung
+  const [center] = useState<[number, number]>([-6.8904, 107.6102]); // Default to Bandung
   const [routeLatLngs, setRouteLatLngs] = useState<[number, number][]>([]);
   const mapRef = useRef<any>(null);
   const [segments, setSegments] = useState<{ segment: [number, number][]; typeValue: number }[]>([]);

@@ -2,7 +2,7 @@
 
 import "boxicons/css/boxicons.min.css";
 
-import Image from "next/image";
+// import Image from "next/image";
 import React from "react";
 import { useRouter } from "next/navigation";
 

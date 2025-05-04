@@ -34,8 +34,10 @@ export const debugTruckRouteMatch = (truck, routePlan) => {
   const routePlanPlate = routePlan.vehicle_plate.split('/')[0] || '';
   const routePlanMacId = routePlan.vehicle_plate.split('/')[1] || '';
   
+  console.log(`[DEBUG] Truck: ${truck.plate_number}/${truck.mac_id}`, `Route: ${routePlanPlate}/${routePlanMacId}`);
   const matchByPlate = routePlanPlate === truck.plate_number;
   const matchByMacId = routePlanMacId === truck.mac_id;
+  console.log(`[DEBUG] Match by plate: ${matchByPlate}, Match by mac_id: ${matchByMacId}`);
   
   return (matchByPlate || matchByMacId);
 };

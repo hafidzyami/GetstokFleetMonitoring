@@ -16,7 +16,7 @@ import "leaflet/dist/leaflet.css";
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
-import Image from "next/image";
+
 
 // Define props for the DetailMap component
 interface DetailMapProps {
@@ -68,7 +68,7 @@ const MapViewSetter = ({
   onMapRef?: (map: L.Map) => void;
 }) => {
   const map = useMap();
-  const [imageLoading, setImageLoading] = useState(true);
+  
 
   useEffect(() => {
     map.setView(center, zoom);
@@ -108,8 +108,6 @@ const Legend = () => {
 
 // Initialize Leaflet icons
 let defaultIcon: any;
-let startIcon: any;
-let endIcon: any;
 let avoidanceIcon: any;
 
 // Function to create waypoint icons with numbers
@@ -132,12 +130,9 @@ const DetailMap: React.FC<DetailMapProps> = ({
   tollways = [],
   onMapRef,
   requesterNames = {},
-  isPlanner = false,
   onAvoidanceAreaConfirm,
   onAvoidanceAreaReject,
-  routeStatus = "",
   requesterRoles = {},
-  userRole = "",
 }) => {
   const [mounted, setMounted] = useState(false);
   const hoverMarkerRef = useRef<L.Marker | null>(null);

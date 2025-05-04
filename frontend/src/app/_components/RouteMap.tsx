@@ -7,7 +7,6 @@ import {
   Marker,
   Polyline,
   useMap,
-  useMapEvents,
   Popup,
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
@@ -138,7 +137,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
   let defaultIcon: L.Icon;
 
   // Car icon for current location
-  let carIcon: L.DivIcon;
+  // let carIcon: L.DivIcon;
   
   // State untuk menyimpan icon waypoints
   const waypointIcons = useRef<{ [key: number]: L.DivIcon }>({});
@@ -169,14 +168,14 @@ const RouteMap: React.FC<RouteMapProps> = ({
       });
 
       // Create car icon
-      carIcon = L.divIcon({
-        className: "car-icon",
-        html: `<div style="background-color: #4285F4; color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">
-                <i class="bx bxs-car-garage" style="font-size: 20px;"></i>
-              </div>`,
-        iconSize: [36, 36],
-        iconAnchor: [18, 18],
-      });
+      // carIcon = L.divIcon({
+      //   className: "car-icon",
+      //   html: `<div style="background-color: #4285F4; color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">
+      //           <i class="bx bxs-car-garage" style="font-size: 20px;"></i>
+      //         </div>`,
+      //   iconSize: [36, 36],
+      //   iconAnchor: [18, 18],
+      // });
 
       L.Marker.prototype.options.icon = defaultIcon;
       setMounted(true);

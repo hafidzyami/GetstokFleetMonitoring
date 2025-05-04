@@ -96,7 +96,6 @@ const BuatRutePage = () => {
   const [avoidancePhoto, setAvoidancePhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [hasBuatRuteBeenClicked, setHasBuatRuteBeenClicked] = useState(false);
 
   const [showPermanentAvoidance, setShowPermanentAvoidance] = useState<boolean>(false);
   const [showNonPermanentAvoidance, setShowNonPermanentAvoidance] = useState<boolean>(false);
@@ -545,8 +544,6 @@ const BuatRutePage = () => {
   const callApiForDirections = async () => {
     setSegments([]);
     setTollways([]);
-    setHasBuatRuteBeenClicked(true);
-
 
     if (markers.length < 2) {
       alert("Silakan tambahkan minimal dua titik tujuan pada peta");
@@ -919,11 +916,6 @@ const BuatRutePage = () => {
 
     if (markers.length < 2) {
       alert("Silakan tandai minimal 2 titik di peta");
-      return;
-    }
-
-    if(!hasBuatRuteBeenClicked) {
-      alert("Silakan buat rute terlebih dahulu");
       return;
     }
 

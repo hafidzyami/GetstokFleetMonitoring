@@ -272,7 +272,7 @@ const UserManagementPage = () => {
 								)}
 								{searchTerm && (
 									<span className="font-medium">
-										Pencarian: "{searchTerm}"
+										Pencarian: &quot;{searchTerm}&quot;
 									</span>
 								)}
 							</div>

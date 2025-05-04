@@ -47,15 +47,10 @@ const Login = () => {
             height={50}
           />
           <h1 className="text-2xl text-[#009EFF] font-semibold">Masuk</h1>
-          <p>
-            {process.env.NODE_ENV} Last Update:{" "}
-            {new Date().toLocaleDateString("id-ID", {
-              day: "numeric",
-              month: "long",
-              year: "numeric",
-            })}
-          </p>
-          <h2 className="text-[#707070] font-light">Selamat datang kembali</h2>
+          <p>{process.env.NODE_ENV} Last Update: Tanggal 19 April 2025</p>
+          <h2 className="text-[#707070] font-light">
+            Selamat datang kembali
+          </h2>
         </div>
 
         {error && (
@@ -66,10 +61,7 @@ const Login = () => {
 
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
-            <label
-              htmlFor="email"
-              className="text-sm font-normal flex items-center gap-2"
-            >
+            <label htmlFor="email" className="text-sm font-normal flex items-center gap-2">
               <i className="bx bx-envelope text-gray-500 text-xl"></i>
               Email
             </label>
@@ -81,17 +73,12 @@ const Login = () => {
               placeholder="Masukkan email"
             />
             {errors.email && (
-              <span className="text-red-500 text-sm">
-                {errors.email.message}
-              </span>
+              <span className="text-red-500 text-sm">{errors.email.message}</span>
             )}
           </div>
 
           <div className="flex flex-col gap-2">
-            <label
-              htmlFor="password"
-              className="text-sm font-normal flex items-center gap-2"
-            >
+            <label htmlFor="password" className="text-sm font-normal flex items-center gap-2">
               <i className="bx bx-lock-alt text-gray-500 text-xl"></i>
               Password
             </label>
@@ -108,17 +95,11 @@ const Login = () => {
                 onClick={togglePasswordVisibility}
                 className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
               >
-                <i
-                  className={`bx ${
-                    showPassword ? "bx-hide" : "bx-show"
-                  } text-xl`}
-                />
+                <i className={`bx ${showPassword ? "bx-hide" : "bx-show"} text-xl`} />
               </button>
             </div>
             {errors.password && (
-              <span className="text-red-500 text-sm">
-                {errors.password.message}
-              </span>
+              <span className="text-red-500 text-sm">{errors.password.message}</span>
             )}
           </div>
 
@@ -130,13 +111,6 @@ const Login = () => {
             {loading ? "Loading..." : "Masuk"}
           </button>
         </form>
-
-        <a
-          href="/reset-password"
-          className="font-light text-sm text-end text-[#BF9105] mt-1"
-        >
-          Lupa Password?
-        </a>
       </div>
     </div>
   );

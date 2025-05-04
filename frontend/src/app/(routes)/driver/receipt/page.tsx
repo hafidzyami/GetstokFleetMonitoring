@@ -2,12 +2,94 @@
 
 import "boxicons/css/boxicons.min.css";
 
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
+// import axios from "axios";
 
 import Image from "next/image";
 import { createWorker } from "tesseract.js";
 
+interface Truck {
+	id: string;
+	plate_number: string;
+	mac_id: string;
+	displayValue: string;
+  }
+
+//   interface Props {
+// 	onSelect?: (truckId: string) => void;
+//   }
+
 const KuitansiPage = () => {
+	const [trucks, setTrucks] = useState<Truck[]>([]);
+	const [selectedTruckId, setSelectedTruckId] = useState("");
+	const [isLoading, setIsLoading] = useState(false);
+
+	const fetchTrucks = async () => {
+		setIsLoading(true);
+		try {
+		  const response = await fetch("/api/v1/trucks", {
+			headers: {
+			  Authorization: `Bearer ${localStorage.getItem("token")}`,
+			},
+		  });
+	
+		  if (!response.ok) {
+			throw new Error(`HTTP error! status: ${response.status}`);
+		  }
+	
+		  const responseJson = await response.json();
+		  const data = responseJson.data || [];
+	
+		  if (Array.isArray(data)) {
+			const formattedTrucks: Truck[] = data.map((truck: any) => ({
+			  id: truck.id || `truck-${Date.now()}-${Math.random()}`,
+			  plate_number: truck.plate_number || "N/A",
+			  mac_id: truck.mac_id || "N/A",
+			  displayValue: `${truck.plate_number || "N/A"} | ${
+				truck.mac_id || "N/A"
+			  }`,
+			}));
+	
+			setTrucks(formattedTrucks);
+		  } else {
+			console.warn("Unexpected trucks API data format:", responseJson);
+			setTrucks([]);
+		  }
+		} catch (error) {
+		  console.error("Error fetching trucks:", error);
+		  setTrucks([]);
+		} finally {
+		  setIsLoading(false);
+		}
+	  };
+
+	  useEffect(() => {
+		fetchTrucks();
+	  }, []);
+
+
+	  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+		setSelectedTruckId(e.target.value);
+	  };
+
+	  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const file = e.target.files?.[0];
+		if (!file) return;
+	  
+		if (file.size > 5 * 1024 * 1024) {
+		  alert("Ukuran file maksimal 5MB.");
+		  return;
+		}
+	  
+		const reader = new FileReader();
+		reader.onload = () => {
+		  const result = reader.result as string;
+		  setPreviewImage(result);
+		};
+		reader.readAsDataURL(file);
+	  };
+	  
+
 	const [isOpen, setIsOpen] = useState({
 		UnggahKuitansi: false,
 		DeteksiKuitansi: false,
@@ -67,6 +149,23 @@ const KuitansiPage = () => {
 		return null;
 	};
 
+	const cleanField = (raw: string, keywords: string[] = []): string => {
+		let result = raw;
+	  
+		// Hapus kata kunci seperti "Harga:", "Nama Produk", dll
+		keywords.forEach(keyword => {
+		  const regex = new RegExp(`${keyword}\\s*:?\\s*`, "i");
+		  result = result.replace(regex, "");
+		});
+	  
+		// Hapus simbol dan karakter aneh di awal dan akhir
+		result = result.replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, "");
+	  
+		return result.trim();
+	  };
+	  
+	  
+
 	const processOCR = async (imageData: string) => {
 		setIsProcessing(true);
 		try {
@@ -95,30 +194,16 @@ const KuitansiPage = () => {
 				const lowerLine = line.toLowerCase();
 				console.log("Memproses baris:", line);
 				if (lowerLine.includes("waktu") || lowerLine.includes("jam")) {
-					extractedData.waktu = line;
-					console.log("Ditemukan waktu:", line);
-				} else if (
-					lowerLine.includes("produk") ||
-					lowerLine.includes("bensin")
-				) {
-					extractedData.namaProduk = line;
-					console.log("Ditemukan nama produk:", line);
-				} else if (
-					lowerLine.includes("harga") &&
-					!lowerLine.includes("total")
-				) {
-					extractedData.hargaPerLiter = line;
-					console.log("Ditemukan harga per liter:", line);
-				} else if (lowerLine.includes("volume")) {
-					extractedData.volume = line;
-					console.log("Ditemukan volume:", line);
-				} else if (
-					lowerLine.includes("total") &&
-					lowerLine.includes("harga")
-				) {
-					extractedData.totalHarga = line;
-					console.log("Ditemukan total harga:", line);
-				}
+					extractedData.waktu = cleanField(line, ["waktu", "jam"]);
+				  } else if (lowerLine.includes("produk") || lowerLine.includes("bensin")) {
+					extractedData.namaProduk = cleanField(line, ["nama produk", "produk", "bensin"]);
+				  } else if (lowerLine.includes("harga") && !lowerLine.includes("total")) {
+					extractedData.hargaPerLiter = cleanField(line, ["harga", "harga/liter", "harga liter"]);
+				  } else if (lowerLine.includes("volume")) {
+					extractedData.volume = cleanField(line, ["volume"]);
+				  } else if (lowerLine.includes("total") && lowerLine.includes("harga")) {
+					extractedData.totalHarga = cleanField(line, ["total harga", "total"]);
+				  }
 			});
 
 			console.log("Data yang diekstrak:", extractedData);
@@ -330,76 +415,78 @@ const KuitansiPage = () => {
 
 							{/* Body Modal */}
 							<div className="p-6 space-y-6">
-								{/* Input Plat Nomor */}
 								<div className="space-y-2">
-									<label className="block text-gray-700 font-medium">
-										Plat Nomor Kendaraan
-									</label>
-									<input
-										type="text"
-										placeholder="Masukkan nomor plat di sini"
-										className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-[#009EFF] focus:ring-2 focus:ring-[#009EFF]/50 transition"
-									/>
+								<label className="block text-gray-700 font-medium">
+									Plat Nomor Kendaraan
+								</label>
+								<select
+									value={selectedTruckId}
+									onChange={handleChange}
+									className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-[#009EFF] focus:ring-2 focus:ring-[#009EFF]/50 transition"
+								>
+									<option value="">-- Pilih Plat Nomor --</option>
+									{trucks.map((truck) => (
+									<option key={truck.id} value={truck.id}>
+										{truck.displayValue}
+									</option>
+									))}
+								</select>
+								{isLoading && <p className="text-sm text-gray-500">Memuat data...</p>}
 								</div>
 
 								{/* Upload Area */}
 								<div className="space-y-2">
-									<label className="block text-gray-700 font-medium">
-										Upload Kuitansi
-									</label>
-									<label className="block border-2 border-dashed border-[#009EFF] rounded-lg p-6 text-center cursor-pointer hover:bg-[#E6F5FF] transition-colors">
-										<div className="flex flex-col items-center justify-center gap-2 text-[#009EFF]">
-											<i className="bx bx-cloud-upload text-3xl"></i>
-											<span className="font-medium">
-												Klik untuk mengunggah
-											</span>
-											<span className="text-xs text-gray-500">
-												Format: JPG, PNG (Maks. 5MB)
-											</span>
-										</div>
+									<label className="block text-gray-700 font-medium">Upload Kuitansi</label>
+
+									<div className="flex gap-2">
+										{/* Tombol Kamera */}
+										<label className="flex-1 cursor-pointer border border-blue-500 text-blue-600 text-center p-3 rounded-md hover:bg-blue-50">
+										📷 Ambil Foto
 										<input
 											type="file"
-											className="hidden"
 											accept="image/*"
-											onChange={(e) => {
-												const file = e.target.files?.[0];
-												if (file) {
-													const reader = new FileReader();
-													reader.onload = () => {
-														const result =
-															reader.result as string;
-														setPreviewImage(result);
-													};
-													reader.readAsDataURL(file);
-												}
-											}}
+											capture="environment"
+											className="hidden"
+											onChange={(e) => handleFileChange(e)}
 										/>
-									</label>
+										</label>
 
-									{/* Preview Image */}
-									{previewImage && (
-										<div className="mt-4 space-y-2">
-											<label className="block text-gray-700 font-medium">
-												Preview
-											</label>
-											<div className="relative group">
-												<Image
-													src={previewImage}
-													alt="Preview Kuitansi"
-													className="w-full h-auto rounded-lg border border-gray-200"
-													width={400}
-													height={300}
-												/>
-												<button
-													className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-													onClick={() => setPreviewImage(null)}
-												>
-													<i className="bx bx-x text-sm"></i>
-												</button>
-											</div>
-										</div>
-									)}
-								</div>
+										{/* Tombol Galeri/File */}
+										<label className="flex-1 cursor-pointer border border-gray-400 text-gray-600 text-center p-3 rounded-md hover:bg-gray-50">
+										📁 Pilih File
+										<input
+											type="file"
+											accept="image/*"
+											className="hidden"
+											onChange={(e) => handleFileChange(e)}
+										/>
+										</label>
+									</div>
+
+  {/* Preview */}
+  {previewImage && (
+    <div className="mt-4">
+      <label className="block text-gray-700 font-medium">Preview</label>
+      <div className="relative group mt-2">
+        <Image
+          src={previewImage}
+          alt="Preview"
+          className="rounded border"
+          width={400}
+          height={300}
+        />
+        <button
+          type="button"
+          className="absolute top-2 right-2 bg-red-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition"
+          onClick={() => setPreviewImage(null)}
+        >
+          ❌
+        </button>
+      </div>
+    </div>
+  )}
+</div>
+
 							</div>
 
 							{/* Footer Modal */}

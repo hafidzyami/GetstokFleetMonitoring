@@ -2,12 +2,12 @@
 
 import "boxicons/css/boxicons.min.css"; // Import Boxicons CSS
 
-import { Bell, ChevronDown, ChevronLeft, Menu, Search } from "lucide-react";
+import { Bell, ChevronDown, ChevronLeft, Menu, KeyRound, LogOut } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import ResetPasswordModal from "./ResetPasswordModal";
 
 import Image from "next/image";
-import ThemeToggle from "@/app/_components/ThemeToggle";
 // Tambahkan style untuk animasi
 // import { createGlobalStyle } from "styled-components";
 import { useAuth } from "@/app/contexts/AuthContext";
@@ -42,6 +42,8 @@ interface Notification {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
+	const [dropdownOpen, setDropdownOpen] = useState(false);
+	// const router = useRouter();
 	const [sidebarOpen, setSidebarOpen] = useState(true);
 	// const { width } = useWindowSize();
 	const currentPath = usePathname();
@@ -64,6 +66,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 	const [hasNewNotifications, setHasNewNotifications] = useState(false);
 	// State untuk menampilkan semua notifikasi
 	const [showAllNotifications, setShowAllNotifications] = useState(false);
+
+	const [modalOpen, setModalOpen] = useState(false);
 
 	// Fungsi untuk handle toggle subscription
 	const handleToggleSubscription = async () => {
@@ -302,11 +306,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 							{sidebarOpen && (
 								<div className="flex items-center">
 									<div className="h-8 w-8 rounded-full bg-[#009EFF] flex items-center justify-center text-white font-semibold">
-										{user?.name?.charAt(0)}
+										{/* {user?.name?.charAt(0)} */}
 									</div>
 									<div className="ml-3">
 										<p className="text-sm font-medium text-gray-700 dark:text-gray-200">
-											{user?.name}
+											{/* {user?.name} */}
 										</p>
 										<p className="text-xs text-gray-500 dark:text-gray-400">
 											User
@@ -367,23 +371,45 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 								</div>
 							</button>
 
-							<div className="relative flex items-center">
-								<button className="flex items-center space-x-2 focus:outline-none">
-									<div className="h-8 w-8 rounded-full bg-[#009EFF] flex items-center justify-center text-white font-semibold">
-										{user?.name?.charAt(0)}
-									</div>
-									{/* <Image src={"https://images.pexels.com/photos/1759531/pexels-photo-1759531.jpeg?auto=compress&cs=tinysrgb&w=200"}  alt="profile"/> */}
-									<span className="hidden lg:flex flex-col items-start text-left">
-										<span className="text-sm font-medium text-gray-900 dark:text-white">
-											{user?.name}
-										</span>
-										<span className="text-xs text-gray-500 dark:text-gray-400">
-											User
-										</span>
-									</span>
-									<ChevronDown className="hidden lg:block h-4 w-4 text-gray-400" />
+							<div className="relative flex items-center ml-auto">
+							<button
+								className="flex items-center space-x-2 focus:outline-none"
+								onClick={() => setDropdownOpen(!dropdownOpen)}
+							>
+								<div className="h-8 w-8 rounded-full bg-[#009EFF] flex items-center justify-center text-white font-semibold">
+								{user?.name?.charAt(0) ?? "U"}
+								</div>
+								<span className="hidden lg:flex flex-col items-start text-left">
+								<span className="text-sm font-medium text-gray-900 dark:text-white">
+									{user?.name ?? "User"}
+								</span>
+								<span className="text-xs text-gray-500 dark:text-gray-400">User</span>
+								</span>
+								<ChevronDown className="hidden lg:block h-4 w-4 text-gray-400" />
+							</button>
+
+							{dropdownOpen && (
+								<div className="absolute top-12 right-0 w-44 bg-white border border-gray-200 rounded-md shadow-md z-50 py-2">
+								<button
+									onClick={() => setModalOpen(true)}
+									className="w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+									>
+									<KeyRound className="w-4 h-4" />
+									Reset Password
+									</button>
+
+									<ResetPasswordModal isOpen={modalOpen} onClose={() => setModalOpen(false)} />
+								<button
+									onClick={logout}
+									className="w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+								>
+									<LogOut className="w-4 h-4" />
+									Logout
 								</button>
+								</div>
+							)}
 							</div>
+
 
 							{/* Notification Alert */}
 							{showNotificationPanel && (

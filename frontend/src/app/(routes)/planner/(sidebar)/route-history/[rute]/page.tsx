@@ -99,35 +99,35 @@ interface AvoidanceMarker {
 }
 
 const RouteHistoryPage = () => {
-  const params = useParams();
-  const router = useRouter();
-  const [routePlan, setRoutePlan] = useState<RoutePlan | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [markers, setMarkers] = useState<MapMarker[]>([]);
-  const [impassibleMarkers, setImpassibleMarkers] = useState<
-    AvoidanceMarker[][]
-  >([]);
-  const [center, setCenter] = useState<[number, number]>([-6.8904, 107.6102]); // Default to Bandung
-  const [routeLatLngs, setRouteLatLngs] = useState<[number, number][]>([]); // Explicit tuple type
-  const mapRef = useRef<any>(null);
-  const [segments, setSegments] = useState<
-    { segment: [number, number][]; typeValue: number }[]
-  >([]);
-  const [tollways, setTollways] = useState<
-    { segment: [number, number][]; tollwayValue: number }[]
-  >([]);
-  const [surfaceTypes, setSurfaceTypes] = useState<any>([]);
-  const [requesterNames, setRequesterNames] = useState<{
-    [key: number]: string;
-  }>({});
-  const [requesterRoles, setRequesterRoles] = useState<{
-    [key: number]: string;
-  }>({});
-  const { user } = useAuth();
-  const [isProcessingAvoidanceArea, setIsProcessingAvoidanceArea] =
-    useState(false);
-  const [isDeletingRoutePlan, setIsDeletingRoutePlan] = useState(false);
+	const params = useParams();
+	const router = useRouter();
+	const [routePlan, setRoutePlan] = useState<RoutePlan | null>(null);
+	const [isLoading, setIsLoading] = useState<boolean>(true);
+	const [error, setError] = useState<string | null>(null);
+	const [markers, setMarkers] = useState<MapMarker[]>([]);
+	const [impassibleMarkers, setImpassibleMarkers] = useState<
+		AvoidanceMarker[][]
+	>([]);
+	const [center, setCenter] = useState<[number, number]>([-6.8904, 107.6102]); // Default to Bandung
+	const [routeLatLngs, setRouteLatLngs] = useState<[number, number][]>([]); // Explicit tuple type
+	const mapRef = useRef<any>(null);
+	const [segments, setSegments] = useState<
+		{ segment: [number, number][]; typeValue: number }[]
+	>([]);
+	const [tollways, setTollways] = useState<
+		{ segment: [number, number][]; tollwayValue: number }[]
+	>([]);
+	const [setSurfaceTypes] = useState<any>([]);
+	const [requesterNames, setRequesterNames] = useState<{
+		[key: number]: string;
+	}>({});
+	const [requesterRoles, setRequesterRoles] = useState<{
+		[key: number]: string;
+	}>({});
+	const { user } = useAuth();
+	const [isProcessingAvoidanceArea, setIsProcessingAvoidanceArea] =
+		useState(false);
+	const [isDeletingRoutePlan, setIsDeletingRoutePlan] = useState(false);
 
 	console.log("impassible", impassibleMarkers);
 
@@ -145,30 +145,30 @@ const RouteHistoryPage = () => {
 		[]
 	);
 
-  const fetchRole = async (userId: number | undefined) => {
-    try {
-      if (!userId) return;
+	// const fetchRole = async (userId: number | undefined) => {
+	// 	try {
+	// 		if (!userId) return;
 
-      const response = await fetch(`/api/v1/users/${userId}/role`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      });
+	// 		const response = await fetch(`/api/v1/users/${userId}/role`, {
+	// 			method: "GET",
+	// 			headers: {
+	// 				"Content-Type": "application/json",
+	// 				Authorization: `Bearer ${localStorage.getItem("token")}`,
+	// 			},
+	// 		});
 
-			if (!response.ok) {
-				throw new Error("Failed to fetch user data");
-			}
+	// 		if (!response.ok) {
+	// 			throw new Error("Failed to fetch user data");
+	// 		}
 
-			const data = await response.json();
-			console.log("role", data.data.role);
-			return data.data.role;
-		} catch (error) {
-			console.error("Error fetching user data:", error);
-			return `Pengguna ${userId}`;
-		}
-	};
+	// 		const data = await response.json();
+	// 		console.log("role", data.data.role);
+	// 		return data.data.role;
+	// 	} catch (error) {
+	// 		console.error("Error fetching user data:", error);
+	// 		return `Pengguna ${userId}`;
+	// 	}
+	// };
 
 	useEffect(() => {
 		const fetchRoutePlanDetail = async () => {
@@ -470,48 +470,48 @@ const RouteHistoryPage = () => {
 		try {
 			const date = new Date(dateString);
 			return format(date, "dd MMMM yyyy, HH:mm", { locale: id });
-		} catch (e) {
+		} catch  {
 			return dateString;
 		}
 	};
 
 	// Handle route status update
-	const handleStatusUpdate = async (newStatus: string) => {
-		if (!routePlan) return;
+	// const handleStatusUpdate = async (newStatus: string) => {
+	// 	if (!routePlan) return;
 
-		try {
-			const token = localStorage.getItem("token");
-			if (!token) {
-				router.push("/login");
-				return;
-			}
+	// 	try {
+	// 		const token = localStorage.getItem("token");
+	// 		if (!token) {
+	// 			router.push("/login");
+	// 			return;
+	// 		}
 
-			const response = await fetch(
-				`/api/v1/route-plans/${routePlan.id}/status`,
-				{
-					method: "PUT",
-					headers: {
-						"Content-Type": "application/json",
-						Authorization: `Bearer ${token}`,
-					},
-					body: JSON.stringify({ status: newStatus }),
-				}
-			);
+	// 		const response = await fetch(
+	// 			`/api/v1/route-plans/${routePlan.id}/status`,
+	// 			{
+	// 				method: "PUT",
+	// 				headers: {
+	// 					"Content-Type": "application/json",
+	// 					Authorization: `Bearer ${token}`,
+	// 				},
+	// 				body: JSON.stringify({ status: newStatus }),
+	// 			}
+	// 		);
 
-			if (!response.ok) {
-				throw new Error(`Error updating status: ${response.statusText}`);
-			}
+	// 		if (!response.ok) {
+	// 			throw new Error(`Error updating status: ${response.statusText}`);
+	// 		}
 
-			// Update local state
-			setRoutePlan({
-				...routePlan,
-				status: newStatus,
-			});
-		} catch (err) {
-			console.error("Error updating status:", err);
-			alert("Gagal mengubah status rute. Silakan coba lagi.");
-		}
-	};
+	// 		// Update local state
+	// 		setRoutePlan({
+	// 			...routePlan,
+	// 			status: newStatus,
+	// 		});
+	// 	} catch (err) {
+	// 		console.error("Error updating status:", err);
+	// 		alert("Gagal mengubah status rute. Silakan coba lagi.");
+	// 	}
+	// };
 
 	// Handle avoidance area approval
 	const handleApproveAvoidanceArea = async (areaId: number) => {
@@ -571,76 +571,83 @@ const RouteHistoryPage = () => {
 				language: "id",
 			};
 
-      // Add avoidance areas if any
-      if (approvedAreas.length > 0) {
-        // Prepare to get all approved avoidance areas, including permanent ones
-        let allAvoidanceAreas = [...approvedAreas];
+			// Add avoidance areas if any
+			if (approvedAreas.length > 0) {
+				// Prepare to get all approved avoidance areas, including permanent ones
+				let allAvoidanceAreas = [...approvedAreas];
 
-        // Also fetch all permanent avoidance areas from the system
-        try {
-          const permanentResponse = await fetch(
-            `/api/v1/route-plans/avoidance/permanent`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            }
-          );
+				// Also fetch all permanent avoidance areas from the system
+				try {
+					const permanentResponse = await fetch(
+						`/api/v1/route-plans/avoidance/permanent`,
+						{
+							headers: {
+								Authorization: `Bearer ${token}`,
+							},
+						}
+					);
 
-          if (permanentResponse.ok) {
-            const permanentResult = await permanentResponse.json();
-            if (permanentResult.data && Array.isArray(permanentResult.data)) {
-              // Add permanent areas that aren't already in our approved areas list
-              const existingAreaIds = new Set(
-                approvedAreas.map((area) => area.id)
-              );
-              const additionalPermanentAreas = permanentResult.data.filter(
-                (area: any) => !existingAreaIds.has(area.id)
-              );
-              allAvoidanceAreas = [
-                ...allAvoidanceAreas,
-                ...additionalPermanentAreas,
-              ];
-              console.log(
-                "Including additional permanent areas:",
-                additionalPermanentAreas.length
-              );
-            }
-          }
-        } catch (error) {
-          console.error("Error fetching permanent avoidance areas:", error);
-          // Continue with just the approved areas we already have
-        }
+					if (permanentResponse.ok) {
+						const permanentResult = await permanentResponse.json();
+						if (
+							permanentResult.data &&
+							Array.isArray(permanentResult.data)
+						) {
+							// Add permanent areas that aren't already in our approved areas list
+							const existingAreaIds = new Set(
+								approvedAreas.map((area) => area.id)
+							);
+							const additionalPermanentAreas =
+								permanentResult.data.filter(
+									(area: any) => !existingAreaIds.has(area.id)
+								);
+							allAvoidanceAreas = [
+								...allAvoidanceAreas,
+								...additionalPermanentAreas,
+							];
+							console.log(
+								"Including additional permanent areas:",
+								additionalPermanentAreas.length
+							);
+						}
+					}
+				} catch (error) {
+					console.error(
+						"Error fetching permanent avoidance areas:",
+						error
+					);
+					// Continue with just the approved areas we already have
+				}
 
-        // Create avoidance polygons from all areas
-        const avoidancePolygons = allAvoidanceAreas.map((area) => {
-          // Extract polygon coordinates in the right format
-          const polygonCoords = area.points
-            .sort((a, b) => a.order - b.order)
-            .map((point) => [point.longitude, point.latitude]);
+				// Create avoidance polygons from all areas
+				const avoidancePolygons = allAvoidanceAreas.map((area) => {
+					// Extract polygon coordinates in the right format
+					const polygonCoords = area.points
+						.sort((a, b) => a.order - b.order)
+						.map((point) => [point.longitude, point.latitude]);
 
-          // Close the polygon by adding the first point at the end if needed
-          if (
-            polygonCoords.length > 0 &&
-            (polygonCoords[0][0] !==
-              polygonCoords[polygonCoords.length - 1][0] ||
-              polygonCoords[0][1] !==
-                polygonCoords[polygonCoords.length - 1][1])
-          ) {
-            polygonCoords.push(polygonCoords[0]);
-          }
+					// Close the polygon by adding the first point at the end if needed
+					if (
+						polygonCoords.length > 0 &&
+						(polygonCoords[0][0] !==
+							polygonCoords[polygonCoords.length - 1][0] ||
+							polygonCoords[0][1] !==
+								polygonCoords[polygonCoords.length - 1][1])
+					) {
+						polygonCoords.push(polygonCoords[0]);
+					}
 
-          return polygonCoords;
-        });
+					return polygonCoords;
+				});
 
-        // Add avoidance areas to request options
-        directionsBody.options = {
-          avoid_polygons: {
-            type: "MultiPolygon",
-            coordinates: avoidancePolygons.map((polygon) => [polygon]),
-          },
-        };
-      }
+				// Add avoidance areas to request options
+				directionsBody.options = {
+					avoid_polygons: {
+						type: "MultiPolygon",
+						coordinates: avoidancePolygons.map((polygon) => [polygon]),
+					},
+				};
+			}
 
 			// Call the routing API to get the new route
 			const directionsResponse = await fetch("/api/v1/routing/directions", {
@@ -652,96 +659,98 @@ const RouteHistoryPage = () => {
 				body: JSON.stringify(directionsBody),
 			});
 
-      if (!directionsResponse.ok) {
-        const errorData = await directionsResponse.json();
-        console.error("Directions API error:", errorData);
-        throw new Error(
-          `Error getting directions: ${directionsResponse.statusText}`
-        );
-      }
+			if (!directionsResponse.ok) {
+				const errorData = await directionsResponse.json();
+				console.error("Directions API error:", errorData);
+				throw new Error(
+					`Error getting directions: ${directionsResponse.statusText}`
+				);
+			}
 
 			const directionsData = await directionsResponse.json();
 			const newRouteGeometry = directionsData.routes[0].geometry;
 			const extras = directionsData.routes[0].extras;
 
-      // Update the route plan with the new geometry and extras
-      const updateResponse = await fetch(
-        `/api/v1/route-plans/${routePlan.id}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            route_geometry: newRouteGeometry,
-            extras: extras,
-          }),
-        }
-      );
+			// Update the route plan with the new geometry and extras
+			const updateResponse = await fetch(
+				`/api/v1/route-plans/${routePlan.id}`,
+				{
+					method: "PUT",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: `Bearer ${token}`,
+					},
+					body: JSON.stringify({
+						route_geometry: newRouteGeometry,
+						extras: extras,
+					}),
+				}
+			);
 
-      if (!updateResponse.ok) {
-        throw new Error(
-          `Error updating route plan: ${updateResponse.statusText}`
-        );
-      }
+			if (!updateResponse.ok) {
+				throw new Error(
+					`Error updating route plan: ${updateResponse.statusText}`
+				);
+			}
 
-      // Update local state
-      if (routePlan && routePlan.avoidance_areas) {
-        const updatedAvoidanceAreas = routePlan.avoidance_areas.map((area) => {
-          if (area.id === areaId) {
-            return { ...area, status: "approved" };
-          }
-          return area;
-        });
+			// Update local state
+			if (routePlan && routePlan.avoidance_areas) {
+				const updatedAvoidanceAreas = routePlan.avoidance_areas.map(
+					(area) => {
+						if (area.id === areaId) {
+							return { ...area, status: "approved" };
+						}
+						return area;
+					}
+				);
 
-        // Check if all areas are now approved - if yes, update route status to "planned"
-        const allAreasApproved = updatedAvoidanceAreas.every(
-          (area) => area.status !== "pending"
-        );
+				// Check if all areas are now approved - if yes, update route status to "planned"
+				const allAreasApproved = updatedAvoidanceAreas.every(
+					(area) => area.status === "approved"
+				);
 
-        let updatedStatus = routePlan.status;
+				let updatedStatus = routePlan.status;
 
-        // If current status is "on confirmation" and all areas are approved, change to "planned"
-        if (allAreasApproved && routePlan.status === "on confirmation") {
-          updatedStatus = "planned";
+				// If current status is "on confirmation" and all areas are approved, change to "planned"
+				if (allAreasApproved && routePlan.status === "on confirmation") {
+					updatedStatus = "planned";
 
-          // Update the status on the API
-          try {
-            const statusResponse = await fetch(
-              `/api/v1/route-plans/${routePlan.id}/status`,
-              {
-                method: "PUT",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({ status: "planned" }),
-              }
-            );
+					// Update the status on the API
+					try {
+						const statusResponse = await fetch(
+							`/api/v1/route-plans/${routePlan.id}/status`,
+							{
+								method: "PUT",
+								headers: {
+									"Content-Type": "application/json",
+									Authorization: `Bearer ${token}`,
+								},
+								body: JSON.stringify({ status: "planned" }),
+							}
+						);
 
-            if (!statusResponse.ok) {
-              console.error("Failed to update route status to planned");
-            }
-          } catch (statusError) {
-            console.error("Error updating route status:", statusError);
-          }
-        }
+						if (!statusResponse.ok) {
+							console.error("Failed to update route status to planned");
+						}
+					} catch (statusError) {
+						console.error("Error updating route status:", statusError);
+					}
+				}
 
-        setRoutePlan({
-          ...routePlan,
-          avoidance_areas: updatedAvoidanceAreas,
-          route_geometry: newRouteGeometry,
-          extras: extras,
-          status: updatedStatus,
-        });
+				setRoutePlan({
+					...routePlan,
+					avoidance_areas: updatedAvoidanceAreas,
+					route_geometry: newRouteGeometry,
+					extras: extras,
+					status: updatedStatus,
+				});
 
-        // Update route on map
-        const latLngs = getLatLngsForMap(newRouteGeometry) as [
-          number,
-          number
-        ][];
-        setRouteLatLngs(latLngs);
+				// Update route on map
+				const latLngs = getLatLngsForMap(newRouteGeometry) as [
+					number,
+					number
+				][];
+				setRouteLatLngs(latLngs);
 
 				// Process waytype segments
 				setSegments([]);
@@ -773,41 +782,44 @@ const RouteHistoryPage = () => {
 					setTollways(newTollways);
 				}
 
-        // Update impassibleMarkers
-        const updatedImpassibleMarkers = impassibleMarkers.map(
-          (markerGroup) => {
-            // Periksa apakah ini adalah grup marker yang sesuai dengan areaId
-            if (markerGroup.length > 0) {
-              const idParts = markerGroup[0].id.split("-");
-              if (idParts.length >= 2 && parseInt(idParts[1]) === areaId) {
-                // Tambahkan status ke semua marker dalam grup
-                return markerGroup.map((marker) => ({
-                  ...marker,
-                  status: "approved",
-                }));
-              }
-            }
-            return markerGroup;
-          }
-        );
-        setImpassibleMarkers(updatedImpassibleMarkers);
+				// Update impassibleMarkers
+				const updatedImpassibleMarkers = impassibleMarkers.map(
+					(markerGroup) => {
+						// Periksa apakah ini adalah grup marker yang sesuai dengan areaId
+						if (markerGroup.length > 0) {
+							const idParts = markerGroup[0].id.split("-");
+							if (
+								idParts.length >= 2 &&
+								parseInt(idParts[1]) === areaId
+							) {
+								// Tambahkan status ke semua marker dalam grup
+								return markerGroup.map((marker) => ({
+									...marker,
+									status: "approved",
+								}));
+							}
+						}
+						return markerGroup;
+					}
+				);
+				setImpassibleMarkers(updatedImpassibleMarkers);
 
-        // Show different message if status was changed
-        if (allAreasApproved && routePlan.status === "on confirmation") {
-          alert(
-            "Semua area telah disetujui. Status rute diubah menjadi 'Direncanakan'."
-          );
-        } else {
-          alert("Area berhasil disetujui dan rute telah diperbarui");
-        }
-      }
-    } catch (err) {
-      console.error("Error approving avoidance area:", err);
-      alert("Gagal menyetujui area. Silakan coba lagi.");
-    } finally {
-      setIsProcessingAvoidanceArea(false);
-    }
-  };
+				// Show different message if status was changed
+				if (allAreasApproved && routePlan.status === "on confirmation") {
+					alert(
+						"Semua area telah disetujui. Status rute diubah menjadi 'Direncanakan'."
+					);
+				} else {
+					alert("Area berhasil disetujui dan rute telah diperbarui");
+				}
+			}
+		} catch (err) {
+			console.error("Error approving avoidance area:", err);
+			alert("Gagal menyetujui area. Silakan coba lagi.");
+		} finally {
+			setIsProcessingAvoidanceArea(false);
+		}
+	};
 
 	// Handle avoidance area rejection (delete)
 	const handleRejectAvoidanceArea = async (areaId: number) => {
@@ -821,11 +833,11 @@ const RouteHistoryPage = () => {
 				return;
 			}
 
-      // First, check if the area being deleted was already approved
-      const areaToDelete = routePlan.avoidance_areas.find(
-        (area) => area.id === areaId
-      );
-      const wasApproved = areaToDelete && areaToDelete.status === "approved";
+			// First, check if the area being deleted was already approved
+			const areaToDelete = routePlan.avoidance_areas.find(
+				(area) => area.id === areaId
+			);
+			const wasApproved = areaToDelete && areaToDelete.status === "approved";
 
 			// Delete the avoidance area
 			const response = await fetch(
@@ -880,74 +892,81 @@ const RouteHistoryPage = () => {
 					language: "id",
 				};
 
-        // Add remaining avoidance areas if any
-        if (remainingApprovedAreas.length > 0) {
-          // Also fetch all permanent avoidance areas from the system
-          let allAvoidanceAreas = [...remainingApprovedAreas];
+				// Add remaining avoidance areas if any
+				if (remainingApprovedAreas.length > 0) {
+					// Also fetch all permanent avoidance areas from the system
+					let allAvoidanceAreas = [...remainingApprovedAreas];
 
-          try {
-            const permanentResponse = await fetch(
-              `/api/v1/route-plans/avoidance/permanent`,
-              {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                },
-              }
-            );
+					try {
+						const permanentResponse = await fetch(
+							`/api/v1/route-plans/avoidance/permanent`,
+							{
+								headers: {
+									Authorization: `Bearer ${token}`,
+								},
+							}
+						);
 
-            if (permanentResponse.ok) {
-              const permanentResult = await permanentResponse.json();
-              if (permanentResult.data && Array.isArray(permanentResult.data)) {
-                // Add permanent areas that aren't already in our approved areas list
-                const existingAreaIds = new Set(
-                  remainingApprovedAreas.map((area) => area.id)
-                );
-                const additionalPermanentAreas = permanentResult.data.filter(
-                  (area: any) => !existingAreaIds.has(area.id)
-                );
-                allAvoidanceAreas = [
-                  ...allAvoidanceAreas,
-                  ...additionalPermanentAreas,
-                ];
-                console.log(
-                  "Including additional permanent areas:",
-                  additionalPermanentAreas.length
-                );
-              }
-            }
-          } catch (error) {
-            console.error("Error fetching permanent avoidance areas:", error);
-          }
+						if (permanentResponse.ok) {
+							const permanentResult = await permanentResponse.json();
+							if (
+								permanentResult.data &&
+								Array.isArray(permanentResult.data)
+							) {
+								// Add permanent areas that aren't already in our approved areas list
+								const existingAreaIds = new Set(
+									remainingApprovedAreas.map((area) => area.id)
+								);
+								const additionalPermanentAreas =
+									permanentResult.data.filter(
+										(area: any) => !existingAreaIds.has(area.id)
+									);
+								allAvoidanceAreas = [
+									...allAvoidanceAreas,
+									...additionalPermanentAreas,
+								];
+								console.log(
+									"Including additional permanent areas:",
+									additionalPermanentAreas.length
+								);
+							}
+						}
+					} catch (error) {
+						console.error(
+							"Error fetching permanent avoidance areas:",
+							error
+						);
+					}
 
-          // Create avoidance polygons from all areas
-          const avoidancePolygons = allAvoidanceAreas.map((area) => {
-            // Extract polygon coordinates in the right format
-            const polygonCoords = area.points
-              .sort((a, b) => a.order - b.order)
-              .map((point) => [point.longitude, point.latitude]);
+					// Create avoidance polygons from all areas
+					const avoidancePolygons = allAvoidanceAreas.map((area) => {
+						// Extract polygon coordinates in the right format
+						const polygonCoords = area.points
+							.sort((a, b) => a.order - b.order)
+							.map((point) => [point.longitude, point.latitude]);
 
-            // Close the polygon by adding the first point at the end if needed
-            if (
-              polygonCoords.length > 0 &&
-              (polygonCoords[0][0] !==
-                polygonCoords[polygonCoords.length - 1][0] ||
-                polygonCoords[0][1] !==
-                  polygonCoords[polygonCoords.length - 1][1])
-            ) {
-              polygonCoords.push(polygonCoords[0]);
-            }
+						// Close the polygon by adding the first point at the end if needed
+						if (
+							polygonCoords.length > 0 &&
+							(polygonCoords[0][0] !==
+								polygonCoords[polygonCoords.length - 1][0] ||
+								polygonCoords[0][1] !==
+									polygonCoords[polygonCoords.length - 1][1])
+						) {
+							polygonCoords.push(polygonCoords[0]);
+						}
 
-            return polygonCoords;
-          });
+						return polygonCoords;
+					});
 
-          // Add avoidance areas to request options
-          directionsBody.options = {
-            avoid_polygons: {
-              type: "MultiPolygon",
-              coordinates: avoidancePolygons.map((polygon) => [polygon]),
-            },
-          };
-        }
+					// Add avoidance areas to request options
+					directionsBody.options = {
+						avoid_polygons: {
+							type: "MultiPolygon",
+							coordinates: avoidancePolygons.map((polygon) => [polygon]),
+						},
+					};
+				}
 
 				// Call the routing API to get the new route
 				const directionsResponse = await fetch(
@@ -962,84 +981,54 @@ const RouteHistoryPage = () => {
 					}
 				);
 
-        if (!directionsResponse.ok) {
-          const errorData = await directionsResponse.json();
-          console.error("Directions API error:", errorData);
-          throw new Error(
-            `Error getting directions: ${directionsResponse.statusText}`
-          );
-        }
+				if (!directionsResponse.ok) {
+					const errorData = await directionsResponse.json();
+					console.error("Directions API error:", errorData);
+					throw new Error(
+						`Error getting directions: ${directionsResponse.statusText}`
+					);
+				}
 
 				const directionsData = await directionsResponse.json();
 				const newRouteGeometry = directionsData.routes[0].geometry;
 				const extras = directionsData.routes[0].extras;
 
-        // Update the route plan with the new geometry and extras
-        const updateResponse = await fetch(
-          `/api/v1/route-plans/${routePlan.id}`,
-          {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              route_geometry: newRouteGeometry,
-              extras: extras,
-            }),
-          }
-        );
+				// Update the route plan with the new geometry and extras
+				const updateResponse = await fetch(
+					`/api/v1/route-plans/${routePlan.id}`,
+					{
+						method: "PUT",
+						headers: {
+							"Content-Type": "application/json",
+							Authorization: `Bearer ${token}`,
+						},
+						body: JSON.stringify({
+							route_geometry: newRouteGeometry,
+							extras: extras,
+						}),
+					}
+				);
 
-        if (!updateResponse.ok) {
-          throw new Error(
-            `Error updating route plan: ${updateResponse.statusText}`
-          );
-        }
+				if (!updateResponse.ok) {
+					throw new Error(
+						`Error updating route plan: ${updateResponse.statusText}`
+					);
+				}
 
-        // Also update local state with the new route information
-        const allAreasNotPending = updatedAvoidanceAreas.every(
-          (area) => area.status !== "pending"
-        );
+				// Also update local state with the new route information
+				setRoutePlan({
+					...routePlan,
+					avoidance_areas: updatedAvoidanceAreas,
+					route_geometry: newRouteGeometry,
+					extras: extras,
+				});
 
-        let updatedStatus = routePlan.status;
-        // If all areas are not pending, update the route status to "planned"
-        if (allAreasNotPending && routePlan.status === "on confirmation") {
-          updatedStatus = "planned";
-          // Update the status on the API
-          try {
-            const statusResponse = await fetch(
-              `/api/v1/route-plans/${routePlan.id}/status`,
-              {
-                method: "PUT",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({ status: "planned" }),
-              }
-            );
-
-            if (!statusResponse.ok) {
-              console.error("Failed to update route status to planned");
-            }
-          } catch (statusError) {
-            console.error("Error updating route status:", statusError);
-          }
-        }
-
-        setRoutePlan({
-          ...routePlan,
-          avoidance_areas: updatedAvoidanceAreas,
-          route_geometry: newRouteGeometry,
-          extras: extras,
-        });
-
-        // Update map display
-        const latLngs = getLatLngsForMap(newRouteGeometry) as [
-          number,
-          number
-        ][];
-        setRouteLatLngs(latLngs);
+				// Update map display
+				const latLngs = getLatLngsForMap(newRouteGeometry) as [
+					number,
+					number
+				][];
+				setRouteLatLngs(latLngs);
 
 				// Process waytype segments
 				setSegments([]);
@@ -1071,43 +1060,13 @@ const RouteHistoryPage = () => {
 					setTollways(newTollways);
 				}
 
-        alert("Area berhasil dihapus dan rute telah diperbarui");
-      } else {
-        // If the area wasn't approved, just update the local state
-        const allAreasNotPending = updatedAvoidanceAreas.every(
-          (area) => area.status !== "pending"
-        );
-
-        let updatedStatus = routePlan.status;
-        // If all areas are not pending, update the route status to "planned"
-        if (allAreasNotPending && routePlan.status === "on confirmation") {
-          updatedStatus = "planned";
-          // Update the status on the API
-          try {
-            const statusResponse = await fetch(
-              `/api/v1/route-plans/${routePlan.id}/status`,
-              {
-                method: "PUT",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({ status: "planned" }),
-              }
-            );
-
-            if (!statusResponse.ok) {
-              console.error("Failed to update route status to planned");
-            }
-          } catch (statusError) {
-            console.error("Error updating route status:", statusError);
-          }
-        }
-        setRoutePlan({
-          ...routePlan,
-          avoidance_areas: updatedAvoidanceAreas,
-          status: updatedStatus,
-        });
+				alert("Area berhasil dihapus dan rute telah diperbarui");
+			} else {
+				// If the area wasn't approved, just update the local state
+				setRoutePlan({
+					...routePlan,
+					avoidance_areas: updatedAvoidanceAreas,
+				});
 
 				// Also remove from impassibleMarkers
 				const updatedImpassibleMarkers = impassibleMarkers.filter(
@@ -1133,27 +1092,27 @@ const RouteHistoryPage = () => {
 		}
 	};
 
-  // Handle route plan deletion
-  const handleDeleteRoutePlan = async () => {
-    if (!routePlan) return;
+	// Handle route plan deletion
+	const handleDeleteRoutePlan = async () => {
+		if (!routePlan) return;
 
-    // Confirm first
-    if (
-      !confirm(
-        `Apakah Anda yakin ingin menghapus rute #${routePlan.id}?\nTindakan ini tidak dapat dibatalkan.`
-      )
-    ) {
-      return;
-    }
+		// Confirm first
+		if (
+			!confirm(
+				`Apakah Anda yakin ingin menghapus rute #${routePlan.id}?\nTindakan ini tidak dapat dibatalkan.`
+			)
+		) {
+			return;
+		}
 
-    setIsDeletingRoutePlan(true);
+		setIsDeletingRoutePlan(true);
 
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        router.push("/login");
-        return;
-      }
+		try {
+			const token = localStorage.getItem("token");
+			if (!token) {
+				router.push("/login");
+				return;
+			}
 
 			const response = await fetch(`/api/v1/route-plans/${routePlan.id}`, {
 				method: "DELETE",
@@ -1660,3 +1619,5 @@ const RouteHistoryPage = () => {
 };
 
 export default RouteHistoryPage;
+
+

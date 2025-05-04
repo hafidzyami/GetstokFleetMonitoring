@@ -2,17 +2,17 @@
 
 import "leaflet/dist/leaflet.css";
 
-import { MapContainer, Marker, Polyline, Popup, TileLayer, useMap, Circle } from "react-leaflet";
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import { MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from "react-leaflet";
+import React, { useEffect, useRef, useState } from "react";
 import { debugTruckRouteMatch, getRouteColor } from "@/app/utils/colorUtils";
 
 import ApexCharts from "apexcharts";
+import Image from "next/image";
 import L from "leaflet";
 import WaypointMarkers from "@/app/_components/WaypointMarkers";
 import { getLatLngsForMap } from "@/app/utils/polylineDecoder";
 import { initLeafletIcons } from "@/app/utils/leafletIcons";
 import { useAuth } from "@/app/contexts/AuthContext";
-import { calculateDistanceToPolyline } from "@/app/utils/distanceUtils";
 
 // Fix Leaflet icon issue
 delete L.Icon.Default.prototype._getIconUrl;
@@ -32,32 +32,6 @@ const truckIcon = new L.Icon({
   iconAnchor: [16, 32],
   popupAnchor: [0, -32],
 });
-
-// Custom truck icon for deviating trucks
-const deviatingTruckIcon = new L.Icon({
-  iconUrl: "/truck-icon.png", // Create this icon in red or with alert symbol
-  iconSize: [32, 32],
-  iconAnchor: [16, 32],
-  popupAnchor: [0, -32],
-});
-
-// Reference point icon
-const referencePointIcon = new L.Icon({
-  iconUrl: "/marker-icon.png", // Create a small dot/marker icon
-  iconSize: [16, 16],
-  iconAnchor: [8, 8],
-  popupAnchor: [0, -8],
-});
-
-// Custom divIcon for showing deviation distance
-const createDeviationLabelIcon = (distance) => {
-  return L.divIcon({
-    className: 'deviation-label',
-    html: `<div class="bg-red-500 text-white px-2 py-1 rounded text-xs font-bold">${distance.toFixed(0)}m</div>`,
-    iconSize: [40, 20],
-    iconAnchor: [20, 10]
-  });
-};
 
 // Component to automatically center map on active truck and route
 function MapController({ activePosition, activeTruck, activeRoutePlans }) {
@@ -133,39 +107,17 @@ const DashboardPage = () => {
   const [error, setError] = useState(null);
   const [activeRoutePlans, setActiveRoutePlans] = useState([]);
   const [loadingRoutePlans, setLoadingRoutePlans] = useState(false);
-  const [deviatingTrucks, setDeviatingTrucks] = useState({});
-  const [showDeviationAlert, setShowDeviationAlert] = useState(false);
-  const [deviationThreshold] = useState(35); // Deviation threshold in meters
-  const [deviationReferences, setDeviationReferences] = useState({});
   const socketRef = useRef(null);
   const componentMountedRef = useRef(true);
   const chartRef = useRef(null);
   const mapRef = useRef(null);
-  const markerRefs = useRef({});
   const { user } = useAuth();
+  const [selectedDay, setSelectedDay] = useState("Today");
+  const [viewMode, setViewMode] = useState("sensor"); // default view is 'sensor'
 
-  // Default center of the map (Jakarta as fallback)
-  const [defaultCenter, setDefaultCenter] = useState([-6.2, 106.816666]);
-  
-  // Effect to get user's current location
-  useEffect(() => {
-    if (typeof navigator !== 'undefined' && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          console.log('User location obtained:', latitude, longitude);
-          setDefaultCenter([latitude, longitude]);
-        },
-        (error) => {
-          console.error('Error getting user location:', error.message);
-          // Keep the default Jakarta location on error
-        },
-        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-      );
-    } else {
-      console.log('Geolocation is not supported by this browser.');
-    }
-  }, []);
+
+  // Default center of the map (Jakarta)
+  const defaultCenter = [-6.2, 106.816666];
   
   // Fungsi untuk decode polyline dari routeGeometry
   const decodeRouteGeometry = (encoded) => {
@@ -256,32 +208,15 @@ const DashboardPage = () => {
     // Fetch route plans
     fetchActiveRoutePlans();
 
-    // Set interval untuk refresh data setiap 60 detik
+    // Set interval untuk refresh data setiap 30 detik
     const interval = setInterval(() => {
       if (componentMountedRef.current) {
         fetchActiveRoutePlans();
       }
-    }, 60000);
+    }, 30000);
 
     return () => clearInterval(interval);
   }, []);
-  
-  // Effect untuk memeriksa deviasi truck ketika data truck atau rute berubah
-  useEffect(() => {
-    // Hanya periksa jika ada truck dan ada route plans
-    if (Object.keys(trucks).length > 0 && activeRoutePlans.length > 0) {
-      checkTruckDeviation();
-      
-      // Set interval untuk memeriksa deviasi setiap 60 detik
-      const deviationInterval = setInterval(() => {
-        if (componentMountedRef.current) {
-          checkTruckDeviation();
-        }
-      }, 60000);
-      
-      return () => clearInterval(deviationInterval);
-    }
-  }, [trucks, activeRoutePlans]);
 
   useEffect(() => {
     // This ensures we can track if the component is still mounted
@@ -482,83 +417,87 @@ const DashboardPage = () => {
     };
   }, []);
 
-  // Initialize chart when activeTruck changes
-  // Effect to handle popup opening/closing when active truck changes
-  useEffect(() => {
-    // Close all popups first
-    Object.values(markerRefs.current).forEach(marker => {
-      if (marker && marker.closePopup) {
-        marker.closePopup();
-      }
-    });
-    
-    // If there's an active truck, open its popup
-    if (activeTruck) {
-      // Short delay to ensure the map has updated
-      setTimeout(() => {
-        const markerRef = markerRefs.current[activeTruck.mac_id];
-        if (markerRef) {
-          markerRef.openPopup();
-        }
-      }, 50);
-    }
-  }, [activeTruck]);
+  const fuelDataPerDay = {
+    Today: [72, 70, 69, 71, 73, 75, 74, 72, 70, 69, 68],
+    Monday: [70, 71, 72, 73, 72, 71, 70, 69, 68, 68, 67],
+    Tuesday: [65, 66, 67, 68, 69, 70, 71, 72, 72, 71, 70],
+    Wednesday: [75, 74, 73, 72, 71, 70, 69, 68, 67, 66, 65],
+    Thursday: [66, 68, 70, 72, 74, 76, 74, 72, 70, 68, 66],
+    Friday: [73, 72, 71, 70, 69, 68, 67, 66, 65, 64, 63],
+    Saturday: [74, 72, 70, 68, 66, 64, 66, 68, 70, 72, 74],
+    Sunday: [68, 69, 70, 71, 70, 69, 68, 67, 66, 65, 64],
+  };
 
+
+  // Initialize chart when activeTruck changes
   useEffect(() => {
     if (!activeTruck) return;
-
-    const initChart = () => {
+    if (viewMode !== 'sensor') return;
       const chartElement = document.querySelector("#fleet-chart");
-      if (!chartElement) return;
+  if (!chartElement) return;
 
-      if (chartRef.current) {
-        chartRef.current.destroy();
-      }
+  if (chartRef.current) {
+    chartRef.current.destroy();
+  }
 
-      const options = {
-        chart: {
-          type: "line",
-          height: 200,
-        },
-        series: [
-          {
-            name: "Fuel Level",
-            data: [70, 65, 60, 72, 68, 74, 71, 69, 73], // Sample data, replace with real truck data
-          },
-        ],
-        xaxis: {
-          categories: [
-            "Jan",
-            "Feb",
-            "Mar",
-            "Apr",
-            "May",
-            "Jun",
-            "Jul",
-            "Aug",
-            "Sep",
-          ],
-        },
-        colors: ["#009EFF"],
-        stroke: {
-          curve: "smooth",
-        },
-      };
+  // Jam dari 07:00 - 17:00
+  const hours = Array.from({ length: 11 }, (_, i) => {
+    const hour = i + 7;
+    return `${hour.toString().padStart(2, "0")}:00`;
+  });
 
-      chartRef.current = new ApexCharts(chartElement, options);
-      chartRef.current.render();
-    };
+  // Dummy BBM data per hari
+  const fuelDataPerDay = {
+    Today: [72, 70, 69, 71, 73, 75, 74, 72, 70, 69, 68],
+    Monday: [70, 71, 72, 73, 72, 71, 70, 69, 68, 68, 67],
+    Tuesday: [65, 66, 67, 68, 69, 70, 71, 72, 72, 71, 70],
+    Wednesday: [75, 74, 73, 72, 71, 70, 69, 68, 67, 66, 65],
+    Thursday: [66, 68, 70, 72, 74, 76, 74, 72, 70, 68, 66],
+    Friday: [73, 72, 71, 70, 69, 68, 67, 66, 65, 64, 63],
+    Saturday: [74, 72, 70, 68, 66, 64, 66, 68, 70, 72, 74],
+    Sunday: [68, 69, 70, 71, 70, 69, 68, 67, 66, 65, 64],
+  };
 
-    // Initialize chart with a small delay to ensure the element is ready
-    setTimeout(initChart, 200);
+  const fuelData = fuelDataPerDay[selectedDay] || fuelDataPerDay["Today"];
 
-    return () => {
-      if (chartRef.current) {
-        chartRef.current.destroy();
-        chartRef.current = null;
-      }
-    };
-  }, [activeTruck]);
+  const options = {
+    chart: {
+      type: "line",
+      height: 200,
+    },
+    series: [
+      {
+        name: "Fuel Level",
+        data: fuelData,
+      },
+    ],
+    xaxis: {
+      categories: hours,
+      title: {
+        text: "Waktu (Jam)",
+      },
+    },
+    yaxis: {
+      title: {
+        text: "Level BBM (%)",
+      },
+    },
+    colors: ["#009EFF"],
+    stroke: {
+      curve: "smooth",
+    },
+  };
+
+  chartRef.current = new ApexCharts(chartElement, options);
+  chartRef.current.render();
+
+  return () => {
+    if (chartRef.current) {
+      chartRef.current.destroy();
+      chartRef.current = null;
+    }
+  };
+}, [activeTruck, selectedDay, viewMode]);
 
   // Fungsi untuk mengecek apakah truck memiliki rute aktif
   const truckHasActiveRoute = (truck) => {
@@ -571,77 +510,6 @@ const DashboardPage = () => {
     return activeRoutePlans.some(routePlan => {
       return debugTruckRouteMatch(truck, routePlan);
     });
-  };
-  
-  // Fungsi untuk mengecek deviasi truck dari rute yang ditentukan
-  const checkTruckDeviation = () => {
-    // Buat objek untuk menyimpan status deviasi setiap truck
-    const newDeviatingTrucks = {};
-    const newDeviationReferences = {};
-    let anyTruckDeviating = false;
-    
-    // Periksa setiap truck yang memiliki posisi
-    Object.values(trucks).forEach(truck => {
-      // Skip jika tidak ada posisi latitude/longitude
-      if (!truck.latitude || !truck.longitude) return;
-      
-      // Cari rute yang sesuai dengan truck ini
-      const truckRoutes = activeRoutePlans.filter(routePlan => {
-        return debugTruckRouteMatch(truck, routePlan);
-      });
-      
-      // Skip jika tidak memiliki rute aktif
-      if (truckRoutes.length === 0) return;
-      
-      // Periksa jarak truck ke rute terdekat
-      truckRoutes.forEach(routePlan => {
-        try {
-          // Decode polyline rute
-          const routePolyline = getLatLngsForMap(routePlan.route_geometry);
-          if (!routePolyline || routePolyline.length === 0) return;
-          
-          // Hitung jarak dari posisi truck ke polyline rute
-          const result = calculateDistanceToPolyline(
-            [truck.latitude, truck.longitude],
-            routePolyline
-          );
-          
-          const distanceToRoute = result.distance;
-          const referencePoint = result.referencePoint;
-          const segmentIndex = result.segmentIndex;
-          
-          console.log(`Truck ${truck.plate_number || truck.mac_id} deviation: ${distanceToRoute.toFixed(2)}m`);
-          
-          // Check if truck deviates more than the threshold
-          if (distanceToRoute >= deviationThreshold) {
-            newDeviatingTrucks[truck.mac_id] = {
-              truck: truck,
-              routePlan: routePlan,
-              distance: distanceToRoute,
-              timestamp: new Date()
-            };
-            
-            // Simpan referensi untuk visualisasi
-            newDeviationReferences[truck.mac_id] = {
-              truckPosition: [truck.latitude, truck.longitude],
-              referencePoint: referencePoint,
-              segmentIndex: segmentIndex,
-              distance: distanceToRoute,
-              routeId: routePlan.id
-            };
-            
-            anyTruckDeviating = true;
-          }
-        } catch (error) {
-          console.error(`Error checking deviation for truck ${truck.plate_number || truck.mac_id}:`, error);
-        }
-      });
-    });
-    
-    // Update state dengan truck-truck yang menyimpang
-    setDeviatingTrucks(newDeviatingTrucks);
-    setDeviationReferences(newDeviationReferences);
-    setShowDeviationAlert(anyTruckDeviating);
   };
 
   // Modified to toggle selection when clicking the same truck
@@ -656,7 +524,6 @@ const DashboardPage = () => {
     } else {
       // Otherwise select the new truck
       setActiveTruck(truck);
-      // Popup will be opened by the useEffect that watches activeTruck
     }
   };
 
@@ -688,48 +555,6 @@ const DashboardPage = () => {
 
   return (
     <div className="">
-      {/* Deviation Alert Notification */}
-      {showDeviationAlert && (
-        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded shadow-md">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <i className="bx bx-error-circle text-2xl text-red-500"></i>
-            </div>
-            <div className="ml-3">
-              <p className="font-bold">Route Deviation Alert</p>
-              <p className="text-sm">
-                {Object.keys(deviatingTrucks).length === 1 
-                  ? `1 truck is deviating from its assigned route by more than ${deviationThreshold} meters.` 
-                  : `${Object.keys(deviatingTrucks).length} trucks are deviating from their assigned routes by more than ${deviationThreshold} meters.`
-                }
-              </p>
-            </div>
-            <div className="ml-auto">
-              <button 
-                onClick={() => setShowDeviationAlert(false)}
-                className="text-red-500 hover:text-red-700 focus:outline-none"
-              >
-                <i className="bx bx-x text-xl"></i>
-              </button>
-            </div>
-          </div>
-          <div className="mt-2 max-h-32 overflow-y-auto">
-            {Object.values(deviatingTrucks).map(({truck, distance}) => (
-              <div key={truck.mac_id} className="flex justify-between items-center text-sm mt-1 border-t border-red-200 pt-1">
-                <span className="font-medium">{truck.plate_number || truck.mac_id}</span>
-                <span>Off route by <span className="font-bold">{distance.toFixed(0)}m</span></span>
-                <button 
-                  onClick={() => handleTruckSelect(truck)} 
-                  className="px-2 py-1 bg-red-200 hover:bg-red-300 rounded text-xs"
-                >
-                  View
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      
       {/* Connection Status and Route Legend */}
       <div className="flex justify-between mb-4">
         {/* Legend untuk active routes */}
@@ -810,11 +635,9 @@ const DashboardPage = () => {
                   className={`bg-white rounded-lg p-3 border cursor-pointer transition duration-200 hover:shadow-md ${
                     activeTruck && activeTruck.mac_id === truck.mac_id
                       ? "border-l-4 border-[#009EFF] bg-[#E6F5FF] shadow-md"
-                      : deviatingTrucks[truck.mac_id]
-                        ? "border-l-4 border-red-500 bg-red-50" 
-                        : truckHasActiveRoute(truck) 
-                          ? "border-l-4 border-green-500 border-opacity-70" 
-                          : "border-gray-200"
+                      : truckHasActiveRoute(truck) 
+                        ? "border-l-4 border-green-500 border-opacity-70" 
+                        : "border-gray-200"
                   }`}
                   onClick={() => handleTruckSelect(truck)}
                 >
@@ -827,12 +650,6 @@ const DashboardPage = () => {
                         </h3>
                         {truckHasActiveRoute(truck) && (
                           <span className="w-2 h-2 rounded-full bg-green-500" title="Has active route"></span>
-                        )}
-                        {deviatingTrucks[truck.mac_id] && (
-                          <span className="flex items-center text-xs text-red-500 font-bold ml-1 animate-pulse" title={`Off route by ${deviatingTrucks[truck.mac_id].distance.toFixed(0)}m`}>
-                            <i className="bx bxs-error-circle mr-1"></i>
-                            Off Route!
-                          </span>
                         )}
                       </div>
                       <span className="text-xs text-gray-500">
@@ -891,68 +708,37 @@ const DashboardPage = () => {
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
 
-              {Object.values(trucks).map((truck) => {
-                // For each truck with position data, create a marker with popup
-                if (!truck.latitude || !truck.longitude) return null;
-                
-                // Create marker element with TruckMarker component
-                return (
-                  <TruckMarker 
-                    key={truck.mac_id}
-                    truck={truck}
-                    isDeviating={!!deviatingTrucks[truck.mac_id]}
-                    deviation={deviatingTrucks[truck.mac_id]}
-                    isActive={activeTruck && activeTruck.mac_id === truck.mac_id}
-                    onClick={handleMarkerClick}
-                    markerRefs={markerRefs}
-                  />
-                );
-              })}
-
-              {/* Visualisasi Titik Referensi dan Deviasi */}
-              {Object.entries(deviationReferences).map(([mac_id, deviationInfo]) => (
-                <React.Fragment key={`deviation-vis-${mac_id}`}>
-                  {/* Titik referensi pada polyline */}
+              {Object.values(trucks).map((truck) =>
+                truck.latitude && truck.longitude ? (
                   <Marker
-                    position={deviationInfo.referencePoint}
-                    icon={referencePointIcon}
+                    key={truck.mac_id}
+                    position={[truck.latitude, truck.longitude]}
+                    icon={truckIcon}
+                    eventHandlers={{
+                      click: () => handleMarkerClick(truck),
+                    }}
                   >
                     <Popup>
                       <div>
-                        <h3 className="font-bold text-sm">Reference Point</h3>
-                        <p className="text-xs">This is the closest point on the route to truck {trucks[mac_id]?.plate_number || mac_id}</p>
-                        <p className="text-xs mt-1">
-                          Position: {deviationInfo.referencePoint[0].toFixed(6)}, {deviationInfo.referencePoint[1].toFixed(6)}
+                        <h3 className="font-bold">
+                          {truck.plate_number || `Truck ${truck.mac_id}`}
+                        </h3>
+                        <p>Type: {truck.type || "Unknown"}</p>
+                        <p>
+                          Fuel:{" "}
+                          {truck.fuel !== undefined
+                            ? `${truck.fuel.toFixed(2)}%`
+                            : "N/A"}
+                        </p>
+                        <p>
+                          Position: {truck.latitude.toFixed(6)},{" "}
+                          {truck.longitude.toFixed(6)}
                         </p>
                       </div>
                     </Popup>
                   </Marker>
-                  
-                  {/* Garis yang menunjukkan deviasi */}
-                  <Polyline
-                    positions={[
-                      deviationInfo.truckPosition,
-                      deviationInfo.referencePoint
-                    ]}
-                    pathOptions={{
-                      color: 'red',
-                      weight: 2,
-                      dashArray: '5, 5',
-                      opacity: 0.7
-                    }}
-                  />
-                  
-                  {/* Label jarak di tengah garis */}
-                  <Marker
-                    position={[
-                      (deviationInfo.truckPosition[0] + deviationInfo.referencePoint[0]) / 2,
-                      (deviationInfo.truckPosition[1] + deviationInfo.referencePoint[1]) / 2
-                    ]}
-                    icon={createDeviationLabelIcon(deviationInfo.distance)}
-                    interactive={false}
-                  />
-                </React.Fragment>
-              ))}
+                ) : null
+              )}
 
               {activeTruck && activeTruck.latitude && activeTruck.longitude && (
                 <MapController 
@@ -1014,12 +800,26 @@ const DashboardPage = () => {
             <div className="bg-white shadow-md py-3 rounded-lg w-full transition-opacity duration-300">
               <div className="flex flex-col md:flex-row justify-between mb-2 gap-4 px-4">
                 <div className="flex gap-2">
-                  <button className="p-2 bg-[#009EFF] text-white rounded-[8px] flex gap-2 items-center text-sm">
-                    <i className="bx bx-radar text-lg"></i> Sensor
-                  </button>
-                  <button className="p-2 text-[#009EFF] border border-[#009EFF] rounded-[8px] flex gap-2 items-center text-sm">
-                    <i className="bx bx-data text-lg"></i> Data
-                  </button>
+                <button
+          onClick={() => setViewMode('sensor')}
+          className={`p-2 rounded-[8px] flex gap-2 items-center text-sm ${
+            viewMode === 'sensor'
+              ? 'bg-[#009EFF] text-white'
+              : 'text-[#009EFF] border border-[#009EFF]'
+          }`}
+        >
+          <i className="bx bx-radar text-lg"></i> Sensor
+        </button>
+        <button
+          onClick={() => setViewMode('data')}
+          className={`p-2 rounded-[8px] flex gap-2 items-center text-sm ${
+            viewMode === 'data'
+              ? 'bg-[#009EFF] text-white'
+              : 'text-[#009EFF] border border-[#009EFF]'
+          }`}
+        >
+          <i className="bx bx-data text-lg"></i> Data
+        </button>
                 </div>
                 <div className="flex justify-between md:justify-end gap-3 text-xs md:text-sm">
                   <div className="flex flex-col items-center">
@@ -1036,7 +836,60 @@ const DashboardPage = () => {
                   </div>
                 </div>
               </div>
-              <div id="fleet-chart" className="w-full h-[200px]" />
+              {viewMode === "sensor" && (
+  <div id="fleet-chart" className="w-full h-[200px]" />
+)}
+{viewMode === "data" && (
+  <div className="p-4 overflow-x-auto">
+    <h4 className="text-sm font-semibold mb-2">Data OCR</h4>
+    <table className="w-full text-sm border border-gray-200 rounded">
+      <thead className="bg-[#009EFF] text-white">
+        <tr>
+          <th className="p-2 border">Waktu</th>
+          <th className="p-2 border">Nama Produk</th>
+          <th className="p-2 border">Harga/Liter</th>
+          <th className="p-2 border">Volume</th>
+          <th className="p-2 border">Total Harga</th>
+        </tr>
+      </thead>
+      <tbody className="text-center">
+        {[
+          {
+            waktu: "10/01/2025 - 10:30",
+            produk: "Bensin Pertalite",
+            harga: "10.000",
+            volume: "10 Liter",
+            total: "100.000",
+          },
+          {
+            waktu: "10/01/2025 - 10:30",
+            produk: "Bensin Pertalite",
+            harga: "10.000",
+            volume: "10 Liter",
+            total: "100.000",
+          },
+          {
+            waktu: "10/01/2025 - 10:30",
+            produk: "Bensin Pertalite",
+            harga: "10.000",
+            volume: "10 Liter",
+            total: "100.000",
+          },
+        ].map((item, index) => (
+          <tr key={index}>
+            <td className="p-2 border">{item.waktu}</td>
+            <td className="p-2 border">{item.produk}</td>
+            <td className="p-2 border">{item.harga}</td>
+            <td className="p-2 border">{item.volume}</td>
+            <td className="p-2 border">{item.total}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+)}
+
+
             </div>
           )}
         </div>
@@ -1128,35 +981,34 @@ const DashboardPage = () => {
               </div>
 
               {/* Right column (Activity) - Only on small screens */}
-              <div className="flex-1 pl-4 border-l lg:border-l-0 lg:pl-0 lg:pt-4 lg:mt-4 lg:border-t">
+             <div className="flex-1 pl-4 border-l lg:border-l-0 lg:pl-0 lg:pt-4 lg:mt-4 lg:border-t">
                 <span className="text-xs text-[#009EFF] font-medium block mb-2">Aktivitas</span>
                 <div className="flex flex-col gap-2 overflow-y-auto text-xs">
                   {aktivitas.slice(0, 4).map((item, index) => (
                     <div
-                      key={index}
-                      className="border border-[#F1F1F1] p-3 rounded-md"
-                    >
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="font-medium text-[#484848]">
-                          {item.day}
-                          {item.date && (
-                            <span className="text-[#ADADAD] font-light ml-2">
-                              {item.date}
-                            </span>
-                          )}
-                        </span>
-                        <span className="text-yellow-500">!</span>
-                      </div>
-                      <div className="w-full h-1 rounded-[8px] bg-gray-300 relative">
-                        <div
-                          className="h-full bg-blue-500 rounded-[8px]"
-                          style={{ width: `${45 + Math.random() * 30}%` }}
-                        />
-                      </div>
+                    key={index}
+                    onClick={() => setSelectedDay(item.day)}
+                    className={`border border-[#F1F1F1] p-3 rounded-md cursor-pointer ${
+                      selectedDay === item.day ? "bg-[#E6F5FF] border-[#009EFF]" : ""
+                    }`}
+                  >
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="font-medium text-[#484848]">
+                        {item.day}
+                        {item.date && (
+                          <span className="text-[#ADADAD] font-light ml-2">
+                            {item.date}
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-yellow-500">!</span>
                     </div>
+                  </div>
+                  
                   ))}
                 </div>
               </div>
+              
             </div>
           </div>
         )}
@@ -1164,70 +1016,5 @@ const DashboardPage = () => {
     </div>
   );
 };
-
-// Helper component to handle marker and popup management
-function TruckMarker({ truck, isDeviating, deviation, isActive, onClick, markerRefs }) {
-  // Create reference for this marker
-  const popupRef = useRef();
-  
-  // Store marker reference when it's created
-  const eventHandlers = useMemo(() => ({
-    add: (e) => {
-      markerRefs.current[truck.mac_id] = e.target;
-    },
-    remove: () => {
-      delete markerRefs.current[truck.mac_id];
-    }
-  }), [truck.mac_id, markerRefs]);
-  
-  // Effect to handle popup when active state changes
-  useEffect(() => {
-    if (!popupRef.current) return;
-    
-    if (isActive) {
-      popupRef.current.openPopup();
-    } else {
-      popupRef.current.closePopup();
-    }
-  }, [isActive]);
-  
-  return (
-    <Marker
-      position={[truck.latitude, truck.longitude]}
-      icon={isDeviating ? deviatingTruckIcon : truckIcon}
-      eventHandlers={{
-        ...eventHandlers,
-        click: () => onClick(truck)
-      }}
-    >
-      <Popup ref={popupRef}>
-        <div>
-          <h3 className="font-bold">
-            {truck.plate_number || `Truck ${truck.mac_id}`}
-            {isDeviating && (
-              <span className="ml-2 text-red-500 text-sm">(Off Route!)</span>
-            )}
-          </h3>
-          <p>Type: {truck.type || "Unknown"}</p>
-          <p>
-            Fuel:{" "}
-            {truck.fuel !== undefined
-              ? `${truck.fuel.toFixed(2)}%`
-              : "N/A"}
-          </p>
-          <p>
-            Position: {truck.latitude.toFixed(6)},{" "}
-            {truck.longitude.toFixed(6)}
-          </p>
-          {isDeviating && deviation && (
-            <p className="text-red-500 font-medium mt-2">
-              Off route by {deviation.distance.toFixed(0)} meters!
-            </p>
-          )}
-        </div>
-      </Popup>
-    </Marker>
-  );
-}
 
 export default DashboardPage;
