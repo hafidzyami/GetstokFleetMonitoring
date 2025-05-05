@@ -78,13 +78,17 @@ interface ApiResponse {
   context?: string;
   id?: string;
   method?: string;
-  data: RoutePlan;
+  data: {
+    id: number;
+    route_plan: RoutePlan;
+  };
   error?: {
     code: number;
     message: string;
     errors?: any[];
   };
 }
+
 
 // Define the marker types
 interface MapMarker {
@@ -166,7 +170,8 @@ const DriverActiveRoutePage = () => {
         throw new Error(`Error ${response.status}: ${response.statusText}`);
       }
 
-      const data: any = await response.json();
+      const data: ApiResponse = await response.json();
+
       console.log("Active route data:", data);
       
       if (!data.data) {

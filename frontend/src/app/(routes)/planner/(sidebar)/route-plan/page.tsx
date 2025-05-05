@@ -92,8 +92,7 @@ const BuatRutePage = () => {
 
   // Reason impassible route
   const [avoidanceReason, setAvoidanceReason] = useState("");
-  const [isPermanent, setIsPermanent] = useState(false);
-  const [avoidancePhoto, setAvoidancePhoto] = useState<File | null>(null);
+  const [isPermanent, setIsPermanent] = useState(false)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -368,7 +367,7 @@ const BuatRutePage = () => {
         setPhotoKey(data.data.key);
 
         // Jangan simpan file di avoidancePhoto lagi, karena kita sudah punya URL
-        setAvoidancePhoto(null);
+        // setAvoidancePhoto(null);
       } catch (error) {
         console.error("Error uploading photo:", error);
         alert("Gagal mengupload foto. Silakan coba lagi.");
@@ -710,6 +709,9 @@ const BuatRutePage = () => {
     
     const avgLat = lats.reduce((a, b) => a + b, 0) / lats.length;
     const avgLng = lngs.reduce((a, b) => a + b, 0) / lngs.length;
+
+    console.debug("Center of polygon:", avgLat, avgLng);
+
     
     // Create a bounds to fit all points
     const bounds = L.latLngBounds(markers.map(marker => L.latLng(marker.position[0], marker.position[1])));
@@ -892,7 +894,7 @@ const BuatRutePage = () => {
     setImpassibleMarkers([]);
     setAvoidanceReason("");
     setIsPermanent(false);
-    setAvoidancePhoto(null);
+    // setAvoidancePhoto(null);
     setFlagImpassible(false);
 
     // Reset file input
@@ -961,8 +963,9 @@ const BuatRutePage = () => {
       });
 
       // Handle format plat nomor
-      let parts = vehiclePlate.split(" | ");
-      let vehicle_plate = `${parts[0]}/${parts[1]}`;
+      const parts = vehiclePlate.split(" | ");
+      const vehicle_plate = `${parts[0]}/${parts[1]}`;
+
 
       console.log("routeGeometry", routeGeometry);
 
@@ -1483,7 +1486,7 @@ const BuatRutePage = () => {
                     : (avoidanceInfo as Marker[]);
 
                   // Get photo URL if available
-                  const photoURL = isNewFormat ? (avoidanceInfo as AvoidanceInfo).photoURL : null;
+                  // const photoURL = isNewFormat ? (avoidanceInfo as AvoidanceInfo).photoURL : null;
 
                   return (
                     <div
