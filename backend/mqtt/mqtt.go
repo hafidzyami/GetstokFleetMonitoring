@@ -59,8 +59,6 @@ type MQTTClient struct {
 var (
 	truckRepo        repository.TruckRepository
 	truckHistoryRepo repository.TruckHistoryRepository
-	routePlanRepo    repository.RoutePlanRepository
-	deviationRepo    repository.RouteDeviationRepository
 	deviationService service.RouteDeviationService
 )
 
