@@ -74,16 +74,6 @@ func SetTruckHistoryRepository(repo repository.TruckHistoryRepository) {
 	truckHistoryRepo = repo
 }
 
-// SetRoutePlanRepository sets the route plan repository for MQTT handlers
-func SetRoutePlanRepository(repo repository.RoutePlanRepository) {
-	routePlanRepo = repo
-}
-
-// SetRouteDeviationRepository sets the route deviation repository for MQTT handlers
-func SetRouteDeviationRepository(repo repository.RouteDeviationRepository) {
-	deviationRepo = repo
-}
-
 // SetRouteDeviationService sets the route deviation service for MQTT handlers
 func SetRouteDeviationService(svc service.RouteDeviationService) {
 	deviationService = svc

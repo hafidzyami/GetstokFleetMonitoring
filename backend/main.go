@@ -83,8 +83,6 @@ func main() {
 	utils.SetUserRepository(userRepo)
 	mqtt.SetTruckRepository(truckRepo)
 	mqtt.SetTruckHistoryRepository(truckHistoryRepo)
-	mqtt.SetRoutePlanRepository(routePlanRepo)
-	mqtt.SetRouteDeviationRepository(deviationRepo)
 	mqtt.SetRouteDeviationService(deviationService)
 
 	// Websocket
