@@ -2,11 +2,13 @@
 
 import "boxicons/css/boxicons.min.css";
 
-import React, { useRef, useState, useEffect } from "react";
-// import axios from "axios";
+import React, { useEffect, useRef, useState } from "react";
 
 import Image from "next/image";
 import { createWorker } from "tesseract.js";
+
+// import axios from "axios";
+
 
 interface Truck {
 	id: string;
@@ -500,17 +502,17 @@ const KuitansiPage = () => {
 									Batal
 								</button>
 								<button
-									className="px-6 py-2 rounded-lg bg-[#009EFF] text-white font-medium hover:bg-[#0088DD] transition disabled:opacity-50"
-									onClick={() =>
-										setIsOpen({
-											...isOpen,
-											UnggahKuitansi: false,
-											DeteksiKuitansi: true,
-										})
-									}
-								>
-									Submit
-								</button>
+                                    className="px-6 py-2 rounded-lg bg-[#009EFF] text-white font-medium hover:bg-[#0088DD] transition disabled:opacity-50"
+                                    onClick={() => {
+                                        setIsOpen({
+                                            ...isOpen,
+                                            UnggahKuitansi: false,
+                                            HasilDeteksiKuitanasi: true,
+                                        })
+                                    }}
+                                >
+                                    Submit
+                                </button>
 							</div>
 						</div>
 					</div>
