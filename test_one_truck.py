@@ -4,9 +4,9 @@ import json
 import datetime
 
 # MQTT settings
-broker = "mqtt.eclipseprojects.io"
+broker = "staging.getstokfms.com"
 port = 1883
-mac_id = "MAC2"
+mac_id = "MAC1"
 topic_prefix = "getstokfms"
 
 # Payloads
@@ -31,8 +31,8 @@ position_payload = {
 
 # position_payload = {
 #     "Timestamp": timestamp,
-#     "Latitude": -6.881644473995715,
-#     "Longitude": 107.61256547847621
+#     "Latitude": -6.888639013514371,
+#     "Longitude": 107.61343560992547
 # }
 
 # Connect and publish
