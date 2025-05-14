@@ -35,24 +35,24 @@ func NewFuelReceiptController(fuelReceiptService service.FuelReceiptService) *Fu
 // @Failure 401 {object} model.BaseResponse "Unauthorized"
 // @Router /fuel-receipts [post]
 func (c *FuelReceiptController) CreateFuelReceipt(ctx *fiber.Ctx) error {
-	 var req model.FuelReceiptCreateRequest
-    if err := ctx.BodyParser(&req); err != nil {
-        return ctx.Status(fiber.StatusBadRequest).JSON(model.SimpleErrorResponse(
-            fiber.StatusBadRequest,
-            "Invalid request body format",
-        ))
-    }
-    
-    // Validate request - hanya field utama
-    if req.ProductName == "" || req.Price <= 0 || req.Volume <= 0 || req.TotalPrice <= 0 || req.TruckID == 0 {
-        return ctx.Status(fiber.StatusBadRequest).JSON(model.SimpleErrorResponse(
-            fiber.StatusBadRequest,
-            "Required fields: product_name, price > 0, volume > 0, total_price > 0, truck_id > 0",
-        ))
-    }
-    
-    // Get driver ID from token
-    driverID := ctx.Locals("userId").(uint)
+	var req model.FuelReceiptCreateRequest
+	if err := ctx.BodyParser(&req); err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(model.SimpleErrorResponse(
+			fiber.StatusBadRequest,
+			"Invalid request body format",
+		))
+	}
+
+	// Validate request - hanya field utama
+	if req.ProductName == "" || req.Price <= 0 || req.Volume <= 0 || req.TotalPrice <= 0 || req.TruckID == 0 {
+		return ctx.Status(fiber.StatusBadRequest).JSON(model.SimpleErrorResponse(
+			fiber.StatusBadRequest,
+			"Required fields: product_name, price > 0, volume > 0, total_price > 0, truck_id > 0",
+		))
+	}
+
+	// Get driver ID from token
+	driverID := ctx.Locals("userId").(uint)
 
 	// Create fuel receipt
 	receipt, err := c.fuelReceiptService.CreateFuelReceipt(req, driverID)
@@ -292,7 +292,7 @@ func (c *FuelReceiptController) GetAllFuelReceipts(ctx *fiber.Ctx) error {
 
 	// Parse pagination parameters
 	pageStr := ctx.Query("page", "1")
-	limitStr := ctx.Query("limit", "10")
+	limitStr := ctx.Query("limit", "50")
 
 	page, err := strconv.Atoi(pageStr)
 	if err != nil || page < 1 {
@@ -350,7 +350,7 @@ func (c *FuelReceiptController) GetFuelReceiptsByDriverID(ctx *fiber.Ctx) error 
 
 	// Parse pagination parameters
 	pageStr := ctx.Query("page", "1")
-	limitStr := ctx.Query("limit", "10")
+	limitStr := ctx.Query("limit", "50")
 
 	page, err := strconv.Atoi(pageStr)
 	if err != nil || page < 1 {
@@ -412,7 +412,7 @@ func (c *FuelReceiptController) GetFuelReceiptsByTruckID(ctx *fiber.Ctx) error {
 
 	// Parse pagination parameters
 	pageStr := ctx.Query("page", "1")
-	limitStr := ctx.Query("limit", "10")
+	limitStr := ctx.Query("limit", "50")
 
 	page, err := strconv.Atoi(pageStr)
 	if err != nil || page < 1 {
@@ -466,7 +466,7 @@ func (c *FuelReceiptController) GetMyFuelReceipts(ctx *fiber.Ctx) error {
 
 	// Parse pagination parameters
 	pageStr := ctx.Query("page", "1")
-	limitStr := ctx.Query("limit", "10")
+	limitStr := ctx.Query("limit", "50")
 
 	page, err := strconv.Atoi(pageStr)
 	if err != nil || page < 1 {
