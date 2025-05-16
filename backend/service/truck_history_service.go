@@ -2,6 +2,7 @@
 package service
 
 import (
+	"time"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/model"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/repository"
 )
@@ -11,6 +12,8 @@ type TruckHistoryService interface {
 	GetFuelHistory(truckID uint, limit int) ([]*model.TruckFuelHistory, error)
 	GetPositionHistoryLast30Days(truckID uint) ([]*model.DateGroupedPositionHistory, error)
 	GetFuelHistoryLast30Days(truckID uint) ([]*model.DateGroupedFuelHistory, error)
+	GetFuelHistoryByDateRange(truckID uint, startDate, endDate time.Time) ([]*model.TruckFuelHistory, error)
+	GetPositionHistoryByDateRange(truckID uint, startDate, endDate time.Time) ([]*model.TruckPositionHistory, error)
 }
 
 type truckHistoryService struct {
@@ -85,4 +88,14 @@ func (s *truckHistoryService) GetFuelHistoryLast30Days(truckID uint) ([]*model.D
 	}
 	
 	return result, nil
+}
+
+// GetFuelHistoryByDateRange mengambil riwayat fuel untuk rentang tanggal yang spesifik
+func (s *truckHistoryService) GetFuelHistoryByDateRange(truckID uint, startDate, endDate time.Time) ([]*model.TruckFuelHistory, error) {
+	return s.truckHistoryRepo.GetFuelHistoryByTruckIDWithCustomDateRange(truckID, startDate, endDate)
+}
+
+// GetPositionHistoryByDateRange mengambil riwayat posisi untuk rentang tanggal yang spesifik
+func (s *truckHistoryService) GetPositionHistoryByDateRange(truckID uint, startDate, endDate time.Time) ([]*model.TruckPositionHistory, error) {
+	return s.truckHistoryRepo.GetPositionHistoryByTruckIDWithCustomDateRange(truckID, startDate, endDate)
 }

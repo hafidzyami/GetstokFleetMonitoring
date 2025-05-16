@@ -386,7 +386,7 @@ func (c *FuelReceiptController) GetFuelReceiptsByDriverID(ctx *fiber.Ctx) error 
 
 // GetFuelReceiptsByTruckID godoc
 // @Summary Get fuel receipts by truck ID
-// @Description Get a paginated list of fuel receipts for a specific truck
+// @Description Get a paginated list of fuel receipts for a specific truck with optional date filtering
 // @Tags fuel-receipts
 // @Accept json
 // @Produce json
@@ -395,55 +395,91 @@ func (c *FuelReceiptController) GetFuelReceiptsByDriverID(ctx *fiber.Ctx) error 
 // @Param truck_id path int true "Truck ID"
 // @Param page query int false "Page number (default: 1)"
 // @Param limit query int false "Items per page (default: 10)"
+// @Param start_date query string false "Filter by start date (format: 2006-01-02)"
+// @Param end_date query string false "Filter by end date (format: 2006-01-02)"
 // @Success 200 {object} model.BaseResponse "List of fuel receipts"
 // @Failure 400 {object} model.BaseResponse "Bad request"
 // @Failure 401 {object} model.BaseResponse "Unauthorized"
 // @Failure 404 {object} model.BaseResponse "Not found"
 // @Router /fuel-receipts/truck/{truck_id} [get]
 func (c *FuelReceiptController) GetFuelReceiptsByTruckID(ctx *fiber.Ctx) error {
-	// Get truck ID from URL
-	truckID, err := strconv.ParseUint(ctx.Params("truck_id"), 10, 32)
-	if err != nil {
-		return ctx.Status(fiber.StatusBadRequest).JSON(model.SimpleErrorResponse(
-			fiber.StatusBadRequest,
-			"Invalid truck ID",
-		))
-	}
+    // Get truck ID from URL
+    truckID, err := strconv.ParseUint(ctx.Params("truck_id"), 10, 32)
+    if err != nil {
+        return ctx.Status(fiber.StatusBadRequest).JSON(model.SimpleErrorResponse(
+            fiber.StatusBadRequest,
+            "Invalid truck ID",
+        ))
+    }
 
-	// Parse pagination parameters
-	pageStr := ctx.Query("page", "1")
-	limitStr := ctx.Query("limit", "50")
+    // Create query parameters structure
+    params := model.FuelReceiptQueryParams{}
+    
+    // Set truck ID
+    truckIDUint := uint(truckID)
+    params.TruckID = &truckIDUint
 
-	page, err := strconv.Atoi(pageStr)
-	if err != nil || page < 1 {
-		page = 1
-	}
+    // Parse date range if provided
+    if startDateStr := ctx.Query("start_date"); startDateStr != "" {
+        startDate, err := time.Parse("2006-01-02", startDateStr)
+        if err != nil {
+            return ctx.Status(fiber.StatusBadRequest).JSON(model.SimpleErrorResponse(
+                fiber.StatusBadRequest,
+                "Invalid start date format. Use YYYY-MM-DD",
+            ))
+        }
+        params.StartDate = &startDate
+    }
 
-	limit, err := strconv.Atoi(limitStr)
-	if err != nil || limit < 1 {
-		limit = 10
-	}
+    if endDateStr := ctx.Query("end_date"); endDateStr != "" {
+        endDate, err := time.Parse("2006-01-02", endDateStr)
+        if err != nil {
+            return ctx.Status(fiber.StatusBadRequest).JSON(model.SimpleErrorResponse(
+                fiber.StatusBadRequest,
+                "Invalid end date format. Use YYYY-MM-DD",
+            ))
+        }
+        // Set end date to end of day for inclusive filtering
+        endDate = endDate.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+        params.EndDate = &endDate
+    }
 
-	// Get fuel receipts
-	receipts, err := c.fuelReceiptService.GetFuelReceiptsByTruckID(uint(truckID), page, limit)
-	if err != nil {
-		if err.Error() == "truck not found" {
-			return ctx.Status(fiber.StatusNotFound).JSON(model.SimpleErrorResponse(
-				fiber.StatusNotFound,
-				err.Error(),
-			))
-		}
-		return ctx.Status(fiber.StatusBadRequest).JSON(model.SimpleErrorResponse(
-			fiber.StatusBadRequest,
-			err.Error(),
-		))
-	}
+    // Parse pagination parameters
+    pageStr := ctx.Query("page", "1")
+    limitStr := ctx.Query("limit", "50")
 
-	// Return success response
-	return ctx.Status(fiber.StatusOK).JSON(model.SuccessResponse(
-		"fuel_receipt.list_by_truck",
-		receipts,
-	))
+    page, err := strconv.Atoi(pageStr)
+    if err != nil || page < 1 {
+        page = 1
+    }
+    params.Page = &page
+
+    limit, err := strconv.Atoi(limitStr)
+    if err != nil || limit < 1 {
+        limit = 50
+    }
+    params.Limit = &limit
+
+    // Use GetAllFuelReceipts method which already handles filtering properly
+    receipts, err := c.fuelReceiptService.GetAllFuelReceipts(params)
+    if err != nil {
+        if err.Error() == "truck not found" {
+            return ctx.Status(fiber.StatusNotFound).JSON(model.SimpleErrorResponse(
+                fiber.StatusNotFound,
+                err.Error(),
+            ))
+        }
+        return ctx.Status(fiber.StatusBadRequest).JSON(model.SimpleErrorResponse(
+            fiber.StatusBadRequest,
+            err.Error(),
+        ))
+    }
+
+    // Return success response
+    return ctx.Status(fiber.StatusOK).JSON(model.SuccessResponse(
+        "fuel_receipt.list_by_truck",
+        receipts,
+    ))
 }
 
 // GetMyFuelReceipts godoc

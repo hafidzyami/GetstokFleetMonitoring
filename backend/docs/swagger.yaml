@@ -670,7 +670,8 @@ paths:
     get:
       consumes:
       - application/json
-      description: Get a paginated list of fuel receipts for a specific truck
+      description: Get a paginated list of fuel receipts for a specific truck with
+        optional date filtering
       parameters:
       - default: Bearer <token>
         description: Bearer token
@@ -691,6 +692,14 @@ paths:
         in: query
         name: limit
         type: integer
+      - description: 'Filter by start date (format: 2006-01-02)'
+        in: query
+        name: start_date
+        type: string
+      - description: 'Filter by end date (format: 2006-01-02)'
+        in: query
+        name: end_date
+        type: string
       produces:
       - application/json
       responses:
@@ -751,34 +760,6 @@ paths:
       security:
       - BearerAuth: []
       summary: Process image with OCR
-      tags:
-      - ocr
-  /ocr/verify:
-    get:
-      consumes:
-      - application/json
-      description: Check if Tesseract OCR is installed and configured correctly
-      parameters:
-      - default: Bearer <token>
-        description: Bearer token
-        in: header
-        name: Authorization
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OCR verification successful
-          schema:
-            $ref: '#/definitions/model.BaseResponse'
-        "500":
-          description: OCR verification failed
-          schema:
-            $ref: '#/definitions/model.BaseResponse'
-      security:
-      - BearerAuth: []
-      summary: Verify Tesseract OCR installation
       tags:
       - ocr
   /profile:
@@ -1725,7 +1706,7 @@ paths:
       consumes:
       - application/json
       description: Get historical fuel data for a truck from the last 30 days, grouped
-        by date
+        by date, or within a specific date range
       parameters:
       - default: Bearer <token>
         description: Bearer token
@@ -1738,11 +1719,19 @@ paths:
         name: truckID
         required: true
         type: integer
+      - description: 'Start date (format: 2006-01-02)'
+        in: query
+        name: start_date
+        type: string
+      - description: 'End date (format: 2006-01-02)'
+        in: query
+        name: end_date
+        type: string
       produces:
       - application/json
       responses:
         "200":
-          description: Fuel history grouped by date
+          description: Fuel history data
           schema:
             $ref: '#/definitions/model.BaseResponse'
         "400":
@@ -1755,7 +1744,7 @@ paths:
             $ref: '#/definitions/model.BaseResponse'
       security:
       - BearerAuth: []
-      summary: Get truck fuel history for last 30 days
+      summary: Get truck fuel history for last 30 days or by date range
       tags:
       - trucks
   /trucks/{truckID}/fuel/limited:

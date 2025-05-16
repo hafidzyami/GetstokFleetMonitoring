@@ -14,6 +14,8 @@ type TruckHistoryRepository interface {
 	GetFuelHistoryByTruckID(truckID uint, limit int) ([]*model.TruckFuelHistory, error)
 	GetPositionHistoryByTruckIDWithDateRange(truckID uint, days int) ([]*model.TruckPositionHistory, error)
 	GetFuelHistoryByTruckIDWithDateRange(truckID uint, days int) ([]*model.TruckFuelHistory, error)
+	GetFuelHistoryByTruckIDWithCustomDateRange(truckID uint, startDate, endDate time.Time) ([]*model.TruckFuelHistory, error)
+	GetPositionHistoryByTruckIDWithCustomDateRange(truckID uint, startDate, endDate time.Time) ([]*model.TruckPositionHistory, error)
 }
 
 type truckHistoryRepository struct{}
@@ -81,6 +83,28 @@ func (r *truckHistoryRepository) GetFuelHistoryByTruckIDWithDateRange(truckID ui
 	
 	// Query dengan filter tanggal
 	query := config.DB.Where("truck_id = ? AND timestamp >= ?", truckID, startDate).Order("timestamp DESC")
+	
+	err := query.Find(&histories).Error
+	return histories, err
+}
+
+// GetFuelHistoryByTruckIDWithCustomDateRange mendapatkan riwayat fuel untuk truck tertentu dalam rentang tanggal yang spesifik
+func (r *truckHistoryRepository) GetFuelHistoryByTruckIDWithCustomDateRange(truckID uint, startDate, endDate time.Time) ([]*model.TruckFuelHistory, error) {
+	var histories []*model.TruckFuelHistory
+	
+	// Query dengan filter tanggal spesifik
+	query := config.DB.Where("truck_id = ? AND timestamp >= ? AND timestamp <= ?", truckID, startDate, endDate).Order("timestamp ASC")
+	
+	err := query.Find(&histories).Error
+	return histories, err
+}
+
+// GetPositionHistoryByTruckIDWithCustomDateRange mendapatkan riwayat posisi untuk truck tertentu dalam rentang tanggal yang spesifik
+func (r *truckHistoryRepository) GetPositionHistoryByTruckIDWithCustomDateRange(truckID uint, startDate, endDate time.Time) ([]*model.TruckPositionHistory, error) {
+	var histories []*model.TruckPositionHistory
+	
+	// Query dengan filter tanggal spesifik
+	query := config.DB.Where("truck_id = ? AND timestamp >= ? AND timestamp <= ?", truckID, startDate, endDate).Order("timestamp ASC")
 	
 	err := query.Find(&histories).Error
 	return histories, err

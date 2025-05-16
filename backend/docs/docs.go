@@ -401,7 +401,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get a paginated list of fuel receipts for a specific truck",
+                "description": "Get a paginated list of fuel receipts for a specific truck with optional date filtering",
                 "consumes": [
                     "application/json"
                 ],
@@ -438,6 +438,18 @@ const docTemplate = `{
                         "type": "integer",
                         "description": "Items per page (default: 10)",
                         "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by start date (format: 2006-01-02)",
+                        "name": "start_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by end date (format: 2006-01-02)",
+                        "name": "end_date",
                         "in": "query"
                     }
                 ],
@@ -715,50 +727,6 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/model.BaseResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/ocr/verify": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Check if Tesseract OCR is installed and configured correctly",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "ocr"
-                ],
-                "summary": "Verify Tesseract OCR installation",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "default": "Bearer \u003ctoken\u003e",
-                        "description": "Bearer token",
-                        "name": "Authorization",
-                        "in": "header",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OCR verification successful",
-                        "schema": {
-                            "$ref": "#/definitions/model.BaseResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "OCR verification failed",
                         "schema": {
                             "$ref": "#/definitions/model.BaseResponse"
                         }
@@ -2293,7 +2261,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get historical fuel data for a truck from the last 30 days, grouped by date",
+                "description": "Get historical fuel data for a truck from the last 30 days, grouped by date, or within a specific date range",
                 "consumes": [
                     "application/json"
                 ],
@@ -2303,7 +2271,7 @@ const docTemplate = `{
                 "tags": [
                     "trucks"
                 ],
-                "summary": "Get truck fuel history for last 30 days",
+                "summary": "Get truck fuel history for last 30 days or by date range",
                 "parameters": [
                     {
                         "type": "string",
@@ -2319,11 +2287,23 @@ const docTemplate = `{
                         "name": "truckID",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start date (format: 2006-01-02)",
+                        "name": "start_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (format: 2006-01-02)",
+                        "name": "end_date",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "Fuel history grouped by date",
+                        "description": "Fuel history data",
                         "schema": {
                             "$ref": "#/definitions/model.BaseResponse"
                         }

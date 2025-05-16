@@ -9,7 +9,6 @@ import {
   Popup,
   TileLayer,
   useMap,
-  Circle,
 } from "react-leaflet";
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import { debugTruckRouteMatch, getRouteColor } from "@/app/utils/colorUtils";
@@ -136,18 +135,6 @@ function MapController({ activePosition, activeTruck, activeRoutePlans }) {
   return null;
 }
 
-// Sample activity data (from layout.tsx)
-const aktivitas = [
-  { day: "Today" },
-  { day: "Monday", date: "12/12/2023" },
-  { day: "Tuesday", date: "12/12/2023" },
-  { day: "Wednesday", date: "12/12/2023" },
-  { day: "Thursday", date: "12/12/2023" },
-  { day: "Friday", date: "12/12/2023" },
-  { day: "Saturday", date: "12/12/2023" },
-  { day: "Sunday", date: "12/12/2023" },
-];
-
 const DashboardPage = () => {
   const [trucks, setTrucks] = useState({});
   const [activeTruck, setActiveTruck] = useState(null);
@@ -168,6 +155,11 @@ const DashboardPage = () => {
   const { user } = useAuth();
   const [selectedDay, setSelectedDay] = useState("Today");
   const [viewMode, setViewMode] = useState("sensor"); // default view is 'sensor'
+  const [fuelData, setFuelData] = useState({});
+  const [fuelReceipts, setFuelReceipts] = useState([]);
+  const [activityDays, setActivityDays] = useState([]);
+  const [loadingFuelData, setLoadingFuelData] = useState(false);
+  const [loadingFuelReceipts, setLoadingFuelReceipts] = useState(false);
 
   const [defaultCenter, setDefaultCenter] = useState([-6.2, 106.816666]);
 
@@ -189,6 +181,46 @@ const DashboardPage = () => {
     } else {
       console.log("Geolocation is not supported by this browser.");
     }
+  }, []);
+
+  // Generate activity days for today and past 4 days
+  useEffect(() => {
+    const generateActivityDays = () => {
+      const days = [];
+      const today = new Date();
+      const dayNames = [
+        "Sunday",
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+      ];
+
+      // Add today
+      days.push({
+        day: "Today",
+        date: today.toLocaleDateString(),
+        isoDate: today.toISOString().split("T")[0],
+      });
+
+      // Add past 4 days
+      for (let i = 1; i <= 4; i++) {
+        const pastDate = new Date(today);
+        pastDate.setDate(today.getDate() - i);
+
+        days.push({
+          day: dayNames[pastDate.getDay()],
+          date: pastDate.toLocaleDateString(),
+          isoDate: pastDate.toISOString().split("T")[0],
+        });
+      }
+
+      setActivityDays(days);
+    };
+
+    generateActivityDays();
   }, []);
 
   // Fungsi untuk decode polyline dari routeGeometry
@@ -272,6 +304,199 @@ const DashboardPage = () => {
     }
   };
 
+  // Function to fetch fuel history for a specific truck
+  const fetchFuelHistory = async (truckId, date) => {
+    if (!truckId) return;
+
+    try {
+      setLoadingFuelData(true);
+
+      // Convert date string to API expected format (YYYY-MM-DD)
+      let startDate, endDate;
+
+      if (date) {
+        startDate = date;
+        endDate = date;
+      } else {
+        // If no date is provided, use today
+        const today = new Date().toISOString().split("T")[0];
+        startDate = today;
+        endDate = today;
+      }
+
+      console.log(`Fetching fuel history for truck ${truckId} from ${startDate} to ${endDate}`);
+      
+      const response = await fetch(
+        `/api/v1/trucks/${truckId}/fuel?start_date=${startDate}&end_date=${endDate}`,
+        {
+          headers: {
+            Authorization: `Bearer ${getToken()}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("Raw fuel history response:", data);
+
+      if (data && data.data) {
+        console.log("Fuel history received:", data.data);
+        
+        // Handle both the DateGroupedFuelHistory format and direct array format
+        let fuelData;
+        
+        if (Array.isArray(data.data)) {
+          // This is the direct format from date range queries
+          fuelData = data.data;
+          console.log("Using direct fuel history array format");
+        } else if (Array.isArray(data.data.Fuels)) {
+          // This might be the grouped format from 30-day query, with a single date
+          fuelData = data.data.Fuels;
+          console.log("Using single day fuel history format");
+        } else if (Array.isArray(data.data)) {
+          // This is the grouped format from 30-day query, with multiple dates
+          // Find the entry for our specific date if exists
+          const dateEntry = data.data.find(entry => entry.Date === date);
+          fuelData = dateEntry?.Fuels || [];
+          console.log(`Using fuel history for date ${date}`);
+        } else {
+          console.warn("Unknown fuel history data format", data.data);
+          fuelData = [];
+        }
+
+        // Process fuel data for chart display
+        const processedData = processFuelData(fuelData);
+
+        // Update state with the new data
+        setFuelData((prevData) => ({
+          ...prevData,
+          [date || "today"]: processedData,
+        }));
+      }
+    } catch (err) {
+      console.error("Error fetching fuel history:", err);
+    } finally {
+      setLoadingFuelData(false);
+    }
+  };
+
+  // Function to process fuel data for chart display
+  const processFuelData = (data) => {
+    if (!data || !Array.isArray(data)) {
+      console.warn("Invalid fuel data format", data);
+      return { times: [], levels: [] };
+    }
+
+    // Sort data by timestamp
+    const sortedData = [...data].sort((a, b) => {
+      return new Date(a.timestamp) - new Date(b.timestamp);
+    });
+
+    console.log("Sorted fuel data sample:", sortedData.length > 0 ? sortedData[0] : "No data");
+
+    // Extract times and fuel levels
+    const times = sortedData.map((item) => {
+      const date = new Date(item.timestamp);
+      return date.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    });
+
+    const levels = sortedData.map((item) => {
+      // Handle different property names - use fuel_level or fuel depending on which exists
+      if (typeof item.fuel_level === "number") {
+        return item.fuel_level;
+      } else if (typeof item.fuel === "number") {
+        return item.fuel;
+      } else {
+        console.warn("Missing fuel level data in item:", item);
+        return 0; // Default value
+      }
+    });
+
+    console.log(`Processed ${times.length} fuel data points for chart`);
+    return { times, levels };
+  };
+
+  const fetchFuelReceipts = async (truckId, startDate, endDate) => {
+    if (!truckId) return;
+
+    try {
+      setLoadingFuelReceipts(true);
+
+      // Fix: Properly construct URL with actual truckId value
+      let url = `/api/v1/fuel-receipts/truck/${truckId}`;
+
+      // Add query parameters with proper ? and & syntax
+      const queryParams = [];
+
+      if (startDate) {
+        queryParams.push(`start_date=${startDate}`);
+      }
+
+      if (endDate) {
+        queryParams.push(`end_date=${endDate}`);
+      }
+
+      // Add query parameters to URL if any exist
+      if (queryParams.length > 0) {
+        url += `?${queryParams.join("&")}`;
+      }
+
+      console.log("Fetching fuel receipts from URL:", url);
+
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("Raw API response:", data);
+
+      // Fix: Match the actual data structure from the API
+      if (data && data.data && data.data.receipts) {
+        console.log("Fuel receipts received:", data.data.receipts);
+        setFuelReceipts(data.data.receipts);
+      } else {
+        console.log("No fuel receipts data or empty array received:", data);
+        setFuelReceipts([]);
+      }
+    } catch (err) {
+      console.error("Error fetching fuel receipts:", err);
+      setFuelReceipts([]);
+    } finally {
+      setLoadingFuelReceipts(false);
+    }
+  };
+
+  // Effect to fetch fuel data when activeTruck or selectedDay changes
+  useEffect(() => {
+    if (!activeTruck) return;
+
+    // Find the selected day in activityDays
+    const selectedDayInfo = activityDays.find((day) => day.day === selectedDay);
+    if (!selectedDayInfo) return;
+
+    // Fetch fuel history for the selected day
+    fetchFuelHistory(activeTruck.id, selectedDayInfo.isoDate);
+
+    // Fetch fuel receipts for the selected day
+    fetchFuelReceipts(
+      activeTruck.id,
+      selectedDayInfo.isoDate,
+      selectedDayInfo.isoDate
+    );
+  }, [activeTruck, selectedDay, activityDays]);
+
   // Refresh active route plans secara periodik
   useEffect(() => {
     // Inisialisasi icon Leaflet
@@ -327,6 +552,140 @@ const DashboardPage = () => {
       }, 50);
     }
   }, [activeTruck]);
+
+  // Initialize chart when fuel data changes
+  useEffect(() => {
+    if (!activeTruck || viewMode !== "sensor") return;
+
+    const chartElement = document.querySelector("#fleet-chart");
+    if (!chartElement) return;
+
+    if (chartRef.current) {
+      chartRef.current.destroy();
+    }
+
+    // Find the selected day in activityDays
+    const selectedDayInfo = activityDays.find((day) => day.day === selectedDay);
+    if (!selectedDayInfo) return;
+
+    // Get fuel data for the selected day
+    const dayFuelData = fuelData[selectedDayInfo.isoDate] || fuelData["today"];
+
+    if (!dayFuelData) {
+      console.log("No fuel data for the selected day. Waiting for data...");
+      // If no data yet, don't render chart
+      return;
+    }
+
+    const { times, levels } = dayFuelData;
+    console.log(`Rendering chart with ${times.length} data points. Selected day: ${selectedDay}`);
+
+    // If no real data available, use placeholder message
+    if (times.length === 0) {
+      // Create a temporary div with a message
+      const messageDiv = document.createElement('div');
+      messageDiv.className = 'flex justify-center items-center h-[200px] text-gray-500';
+      messageDiv.innerHTML = 'No fuel sensor data available for the selected day';
+      
+      // Clear chart container and append message
+      chartElement.innerHTML = '';
+      chartElement.appendChild(messageDiv);
+      return;
+    }
+
+    // Actual data points exist, render chart
+    const options = {
+      chart: {
+        type: "line",
+        height: 200,
+        toolbar: {
+          show: true,
+          tools: {
+            download: true,
+            selection: true,
+            zoom: true,
+            zoomin: true,
+            zoomout: true,
+            pan: true,
+            reset: true,
+          },
+        },
+      },
+      series: [
+        {
+          name: "Fuel Level",
+          data: levels,
+        },
+      ],
+      xaxis: {
+        categories: times,
+        title: {
+          text: "Waktu (Jam)",
+        },
+        labels: {
+          rotate: -45,
+          style: {
+            fontSize: '10px',
+          },
+        },
+      },
+      yaxis: {
+        title: {
+          text: "Level BBM (%)",
+        },
+        min: 0,
+        max: 100,
+        forceNiceScale: true,
+      },
+      title: {
+        text: `Fuel Levels - ${selectedDayInfo.day} (${selectedDayInfo.date})`,
+        align: 'center',
+        style: {
+          fontSize: '14px',
+        },
+      },
+      subtitle: {
+        text: activeTruck ? `Truck: ${activeTruck.plate_number || activeTruck.mac_id}` : '',
+        align: 'center',
+      },
+      colors: ["#009EFF"],
+      stroke: {
+        curve: "smooth",
+        width: 3,
+      },
+      markers: {
+        size: 4,
+        hover: {
+          size: 6,
+        },
+      },
+      tooltip: {
+        y: {
+          formatter: (value) => `${value}%`,
+        },
+        x: {
+          show: true,
+        },
+      },
+      grid: {
+        row: {
+          colors: ['transparent', 'transparent'],
+          opacity: 0.2
+        },
+        borderColor: '#f1f1f1'
+      },
+    };
+
+    chartRef.current = new ApexCharts(chartElement, options);
+    chartRef.current.render();
+
+    return () => {
+      if (chartRef.current) {
+        chartRef.current.destroy();
+        chartRef.current = null;
+      }
+    };
+  }, [activeTruck, selectedDay, viewMode, fuelData]);
 
   useEffect(() => {
     // This ensures we can track if the component is still mounted
@@ -526,87 +885,6 @@ const DashboardPage = () => {
       }
     };
   }, []);
-
-  const fuelDataPerDay = {
-    Today: [72, 70, 69, 71, 73, 75, 74, 72, 70, 69, 68],
-    Monday: [70, 71, 72, 73, 72, 71, 70, 69, 68, 68, 67],
-    Tuesday: [65, 66, 67, 68, 69, 70, 71, 72, 72, 71, 70],
-    Wednesday: [75, 74, 73, 72, 71, 70, 69, 68, 67, 66, 65],
-    Thursday: [66, 68, 70, 72, 74, 76, 74, 72, 70, 68, 66],
-    Friday: [73, 72, 71, 70, 69, 68, 67, 66, 65, 64, 63],
-    Saturday: [74, 72, 70, 68, 66, 64, 66, 68, 70, 72, 74],
-    Sunday: [68, 69, 70, 71, 70, 69, 68, 67, 66, 65, 64],
-  };
-
-  // Initialize chart when activeTruck changes
-  useEffect(() => {
-    if (!activeTruck) return;
-    if (viewMode !== "sensor") return;
-    const chartElement = document.querySelector("#fleet-chart");
-    if (!chartElement) return;
-
-    if (chartRef.current) {
-      chartRef.current.destroy();
-    }
-
-    // Jam dari 07:00 - 17:00
-    const hours = Array.from({ length: 11 }, (_, i) => {
-      const hour = i + 7;
-      return `${hour.toString().padStart(2, "0")}:00`;
-    });
-
-    // Dummy BBM data per hari
-    const fuelDataPerDay = {
-      Today: [72, 70, 69, 71, 73, 75, 74, 72, 70, 69, 68],
-      Monday: [70, 71, 72, 73, 72, 71, 70, 69, 68, 68, 67],
-      Tuesday: [65, 66, 67, 68, 69, 70, 71, 72, 72, 71, 70],
-      Wednesday: [75, 74, 73, 72, 71, 70, 69, 68, 67, 66, 65],
-      Thursday: [66, 68, 70, 72, 74, 76, 74, 72, 70, 68, 66],
-      Friday: [73, 72, 71, 70, 69, 68, 67, 66, 65, 64, 63],
-      Saturday: [74, 72, 70, 68, 66, 64, 66, 68, 70, 72, 74],
-      Sunday: [68, 69, 70, 71, 70, 69, 68, 67, 66, 65, 64],
-    };
-
-    const fuelData = fuelDataPerDay[selectedDay] || fuelDataPerDay["Today"];
-
-    const options = {
-      chart: {
-        type: "line",
-        height: 200,
-      },
-      series: [
-        {
-          name: "Fuel Level",
-          data: fuelData,
-        },
-      ],
-      xaxis: {
-        categories: hours,
-        title: {
-          text: "Waktu (Jam)",
-        },
-      },
-      yaxis: {
-        title: {
-          text: "Level BBM (%)",
-        },
-      },
-      colors: ["#009EFF"],
-      stroke: {
-        curve: "smooth",
-      },
-    };
-
-    chartRef.current = new ApexCharts(chartElement, options);
-    chartRef.current.render();
-
-    return () => {
-      if (chartRef.current) {
-        chartRef.current.destroy();
-        chartRef.current = null;
-      }
-    };
-  }, [activeTruck, selectedDay, viewMode]);
 
   // Fungsi untuk mengecek apakah truck memiliki rute aktif
   const truckHasActiveRoute = (truck) => {
@@ -1158,55 +1436,83 @@ const DashboardPage = () => {
                 </div>
               </div>
               {viewMode === "sensor" && (
-                <div id="fleet-chart" className="w-full h-[200px]" />
+                <div className="relative">
+                  {loadingFuelData ? (
+                    <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-70">
+                      <div className="text-[#009EFF]">
+                        Loading sensor data...
+                      </div>
+                    </div>
+                  ) : null}
+                  <div id="fleet-chart" className="w-full h-[200px]" />
+                </div>
               )}
               {viewMode === "data" && (
                 <div className="p-4 overflow-x-auto">
-                  <h4 className="text-sm font-semibold mb-2">Data OCR</h4>
-                  <table className="w-full text-sm border border-gray-200 rounded">
-                    <thead className="bg-[#009EFF] text-white">
-                      <tr>
-                        <th className="p-2 border">Waktu</th>
-                        <th className="p-2 border">Nama Produk</th>
-                        <th className="p-2 border">Harga/Liter</th>
-                        <th className="p-2 border">Volume</th>
-                        <th className="p-2 border">Total Harga</th>
-                      </tr>
-                    </thead>
-                    <tbody className="text-center">
-                      {[
-                        {
-                          waktu: "10/01/2025 - 10:30",
-                          produk: "Bensin Pertalite",
-                          harga: "10.000",
-                          volume: "10 Liter",
-                          total: "100.000",
-                        },
-                        {
-                          waktu: "10/01/2025 - 10:30",
-                          produk: "Bensin Pertalite",
-                          harga: "10.000",
-                          volume: "10 Liter",
-                          total: "100.000",
-                        },
-                        {
-                          waktu: "10/01/2025 - 10:30",
-                          produk: "Bensin Pertalite",
-                          harga: "10.000",
-                          volume: "10 Liter",
-                          total: "100.000",
-                        },
-                      ].map((item, index) => (
-                        <tr key={index}>
-                          <td className="p-2 border">{item.waktu}</td>
-                          <td className="p-2 border">{item.produk}</td>
-                          <td className="p-2 border">{item.harga}</td>
-                          <td className="p-2 border">{item.volume}</td>
-                          <td className="p-2 border">{item.total}</td>
+                  <h4 className="text-sm font-semibold mb-2">
+                    Fuel Receipt Data
+                  </h4>
+                  {loadingFuelReceipts ? (
+                    <div className="flex justify-center items-center h-36">
+                      <div className="text-[#009EFF]">
+                        Loading fuel receipt data...
+                      </div>
+                    </div>
+                  ) : fuelReceipts.length > 0 ? (
+                    <table className="w-full text-sm border border-gray-200 rounded">
+                      <thead className="bg-[#009EFF] text-white">
+                        <tr>
+                          <th className="p-2 border">DateTime</th>
+                          <th className="p-2 border">Product</th>
+                          <th className="p-2 border">Price/Liter</th>
+                          <th className="p-2 border">Volume</th>
+                          <th className="p-2 border">Total Price</th>
+                          <th className="p-2 border">Bukti Foto</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="text-center">
+                        {fuelReceipts.map((receipt) => (
+                          <tr key={receipt.id}>
+                            <td className="p-2 border">
+                              {new Date(receipt.created_at).toLocaleString()}
+                            </td>
+                            <td className="p-2 border">
+                              {receipt.product_name}
+                            </td>
+                            <td className="p-2 border">
+                              Rp {receipt.price.toLocaleString()}
+                            </td>
+                            <td className="p-2 border">
+                              {receipt.volume} Liter
+                            </td>
+                            <td className="p-2 border">
+                              Rp {receipt.total_price.toLocaleString()}
+                            </td>
+                            <td className="p-2 border">
+                              {receipt.image_url ? (
+                                <a href={receipt.image_url} target="_blank" rel="noopener noreferrer">
+                                  <div className="flex flex-col items-center">
+                                    <img
+                                      src={receipt.image_url}
+                                      alt="Bukti Receipt"
+                                      className="w-16 h-16 object-cover rounded border border-gray-300 mb-1"
+                                    />
+                                    <span className="text-xs text-blue-500 hover:underline">Lihat Foto</span>
+                                  </div>
+                                </a>
+                              ) : (
+                                <span className="text-gray-400 text-xs">Tidak ada foto</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div className="text-center text-gray-500 py-4">
+                      No fuel receipt data available for {selectedDay}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1311,7 +1617,7 @@ const DashboardPage = () => {
                   Aktivitas
                 </span>
                 <div className="flex flex-col gap-2 overflow-y-auto text-xs">
-                  {aktivitas.slice(0, 4).map((item, index) => (
+                  {activityDays.map((item, index) => (
                     <div
                       key={index}
                       onClick={() => setSelectedDay(item.day)}
@@ -1330,7 +1636,9 @@ const DashboardPage = () => {
                             </span>
                           )}
                         </span>
-                        <span className="text-yellow-500">!</span>
+                        <span className="text-yellow-500">
+                          <i className="bx bx-calendar"></i>
+                        </span>
                       </div>
                     </div>
                   ))}
@@ -1345,38 +1653,48 @@ const DashboardPage = () => {
 };
 
 // Helper component to handle marker and popup management
-function TruckMarker({ truck, isDeviating, deviation, isActive, onClick, markerRefs }) {
+function TruckMarker({
+  truck,
+  isDeviating,
+  deviation,
+  isActive,
+  onClick,
+  markerRefs,
+}) {
   // Create reference for this marker
   const popupRef = useRef();
-  
+
   // Store marker reference when it's created
-  const eventHandlers = useMemo(() => ({
-    add: (e) => {
-      markerRefs.current[truck.mac_id] = e.target;
-    },
-    remove: () => {
-      delete markerRefs.current[truck.mac_id];
-    }
-  }), [truck.mac_id, markerRefs]);
-  
+  const eventHandlers = useMemo(
+    () => ({
+      add: (e) => {
+        markerRefs.current[truck.mac_id] = e.target;
+      },
+      remove: () => {
+        delete markerRefs.current[truck.mac_id];
+      },
+    }),
+    [truck.mac_id, markerRefs]
+  );
+
   // Effect to handle popup when active state changes
   useEffect(() => {
     if (!popupRef.current) return;
-    
+
     if (isActive) {
       popupRef.current.openPopup();
     } else {
       popupRef.current.closePopup();
     }
   }, [isActive]);
-  
+
   return (
     <Marker
       position={[truck.latitude, truck.longitude]}
       icon={isDeviating ? deviatingTruckIcon : truckIcon}
       eventHandlers={{
         ...eventHandlers,
-        click: () => onClick(truck)
+        click: () => onClick(truck),
       }}
     >
       <Popup ref={popupRef}>
@@ -1390,13 +1708,10 @@ function TruckMarker({ truck, isDeviating, deviation, isActive, onClick, markerR
           <p>Type: {truck.type || "Unknown"}</p>
           <p>
             Fuel:{" "}
-            {truck.fuel !== undefined
-              ? `${truck.fuel.toFixed(2)}%`
-              : "N/A"}
+            {truck.fuel !== undefined ? `${truck.fuel.toFixed(2)}%` : "N/A"}
           </p>
           <p>
-            Position: {truck.latitude.toFixed(6)},{" "}
-            {truck.longitude.toFixed(6)}
+            Position: {truck.latitude.toFixed(6)}, {truck.longitude.toFixed(6)}
           </p>
           {isDeviating && deviation && (
             <p className="text-red-500 font-medium mt-2">
