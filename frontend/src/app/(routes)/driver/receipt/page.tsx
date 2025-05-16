@@ -5,7 +5,7 @@ import "boxicons/css/boxicons.min.css";
 import React, { useRef, useState, useEffect } from "react";
 import Image from "next/image";
 // OCR is now handled by the backend
-import { format } from "date-fns";
+import { format, set } from "date-fns";
 import { id } from "date-fns/locale";
 
 interface Truck {
@@ -38,6 +38,7 @@ const KuitansiPage = () => {
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [isLoadingReceipts, setIsLoadingReceipts] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Fetch trucks
   const fetchTrucks = async () => {
@@ -81,7 +82,6 @@ const KuitansiPage = () => {
 
   // Fetch receipts
   const fetchReceipts = async () => {
-    setIsLoadingReceipts(true);
     try {
       const response = await fetch("/api/v1/fuel-receipts/my-receipts", {
         headers: {
@@ -163,6 +163,7 @@ const KuitansiPage = () => {
   // Submit receipt to the backend
   const submitReceipt = async () => {
     // Validasi input seperti biasa
+    setIsSubmitting(true);
     if (!selectedTruckId) {
       alert("Silakan pilih kendaraan terlebih dahulu");
       return;
@@ -257,7 +258,7 @@ const KuitansiPage = () => {
         image_base64: imageBase64,
       };
 
-      console.log("Sending data:", JSON.stringify(receiptData, null, 2));
+      // console.log("Sending data:", JSON.stringify(receiptData, null, 2));
 
       // Kirim request
       const response = await fetch("/api/v1/fuel-receipts", {
@@ -317,6 +318,7 @@ const KuitansiPage = () => {
       alert(`Gagal menyimpan kuitansi: ${error.message}`);
     } finally {
       setIsProcessing(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -352,18 +354,27 @@ const KuitansiPage = () => {
       DeteksiKuitansi: false,
       HasilDeteksiKuitanasi: true,
     });
-    
+
     // If OCR wasn't entirely successful but we have some data, show a helpful message
-    if (!success && (ocrData.namaProduk || ocrData.hargaPerLiter || ocrData.volume || ocrData.totalHarga)) {
+    if (
+      !success &&
+      (ocrData.namaProduk ||
+        ocrData.hargaPerLiter ||
+        ocrData.volume ||
+        ocrData.totalHarga)
+    ) {
       // Some data was detected but not all
       setTimeout(() => {
-        alert("Beberapa data berhasil dideteksi. Silakan lengkapi atau perbaiki data yang kurang.");
+        alert(
+          "Beberapa data berhasil dideteksi. Silakan lengkapi atau perbaiki data yang kurang."
+        );
       }, 300);
-    } 
-    else if (!success) {
+    } else if (!success) {
       // No data was detected
       setTimeout(() => {
-        alert(errorMessage || "Data tidak terdeteksi. Silakan isi secara manual.");
+        alert(
+          errorMessage || "Data tidak terdeteksi. Silakan isi secara manual."
+        );
       }, 300);
     }
   };
@@ -390,7 +401,7 @@ const KuitansiPage = () => {
     reader.onload = () => {
       const result = reader.result as string;
       setPreviewImage(result);
-      
+
       // Otomatis proses OCR saat file dipilih
       processOCR(result);
     };
@@ -464,19 +475,19 @@ const KuitansiPage = () => {
       // Ekstrak base64 string dari dataURL dengan benar
       let formattedBase64 = imageData;
       // Jika imageData sudah memiliki header data:image, gunakan base64 bagian setelah koma
-      if (imageData.includes(',')) {
-        formattedBase64 = imageData.split(',')[1];
+      if (imageData.includes(",")) {
+        formattedBase64 = imageData.split(",")[1];
       }
-      
+
       const response = await fetch("/api/v1/ocr/process", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${localStorage.getItem("token")}`,
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
         body: JSON.stringify({
-        image_base64: formattedBase64,
-        lang: "auto" // Gunakan deteksi otomatis bahasa dengan engine 2
+          image_base64: formattedBase64,
+          lang: "auto", // Gunakan deteksi otomatis bahasa dengan engine 2
         }),
       });
 
@@ -490,71 +501,69 @@ const KuitansiPage = () => {
       if (result.data && result.data.extracted_data) {
         // Konversi dari snake_case ke camelCase untuk kompatibilitas dengan frontend
         const apiData = result.data.extracted_data;
-      // Format nilai berdasarkan jenisnya
-      // Untuk harga: ubah 12.500 → 12500 (tidak perlu koma/titik ribuan)
-      // Untuk volume: pertahankan desimal, 2.801 → 2.801 (desimal penting)
-      const formatNumberForDisplay = (value, isVolume = false) => {
-        if (!value) return "";
-        
-        // Hapus titik di depan jika ada
-        let formatted = value.startsWith(".") ? value.substring(1) : value;
-        
-        if (isVolume) {
-          // Untuk volume, kita ingin mempertahankan desimal
-          // Pastikan koma diubah ke titik
-          formatted = formatted.replace(/,/g, ".");
+        // Format nilai berdasarkan jenisnya
+        // Untuk harga: ubah 12.500 → 12500 (tidak perlu koma/titik ribuan)
+        // Untuk volume: pertahankan desimal, 2.801 → 2.801 (desimal penting)
+        const formatNumberForDisplay = (value : any, isVolume = false) => {
+          if (!value) return "";
           
-          // Pastikan hanya satu titik desimal
-          const parts = formatted.split(".");
-          if (parts.length > 2) {
-            formatted = parts[0] + "." + parts.slice(1).join("");
-          }
+          // Hapus titik di depan jika ada
+          let formatted = value.startsWith(".") ? value.substring(1) : value;
           
-          // Kalau tidak ada titik, kemungkinan OCR error mengenali 2,801 sebagai 2801
-          if (!formatted.includes(".") && formatted.length > 1) {
-            // Jika angka > 100, kemungkinan butuh konversi ke format desimal
-            const numValue = parseFloat(formatted);
-            if (numValue > 100) {
-              // Kemungkinan kesalahan OCR - konversi 2801 ke 2.801
-              formatted = (numValue / 1000).toFixed(3);
+          if (isVolume) {
+            // Untuk volume, kita ingin mempertahankan desimal
+            // Pastikan koma diubah ke titik
+            formatted = formatted.replace(/,/g, ".");
+            
+            // Pastikan hanya satu titik desimal
+            const parts = formatted.split(".");
+            if (parts.length > 2) {
+              formatted = parts[0] + "." + parts.slice(1).join("");
             }
+            
+            // Kalau tidak ada titik, kemungkinan OCR error mengenali 2,801 sebagai 2801
+            if (!formatted.includes(".") && formatted.length > 1) {
+              // Jika angka > 100, kemungkinan butuh konversi ke format desimal
+              const numValue = parseFloat(formatted);
+              if (numValue > 100) {
+                // Kemungkinan kesalahan OCR - konversi 2801 ke 2.801
+                formatted = (numValue / 1000).toFixed(3);
+              }
+            }
+          } else {
+            // Untuk harga, hapus semua titik dan koma
+            formatted = formatted.replace(/[.,]/g, "");
           }
-        } else {
-          // Untuk harga, hapus semua titik dan koma
-          formatted = formatted.replace(/[.,]/g, "");
-        }
-        
-        return formatted;
-      };
+          
+          return formatted;
+        };
 
-      const extractedData = {
-        waktu: apiData.waktu || "",
-        namaProduk: apiData.nama_produk || "",
-        hargaPerLiter: formatNumberForDisplay(apiData.harga_per_liter || ""),
-        volume: formatNumberForDisplay(apiData.volume || "", true),  // true = isVolume
-        totalHarga: formatNumberForDisplay(apiData.total_harga || ""),
-      };
+        const extractedData = {
+          waktu: apiData.waktu || "",
+          namaProduk: apiData.nama_produk || "",
+          hargaPerLiter: formatNumberForDisplay(apiData.harga_per_liter || ""),
+          volume: formatNumberForDisplay(apiData.volume || "", true),  // true = isVolume
+          totalHarga: formatNumberForDisplay(apiData.total_harga || ""),
+        };
 
         console.log("Data yang diekstrak dari API:", extractedData);
         console.log("Raw text dari API:", result.data.raw_text);
 
         setOcrData(extractedData);
-        
+
         // Cek jika data terdeteksi dengan baik
-        const isDataComplete = (
-          extractedData.namaProduk && 
-          extractedData.hargaPerLiter && 
-          extractedData.volume && 
-          extractedData.totalHarga
-        );
-        
-        const isDataPartial = (
-          extractedData.namaProduk || 
-          extractedData.hargaPerLiter || 
-          extractedData.volume || 
-          extractedData.totalHarga
-        );
-        
+        const isDataComplete =
+          extractedData.namaProduk &&
+          extractedData.hargaPerLiter &&
+          extractedData.volume &&
+          extractedData.totalHarga;
+
+        const isDataPartial =
+          extractedData.namaProduk ||
+          extractedData.hargaPerLiter ||
+          extractedData.volume ||
+          extractedData.totalHarga;
+
         if (isDataComplete) {
           handleOCRResult(true);
         } else if (isDataPartial) {
@@ -563,7 +572,10 @@ const KuitansiPage = () => {
           handleOCRResult(false, "Tidak ada data yang terdeteksi");
         }
       } else {
-        handleOCRResult(false, "Tidak ada data yang berhasil diekstrak dari gambar");
+        handleOCRResult(
+          false,
+          "Tidak ada data yang berhasil diekstrak dari gambar"
+        );
       }
     } catch (error: any) {
       console.error("Error processing OCR:", error);
@@ -602,11 +614,11 @@ const KuitansiPage = () => {
     );
   });
 
-  // Format date for display
+  // Format date for display with time
   const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString);
-      return format(date, "d MMMM yyyy", { locale: id });
+      return format(date, "d MMMM yyyy '-' HH:mm:ss", { locale: id });
     } catch (error) {
       return dateString;
     }
@@ -803,7 +815,7 @@ const KuitansiPage = () => {
                   {receipt.image_url ? (
                     <a
                       href={receipt.image_url}
-                      target="_blank" 
+                      target="_blank"
                       rel="noopener noreferrer"
                       className="w-full mt-3 flex items-center justify-center gap-2 bg-[#FBB25B] hover:bg-[#EAA347] px-4 py-2 rounded-lg text-white font-medium transition-colors"
                     >
@@ -871,7 +883,7 @@ const KuitansiPage = () => {
                   )}
                 </div>
 
-                  {/* Upload Area */}
+                {/* Upload Area */}
                 <div className="space-y-2">
                   <label className="block text-gray-700 font-medium">
                     Upload Kuitansi
@@ -879,7 +891,9 @@ const KuitansiPage = () => {
 
                   {/* Tips untuk OCR yang lebih baik */}
                   <div className="bg-blue-50 p-3 rounded-lg mb-4 text-sm text-gray-600">
-                    <h3 className="font-semibold text-blue-600">Tips hasil OCR terbaik:</h3>
+                    <h3 className="font-semibold text-blue-600">
+                      Tips hasil OCR terbaik:
+                    </h3>
                     <ul className="list-disc pl-5 mt-1 space-y-1">
                       <li>Pastikan kuitansi dalam kondisi tidak kusut</li>
                       <li>Ambil foto dengan pencahayaan yang cukup</li>
@@ -930,7 +944,9 @@ const KuitansiPage = () => {
                         {isProcessing && (
                           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded">
                             <div className="animate-spin w-10 h-10 border-4 border-white border-t-transparent rounded-full"></div>
-                            <span className="text-white ml-3 font-semibold">Memproses OCR...</span>
+                            <span className="text-white ml-3 font-semibold">
+                              Memproses OCR...
+                            </span>
                           </div>
                         )}
                         <button
@@ -1140,6 +1156,17 @@ const KuitansiPage = () => {
             </div>
           </div>
         </>
+      )}
+      {isSubmitting && (
+        <div className="fixed inset-0 bg-gray-50 opacity-90 z-[9999] flex items-center justify-center">
+          <div className="bg-white p-8 rounded-lg shadow-2xl flex flex-col items-center">
+            <div className="w-20 h-20 border-4 border-t-blue-500 border-blue-200 rounded-full animate-spin mb-6"></div>
+            <p className="text-xl font-semibold text-gray-800">
+              Mengirimkan Kuitansi...
+            </p>
+            <p className="text-sm text-gray-500 mt-2">Mohon tunggu sebentar</p>
+          </div>
+        </div>
       )}
     </div>
   );
