@@ -153,6 +153,16 @@ definitions:
     - email
     - password
     type: object
+  model.OCRRequest:
+    properties:
+      image_base64:
+        type: string
+      lang:
+        description: Optional language, default is "ind" (Indonesian)
+        type: string
+    required:
+    - image_base64
+    type: object
   model.RegisterRequest:
     properties:
       email:
@@ -705,6 +715,72 @@ paths:
       summary: Get fuel receipts by truck ID
       tags:
       - fuel-receipts
+  /ocr/process:
+    post:
+      consumes:
+      - application/json
+      description: Process an uploaded image with OCR to extract receipt data
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: OCR request with base64 encoded image
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.OCRRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully processed image
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Process image with OCR
+      tags:
+      - ocr
+  /ocr/verify:
+    get:
+      consumes:
+      - application/json
+      description: Check if Tesseract OCR is installed and configured correctly
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OCR verification successful
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "500":
+          description: OCR verification failed
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Verify Tesseract OCR installation
+      tags:
+      - ocr
   /profile:
     get:
       consumes:

@@ -4,7 +4,7 @@ import "boxicons/css/boxicons.min.css";
 
 import React, { useRef, useState, useEffect } from "react";
 import Image from "next/image";
-import { createWorker } from "tesseract.js";
+// OCR is now handled by the backend
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
 
@@ -95,7 +95,7 @@ const KuitansiPage = () => {
 
       // Baca respons sebagai teks untuk debug
       const responseText = await response.text();
-      console.log("Raw receipts response:", responseText);
+      // console.log("Raw receipts response:", responseText);
 
       // Parse respons JSON
       let responseJson;
@@ -107,7 +107,7 @@ const KuitansiPage = () => {
         return;
       }
 
-      console.log("Parsed receipts response:", responseJson);
+      // console.log("Parsed receipts response:", responseJson);
 
       // Ekstrak data kuitansi dari format respons yang spesifik
       // Format: { apiVersion: "1.0", method: "fuel_receipt.my_receipts", data: { receipts: [...] } }
@@ -116,10 +116,10 @@ const KuitansiPage = () => {
         responseJson.data &&
         responseJson.data.receipts
       ) {
-        console.log(
-          "Found receipts data in API format:",
-          responseJson.data.receipts
-        );
+        // console.log(
+        //   "Found receipts data in API format:",
+        //   responseJson.data.receipts
+        // );
         setReceipts(responseJson.data.receipts);
       }
       // Format alternatif lain jika ada
@@ -128,23 +128,23 @@ const KuitansiPage = () => {
         responseJson.data &&
         responseJson.data.receipts
       ) {
-        console.log(
-          "Found receipts data in success format:",
-          responseJson.data.receipts
-        );
+        // console.log(
+        //   "Found receipts data in success format:",
+        //   responseJson.data.receipts
+        // );
         setReceipts(responseJson.data.receipts);
       }
       // Format langsung array
       else if (Array.isArray(responseJson)) {
-        console.log("Found receipts data as direct array:", responseJson);
+        // console.log("Found receipts data as direct array:", responseJson);
         setReceipts(responseJson);
       }
       // Format jika data langsung berisi array
       else if (Array.isArray(responseJson.data)) {
-        console.log(
-          "Found receipts data in direct data array:",
-          responseJson.data
-        );
+        // console.log(
+        //   "Found receipts data in direct data array:",
+        //   responseJson.data
+        // );
         setReceipts(responseJson.data);
       }
       // Jika format tidak dikenali
@@ -180,15 +180,43 @@ const KuitansiPage = () => {
 
     setIsProcessing(true);
     try {
-      // Parse numeric values
-      const parseNumeric = (str: any) => {
-        const numStr = str.replace(/[^\d.]/g, "");
-        const result = parseFloat(numStr);
+      // Parse numeric values dengan perlakuan khusus untuk volume
+      const parseNumeric = (str: any, isVolume = false) => {
+        if (!str) return 0;
+        
+        // Bersihkan string
+        let cleanStr = str.toString();
+        
+        // Hapus titik di depan jika ada
+        if (cleanStr.startsWith('.')) {
+          cleanStr = cleanStr.substring(1);
+        }
+
+        if (isVolume) {
+          // Untuk volume, pertahankan titik desimal
+          // Standarisasi koma menjadi titik untuk desimal
+          cleanStr = cleanStr.replace(/,/g, '.');
+          
+          // Pastikan hanya ada satu titik desimal
+          const parts = cleanStr.split('.');
+          if (parts.length > 2) {
+            cleanStr = parts[0] + '.' + parts.slice(1).join('');
+          }
+
+          // Hapus karakter non-numerik kecuali titik desimal
+          cleanStr = cleanStr.replace(/[^\d.]/g, '');
+        } else {
+          // Untuk harga, hapus semua pemisah dan gunakan angka bulat
+          cleanStr = cleanStr.replace(/[^\d]/g, '');
+        }
+        
+        // Konversi ke angka
+        const result = parseFloat(cleanStr);
         return isNaN(result) ? 0 : result;
       };
 
       const price = parseNumeric(ocrData.hargaPerLiter);
-      const volume = parseNumeric(ocrData.volume);
+      const volume = parseNumeric(ocrData.volume, true); // true = isVolume 
       const totalPrice = parseNumeric(ocrData.totalHarga);
 
       // Validasi nilai numerik
@@ -209,6 +237,16 @@ const KuitansiPage = () => {
       let timestamp = new Date().toISOString();
 
       // Buat data yang akan dikirim
+      let imageBase64 = "";
+      if (previewImage) {
+        // Pastikan format yang benar: ambil hanya bagian base64 setelah koma
+        if (previewImage.includes(",")) {
+          imageBase64 = previewImage.split(",")[1] || "";
+        } else {
+          imageBase64 = previewImage;
+        }
+      }
+
       const receiptData = {
         product_name: ocrData.namaProduk.trim(),
         price: price,
@@ -216,7 +254,7 @@ const KuitansiPage = () => {
         total_price: totalPrice,
         truck_id: parseInt(selectedTruckId, 10),
         timestamp: timestamp,
-        image_base64: previewImage ? previewImage.split(",")[1] || "" : "",
+        image_base64: imageBase64,
       };
 
       console.log("Sending data:", JSON.stringify(receiptData, null, 2));
@@ -306,6 +344,30 @@ const KuitansiPage = () => {
     fetchReceipts();
   };
 
+  // Handle OCR result in a more robust way
+  const handleOCRResult = (success: boolean, errorMessage?: string) => {
+    // Always proceed to show the OCR form, even if partial data is available
+    setIsOpen({
+      UnggahKuitansi: false,
+      DeteksiKuitansi: false,
+      HasilDeteksiKuitanasi: true,
+    });
+    
+    // If OCR wasn't entirely successful but we have some data, show a helpful message
+    if (!success && (ocrData.namaProduk || ocrData.hargaPerLiter || ocrData.volume || ocrData.totalHarga)) {
+      // Some data was detected but not all
+      setTimeout(() => {
+        alert("Beberapa data berhasil dideteksi. Silakan lengkapi atau perbaiki data yang kurang.");
+      }, 300);
+    } 
+    else if (!success) {
+      // No data was detected
+      setTimeout(() => {
+        alert(errorMessage || "Data tidak terdeteksi. Silakan isi secara manual.");
+      }, 300);
+    }
+  };
+
   useEffect(() => {
     fetchTrucks();
     fetchReceipts();
@@ -328,6 +390,9 @@ const KuitansiPage = () => {
     reader.onload = () => {
       const result = reader.result as string;
       setPreviewImage(result);
+      
+      // Otomatis proses OCR saat file dipilih
+      processOCR(result);
     };
     reader.readAsDataURL(file);
   };
@@ -391,86 +456,118 @@ const KuitansiPage = () => {
     return null;
   };
 
-  const cleanField = (raw: string, keywords: string[] = []): string => {
-    let result = raw;
-
-    // Hapus kata kunci seperti "Harga:", "Nama Produk", dll
-    keywords.forEach((keyword) => {
-      const regex = new RegExp(`${keyword}\\s*:?\\s*`, "i");
-      result = result.replace(regex, "");
-    });
-
-    // Hapus simbol dan karakter aneh di awal dan akhir
-    result = result.replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, "");
-
-    return result.trim();
-  };
+  // Tidak lagi memerlukan fungsi cleanField karena OCR diproses di backend
 
   const processOCR = async (imageData: string) => {
     setIsProcessing(true);
     try {
-      const worker = await createWorker("ind");
-      const {
-        data: { text },
-      } = await worker.recognize(imageData);
-      await worker.terminate();
+      // Ekstrak base64 string dari dataURL dengan benar
+      let formattedBase64 = imageData;
+      // Jika imageData sudah memiliki header data:image, gunakan base64 bagian setelah koma
+      if (imageData.includes(',')) {
+        formattedBase64 = imageData.split(',')[1];
+      }
+      
+      const response = await fetch("/api/v1/ocr/process", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({
+        image_base64: formattedBase64,
+        lang: "auto" // Gunakan deteksi otomatis bahasa dengan engine 2
+        }),
+      });
 
-      console.log("Hasil OCR mentah:", text);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
-      // Proses teks hasil OCR
-      const lines = text.split("\n");
-      console.log("Baris-baris hasil OCR:", lines);
+      const result = await response.json();
+      console.log("OCR API Response:", result);
 
-      const extractedData = {
-        waktu: "",
-        namaProduk: "",
-        hargaPerLiter: "",
-        volume: "",
-        totalHarga: "",
+      if (result.data && result.data.extracted_data) {
+        // Konversi dari snake_case ke camelCase untuk kompatibilitas dengan frontend
+        const apiData = result.data.extracted_data;
+      // Format nilai berdasarkan jenisnya
+      // Untuk harga: ubah 12.500 → 12500 (tidak perlu koma/titik ribuan)
+      // Untuk volume: pertahankan desimal, 2.801 → 2.801 (desimal penting)
+      const formatNumberForDisplay = (value, isVolume = false) => {
+        if (!value) return "";
+        
+        // Hapus titik di depan jika ada
+        let formatted = value.startsWith(".") ? value.substring(1) : value;
+        
+        if (isVolume) {
+          // Untuk volume, kita ingin mempertahankan desimal
+          // Pastikan koma diubah ke titik
+          formatted = formatted.replace(/,/g, ".");
+          
+          // Pastikan hanya satu titik desimal
+          const parts = formatted.split(".");
+          if (parts.length > 2) {
+            formatted = parts[0] + "." + parts.slice(1).join("");
+          }
+          
+          // Kalau tidak ada titik, kemungkinan OCR error mengenali 2,801 sebagai 2801
+          if (!formatted.includes(".") && formatted.length > 1) {
+            // Jika angka > 100, kemungkinan butuh konversi ke format desimal
+            const numValue = parseFloat(formatted);
+            if (numValue > 100) {
+              // Kemungkinan kesalahan OCR - konversi 2801 ke 2.801
+              formatted = (numValue / 1000).toFixed(3);
+            }
+          }
+        } else {
+          // Untuk harga, hapus semua titik dan koma
+          formatted = formatted.replace(/[.,]/g, "");
+        }
+        
+        return formatted;
       };
 
-      // Logika ekstraksi data dari teks OCR
-      lines.forEach((line) => {
-        const lowerLine = line.toLowerCase();
-        console.log("Memproses baris:", line);
-        if (lowerLine.includes("waktu") || lowerLine.includes("jam")) {
-          extractedData.waktu = cleanField(line, ["waktu", "jam"]);
-        } else if (
-          lowerLine.includes("produk") ||
-          lowerLine.includes("bensin")
-        ) {
-          extractedData.namaProduk = cleanField(line, [
-            "nama produk",
-            "produk",
-            "bensin",
-          ]);
-        } else if (
-          lowerLine.includes("harga") &&
-          !lowerLine.includes("total")
-        ) {
-          extractedData.hargaPerLiter = cleanField(line, [
-            "harga",
-            "harga/liter",
-            "harga liter",
-          ]);
-        } else if (lowerLine.includes("volume")) {
-          extractedData.volume = cleanField(line, ["volume"]);
-        } else if (lowerLine.includes("total") && lowerLine.includes("harga")) {
-          extractedData.totalHarga = cleanField(line, ["total harga", "total"]);
+      const extractedData = {
+        waktu: apiData.waktu || "",
+        namaProduk: apiData.nama_produk || "",
+        hargaPerLiter: formatNumberForDisplay(apiData.harga_per_liter || ""),
+        volume: formatNumberForDisplay(apiData.volume || "", true),  // true = isVolume
+        totalHarga: formatNumberForDisplay(apiData.total_harga || ""),
+      };
+
+        console.log("Data yang diekstrak dari API:", extractedData);
+        console.log("Raw text dari API:", result.data.raw_text);
+
+        setOcrData(extractedData);
+        
+        // Cek jika data terdeteksi dengan baik
+        const isDataComplete = (
+          extractedData.namaProduk && 
+          extractedData.hargaPerLiter && 
+          extractedData.volume && 
+          extractedData.totalHarga
+        );
+        
+        const isDataPartial = (
+          extractedData.namaProduk || 
+          extractedData.hargaPerLiter || 
+          extractedData.volume || 
+          extractedData.totalHarga
+        );
+        
+        if (isDataComplete) {
+          handleOCRResult(true);
+        } else if (isDataPartial) {
+          handleOCRResult(false, "Data tidak lengkap");
+        } else {
+          handleOCRResult(false, "Tidak ada data yang terdeteksi");
         }
-      });
-
-      console.log("Data yang diekstrak:", extractedData);
-
-      setOcrData(extractedData);
-      // Mengubah state untuk menampilkan hasil deteksi
-      setIsOpen({
-        UnggahKuitansi: false,
-        DeteksiKuitansi: false,
-        HasilDeteksiKuitanasi: true,
-      });
-    } catch (error) {
+      } else {
+        handleOCRResult(false, "Tidak ada data yang berhasil diekstrak dari gambar");
+      }
+    } catch (error: any) {
       console.error("Error processing OCR:", error);
+      handleOCRResult(false, error.message);
     } finally {
       setIsProcessing(false);
     }
@@ -480,7 +577,12 @@ const KuitansiPage = () => {
     const imageData = captureImage();
     if (imageData) {
       setPreviewImage(imageData); // Save captured image for submission
-      await processOCR(imageData);
+      try {
+        await processOCR(imageData);
+      } catch (error) {
+        console.error("Error during capture OCR:", error);
+        handleOCRResult(false, "Terjadi kesalahan saat memproses gambar");
+      }
     }
     stopCamera();
   };
@@ -699,12 +801,12 @@ const KuitansiPage = () => {
                   </div>
 
                   {receipt.image_url ? (
-                    <a>
+                    <a
                       href={receipt.image_url}
-                      target="_blank" rel="noopener noreferrer"
-                      className="w-full mt-3 flex items-center justify-center
-                      gap-2 bg-[#FBB25B] hover:bg-[#EAA347] px-4 py-2 rounded-lg
-                      text-white font-medium transition-colors"
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="w-full mt-3 flex items-center justify-center gap-2 bg-[#FBB25B] hover:bg-[#EAA347] px-4 py-2 rounded-lg text-white font-medium transition-colors"
+                    >
                       <i className="bx bx-image-alt"></i>
                       <span>Bukti foto</span>
                     </a>
@@ -769,11 +871,22 @@ const KuitansiPage = () => {
                   )}
                 </div>
 
-                {/* Upload Area */}
+                  {/* Upload Area */}
                 <div className="space-y-2">
                   <label className="block text-gray-700 font-medium">
                     Upload Kuitansi
                   </label>
+
+                  {/* Tips untuk OCR yang lebih baik */}
+                  <div className="bg-blue-50 p-3 rounded-lg mb-4 text-sm text-gray-600">
+                    <h3 className="font-semibold text-blue-600">Tips hasil OCR terbaik:</h3>
+                    <ul className="list-disc pl-5 mt-1 space-y-1">
+                      <li>Pastikan kuitansi dalam kondisi tidak kusut</li>
+                      <li>Ambil foto dengan pencahayaan yang cukup</li>
+                      <li>Posisikan kamera tegak lurus</li>
+                      <li>Pastikan seluruh kuitansi terlihat jelas</li>
+                    </ul>
+                  </div>
 
                   <div className="flex gap-2">
                     {/* Tombol Kamera */}
@@ -814,6 +927,12 @@ const KuitansiPage = () => {
                           width={400}
                           height={300}
                         />
+                        {isProcessing && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded">
+                            <div className="animate-spin w-10 h-10 border-4 border-white border-t-transparent rounded-full"></div>
+                            <span className="text-white ml-3 font-semibold">Memproses OCR...</span>
+                          </div>
+                        )}
                         <button
                           type="button"
                           className="absolute top-2 right-2 bg-red-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition"
@@ -839,14 +958,20 @@ const KuitansiPage = () => {
                 </button>
                 <button
                   className="px-6 py-2 rounded-lg bg-[#009EFF] text-white font-medium hover:bg-[#0088DD] transition disabled:opacity-50"
-                  onClick={() =>
-                    setIsOpen({
-                      ...isOpen,
-                      UnggahKuitansi: false,
-                      //   DeteksiKuitansi: true,
-                      HasilDeteksiKuitanasi: true,
-                    })
-                  }
+                  onClick={() => {
+                    // Saat tombol Submit ditekan, tampilkan hasil OCR
+                    if (previewImage && ocrData.hargaPerLiter) {
+                      // Jika OCR sudah selesai diproses, buka langsung hasil OCR
+                      setIsOpen({
+                        UnggahKuitansi: false,
+                        DeteksiKuitansi: false,
+                        HasilDeteksiKuitanasi: true,
+                      });
+                    } else if (previewImage) {
+                      // Jika OCR belum selesai, proses OCR terlebih dahulu
+                      processOCR(previewImage);
+                    }
+                  }}
                   disabled={!selectedTruckId || !previewImage}
                 >
                   Submit

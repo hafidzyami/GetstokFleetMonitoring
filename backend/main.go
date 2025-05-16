@@ -16,8 +16,8 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/swagger"
 	_ "github.com/hafidzyami/GetstokFleetMonitoring/backend/docs" // Import generated docs
-	"github.com/hafidzyami/GetstokFleetMonitoring/backend/model"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/migration"
+	"github.com/hafidzyami/GetstokFleetMonitoring/backend/model"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/seed"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/utils"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/websocket"
@@ -45,7 +45,7 @@ func main() {
 	if err := migration.CreateDriverLocationsTable(); err != nil {
 		log.Printf("Error creating driver_locations table: %v", err)
 	}
-	
+
 	// Run fuel receipt migration
 	if err := migration.CreateFuelReceiptsTable(); err != nil {
 		log.Printf("Error creating fuel_receipts table: %v", err)
@@ -70,12 +70,14 @@ func main() {
 	userService := service.NewUserService(userRepo)
 	routingPlanService := service.NewRoutePlanService(routePlanRepo, truckRepo, userRepo)
 	deviationService := service.NewRouteDeviationService(
-		truckRepo, 
-		routePlanRepo, 
+		truckRepo,
+		routePlanRepo,
 		deviationRepo,
 		userRepo, // Add userRepo here so we can get driver names
 	)
-	
+	// Initialize OCR service
+	ocrService := service.NewOCRService()
+
 	// Initialize driver location repository and service
 	driverLocationRepo := repository.NewDriverLocationRepository()
 	driverLocationService := service.NewDriverLocationService(
@@ -84,7 +86,7 @@ func main() {
 		userRepo,
 		routingPlanService,
 	)
-	
+
 	// Set repositories and services for MQTT handlers
 	utils.SetUserRepository(userRepo)
 	mqtt.SetTruckRepository(truckRepo)
@@ -97,7 +99,7 @@ func main() {
 	// S3
 	s3Service, _ := service.NewS3Service()
 	uploadController := controller.NewUploadController(s3Service)
-	
+
 	// Initialize fuel receipt service
 	fuelReceiptService := service.NewFuelReceiptService(
 		fuelReceiptRepo,
@@ -115,6 +117,7 @@ func main() {
 	routePlanController := controller.NewRoutePlanController(routingPlanService)
 	driverLocationController := controller.NewDriverLocationController(driverLocationService)
 	fuelReceiptController := controller.NewFuelReceiptController(fuelReceiptService)
+	ocrController := controller.NewOCRController(ocrService)
 
 	// Initialize Fiber app
 	app := fiber.New(fiber.Config{
@@ -308,6 +311,11 @@ func main() {
 	uploads.Use(middleware.Protected())
 	uploads.Post("/photo", uploadController.UploadPhoto)
 	uploads.Post("/photo/base64", uploadController.UploadBase64Photo)
+
+	// OCR routes
+	ocr := api.Group("/ocr")
+	ocr.Use(middleware.Protected())
+	ocr.Post("/process", ocrController.ProcessOCR)
 
 	// Protected routes
 	api.Get("/profile", middleware.Protected(), authController.GetProfile)
