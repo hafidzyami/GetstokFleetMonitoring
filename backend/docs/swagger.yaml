@@ -724,6 +724,99 @@ paths:
       summary: Get fuel receipts by truck ID
       tags:
       - fuel-receipts
+  /idle-detections:
+    get:
+      consumes:
+      - application/json
+      description: Get all truck idle detections
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Idle detection data
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get all idle detections
+      tags:
+      - idle-detections
+  /idle-detections/{id}/resolve:
+    put:
+      consumes:
+      - application/json
+      description: Mark an idle detection as resolved
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Idle detection ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success message
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Resolve idle detection
+      tags:
+      - idle-detections
+  /idle-detections/active:
+    get:
+      consumes:
+      - application/json
+      description: Get all active (unresolved) idle detections
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Active idle detection data
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get active idle detections
+      tags:
+      - idle-detections
   /ocr/process:
     post:
       consumes:
@@ -1618,6 +1711,43 @@ paths:
       summary: Create a new truck
       tags:
       - trucks
+  /trucks/{id}/idle-detections:
+    get:
+      consumes:
+      - application/json
+      description: Get idle detections for a specific truck
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Truck ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Idle detection data
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get idle detections by truck ID
+      tags:
+      - idle-detections
   /trucks/{macID}:
     get:
       consumes:
@@ -1914,6 +2044,43 @@ paths:
       summary: Update truck information by ID
       tags:
       - trucks
+  /trucks/mac/{macID}/idle-detections:
+    get:
+      consumes:
+      - application/json
+      description: Get idle detections for a specific MAC ID
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: MAC ID
+        in: path
+        name: macID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Idle detection data
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get idle detections by MAC ID
+      tags:
+      - idle-detections
   /uploads/photo:
     post:
       consumes:

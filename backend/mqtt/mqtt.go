@@ -60,6 +60,7 @@ var (
 	truckRepo        repository.TruckRepository
 	truckHistoryRepo repository.TruckHistoryRepository
 	deviationService service.RouteDeviationService
+	idleService      service.TruckIdleService
 )
 
 // SetTruckRepository sets the truck repository for MQTT handlers
@@ -75,6 +76,11 @@ func SetTruckHistoryRepository(repo repository.TruckHistoryRepository) {
 // SetRouteDeviationService sets the route deviation service for MQTT handlers
 func SetRouteDeviationService(svc service.RouteDeviationService) {
 	deviationService = svc
+}
+
+// SetTruckIdleService sets the truck idle detection service for MQTT handlers
+func SetTruckIdleService(svc service.TruckIdleService) {
+	idleService = svc
 }
 
 // NewMQTTClient membuat client MQTT baru
@@ -219,6 +225,15 @@ func (mc *MQTTClient) Subscribe() {
 				if err := deviationService.DetectAndSaveDeviation(macID, positionData.Latitude, positionData.Longitude, positionTime); err != nil {
 					// Just log the error, don't interrupt the main flow
 					log.Printf("Error checking route deviation: %v", err)
+				}
+			}
+			
+			// Process position for idle detection
+			if idleService != nil {
+				log.Printf("Processing position for idle detection for truck %s", macID)
+				if err := idleService.ProcessPosition(macID, positionData.Latitude, positionData.Longitude, positionTime); err != nil {
+					// Just log the error, don't interrupt the main flow
+					log.Printf("Error processing idle detection: %v", err)
 				}
 			}
 		}

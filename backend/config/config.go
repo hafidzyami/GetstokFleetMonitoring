@@ -51,6 +51,7 @@ func ConnectDB() {
 		&model.RouteAvoidanceArea{},
 		&model.RouteAvoidancePoint{},
 		&model.TruckRouteDeviation{},
+		&model.TruckIdleDetection{},
 	)
 	if err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
