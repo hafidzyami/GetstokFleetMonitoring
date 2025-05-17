@@ -11,6 +11,7 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/model"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/repository"
+	"github.com/hafidzyami/GetstokFleetMonitoring/backend/service"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/websocket"
 )
 
@@ -58,6 +59,7 @@ type MQTTClient struct {
 var (
 	truckRepo        repository.TruckRepository
 	truckHistoryRepo repository.TruckHistoryRepository
+	deviationService service.RouteDeviationService
 )
 
 // SetTruckRepository sets the truck repository for MQTT handlers
@@ -68,6 +70,11 @@ func SetTruckRepository(repo repository.TruckRepository) {
 // SetTruckHistoryRepository sets the truck history repository for MQTT handlers
 func SetTruckHistoryRepository(repo repository.TruckHistoryRepository) {
 	truckHistoryRepo = repo
+}
+
+// SetRouteDeviationService sets the route deviation service for MQTT handlers
+func SetRouteDeviationService(svc service.RouteDeviationService) {
+	deviationService = svc
 }
 
 // NewMQTTClient membuat client MQTT baru
@@ -204,6 +211,15 @@ func (mc *MQTTClient) Subscribe() {
 				log.Printf("Failed to save position history: %v", err)
 			} else {
 				log.Printf("Saved position history for truck %s", macID)
+			}
+			
+			// Check and record route deviation if needed
+			if deviationService != nil {
+				log.Printf("Checking for route deviation for truck %s", macID)
+				if err := deviationService.DetectAndSaveDeviation(macID, positionData.Latitude, positionData.Longitude, positionTime); err != nil {
+					// Just log the error, don't interrupt the main flow
+					log.Printf("Error checking route deviation: %v", err)
+				}
 			}
 		}
 

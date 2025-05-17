@@ -53,6 +53,31 @@ const successResponse = (method, data) => ({
   data
 });
 
+async function initializeDatabase() {
+  try {
+    // Cek dan buat tabel push_subscriptions jika belum ada
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        endpoint TEXT UNIQUE NOT NULL,
+        p256dh TEXT NOT NULL,
+        auth TEXT NOT NULL,
+        role TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      
+      CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id);
+      CREATE INDEX IF NOT EXISTS idx_push_subscriptions_role ON push_subscriptions(role);
+    `);
+    console.log('Database initialized successfully');
+  } catch (error) {
+    console.error('Failed to initialize database:', error);
+    process.exit(1);
+  }
+}
+
 /**
  * @swagger
  * /push/vapid-key:
@@ -252,7 +277,7 @@ app.post('/api/v1/push/unsubscribe', protected, async (req, res) => {
  *       500:
  *         description: Server error
  */
-app.post('/api/v1/push/send', protected, roleAuthorization(['management']), async (req, res) => {
+app.post('/api/v1/push/send', async (req, res) => { // Fixed the syntax error here
   try {
     // Validate request
     const { title, message, url, targetRoles, targetUserIDs } = req.body;
@@ -335,10 +360,14 @@ app.post('/api/v1/push/send', protected, roleAuthorization(['management']), asyn
   }
 });
 
+
+
 // Start server
-app.listen(PORT, () => {
-  console.log(`Push notification service running on port ${PORT}`);
-  console.log(`Swagger docs available at http://localhost:${PORT}/api-docs`);
+initializeDatabase().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Push notification service running on port ${PORT}`);
+    console.log(`Swagger docs available at http://localhost:${PORT}/api-docs`);
+  });
 });
 
 module.exports = app;

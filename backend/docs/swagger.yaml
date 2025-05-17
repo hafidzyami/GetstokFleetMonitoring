@@ -99,6 +99,49 @@ definitions:
       sendReport:
         type: string
     type: object
+  model.FuelReceiptCreateRequest:
+    properties:
+      image_base64:
+        description: Optional base64 encoded image
+        type: string
+      price:
+        minimum: 0
+        type: number
+      product_name:
+        type: string
+      timestamp:
+        type: string
+      total_price:
+        minimum: 0
+        type: number
+      truck_id:
+        type: integer
+      volume:
+        minimum: 0
+        type: number
+    required:
+    - price
+    - product_name
+    - timestamp
+    - total_price
+    - truck_id
+    - volume
+    type: object
+  model.FuelReceiptUpdateRequest:
+    properties:
+      price:
+        type: number
+      product_name:
+        type: string
+      timestamp:
+        type: string
+      total_price:
+        type: number
+      truck_id:
+        type: integer
+      volume:
+        type: number
+    type: object
   model.LoginRequest:
     properties:
       email:
@@ -109,6 +152,16 @@ definitions:
     required:
     - email
     - password
+    type: object
+  model.OCRRequest:
+    properties:
+      image_base64:
+        type: string
+      lang:
+        description: Optional language, default is "ind" (Indonesian)
+        type: string
+    required:
+    - image_base64
     type: object
   model.RegisterRequest:
     properties:
@@ -303,6 +356,412 @@ paths:
       summary: Register a new user
       tags:
       - auth
+  /fuel-receipts:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of all fuel receipts with optional filtering
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Filter by driver ID
+        in: query
+        name: driver_id
+        type: integer
+      - description: Filter by truck ID
+        in: query
+        name: truck_id
+        type: integer
+      - description: 'Filter by start date (format: 2006-01-02)'
+        in: query
+        name: start_date
+        type: string
+      - description: 'Filter by end date (format: 2006-01-02)'
+        in: query
+        name: end_date
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Items per page (default: 10)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of fuel receipts
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get all fuel receipts
+      tags:
+      - fuel-receipts
+    post:
+      consumes:
+      - application/json
+      description: Create a new fuel receipt with the provided information
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Fuel receipt data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.FuelReceiptCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Successfully created fuel receipt
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a new fuel receipt
+      tags:
+      - fuel-receipts
+  /fuel-receipts/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a fuel receipt by ID
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Fuel receipt ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully deleted fuel receipt
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a fuel receipt
+      tags:
+      - fuel-receipts
+    get:
+      consumes:
+      - application/json
+      description: Get detailed information about a specific fuel receipt
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Fuel receipt ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Fuel receipt details
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a fuel receipt by ID
+      tags:
+      - fuel-receipts
+    put:
+      consumes:
+      - application/json
+      description: Update an existing fuel receipt with the provided information
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Fuel receipt ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Updated fuel receipt data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.FuelReceiptUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully updated fuel receipt
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a fuel receipt
+      tags:
+      - fuel-receipts
+  /fuel-receipts/driver/{driver_id}:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of fuel receipts for a specific driver
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Driver ID
+        in: path
+        name: driver_id
+        required: true
+        type: integer
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Items per page (default: 10)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of fuel receipts
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get fuel receipts by driver ID
+      tags:
+      - fuel-receipts
+  /fuel-receipts/my-receipts:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of fuel receipts for the currently authenticated
+        driver
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Items per page (default: 10)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of fuel receipts
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get fuel receipts for the authenticated driver
+      tags:
+      - fuel-receipts
+  /fuel-receipts/truck/{truck_id}:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of fuel receipts for a specific truck with
+        optional date filtering
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Truck ID
+        in: path
+        name: truck_id
+        required: true
+        type: integer
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Items per page (default: 10)'
+        in: query
+        name: limit
+        type: integer
+      - description: 'Filter by start date (format: 2006-01-02)'
+        in: query
+        name: start_date
+        type: string
+      - description: 'Filter by end date (format: 2006-01-02)'
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of fuel receipts
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get fuel receipts by truck ID
+      tags:
+      - fuel-receipts
+  /ocr/process:
+    post:
+      consumes:
+      - application/json
+      description: Process an uploaded image with OCR to extract receipt data
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: OCR request with base64 encoded image
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.OCRRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully processed image
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Process image with OCR
+      tags:
+      - ocr
   /profile:
     get:
       consumes:
@@ -1246,6 +1705,52 @@ paths:
     get:
       consumes:
       - application/json
+      description: Get historical fuel data for a truck from the last 30 days, grouped
+        by date, or within a specific date range
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Truck ID
+        in: path
+        name: truckID
+        required: true
+        type: integer
+      - description: 'Start date (format: 2006-01-02)'
+        in: query
+        name: start_date
+        type: string
+      - description: 'End date (format: 2006-01-02)'
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Fuel history data
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get truck fuel history for last 30 days or by date range
+      tags:
+      - trucks
+  /trucks/{truckID}/fuel/limited:
+    get:
+      consumes:
+      - application/json
       description: Get historical fuel data for a truck
       parameters:
       - default: Bearer <token>
@@ -1284,6 +1789,44 @@ paths:
       tags:
       - trucks
   /trucks/{truckID}/positions:
+    get:
+      consumes:
+      - application/json
+      description: Get historical position data for a truck from the last 30 days,
+        grouped by date
+      parameters:
+      - default: Bearer <token>
+        description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Truck ID
+        in: path
+        name: truckID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Position history grouped by date
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get truck position history for last 30 days
+      tags:
+      - trucks
+  /trucks/{truckID}/positions/limited:
     get:
       consumes:
       - application/json

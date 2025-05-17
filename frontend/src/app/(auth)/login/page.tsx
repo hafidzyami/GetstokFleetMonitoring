@@ -111,13 +111,6 @@ const Login = () => {
             {loading ? "Loading..." : "Masuk"}
           </button>
         </form>
-
-        <a
-          href="/reset-password"
-          className="font-light text-sm text-end text-[#BF9105] mt-1"
-        >
-          Lupa Password?
-        </a>
       </div>
     </div>
   );

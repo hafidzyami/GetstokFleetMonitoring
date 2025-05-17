@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"log"
 
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/model"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/repository"
@@ -178,7 +179,10 @@ func (s *routePlanService) CreateRoutePlan(req model.RoutePlanCreateRequest, pla
 		// Parse extras data
 		var extras model.RouteExtras
 		if err := json.Unmarshal([]byte(req.ExtrasData), &extras); err == nil {
-			routePlan.SetExtras(&extras)
+			if err := routePlan.SetExtras(&extras); err != nil {
+				// Tangani error sesuai kebutuhan, misalnya log atau return
+				log.Printf("failed to set extras: %v", err)
+			}
 		}
 	}
 
@@ -344,7 +348,9 @@ func (s *routePlanService) GetRoutePlanByID(id uint) (*model.RoutePlanResponse, 
 
 				// Update the URL in the database
 				area.PhotoURL = newURL
-				s.routePlanRepo.UpdateAvoidanceArea(area)
+				if err := s.routePlanRepo.UpdateAvoidanceArea(area); err != nil {
+					log.Printf("failed to update avoidance area: %v", err)
+				}
 			}
 		}
 
@@ -472,6 +478,11 @@ func (s *routePlanService) DeleteAvoidanceArea(id uint) error {
 		_ = s.s3Service.DeleteObject(area.PhotoKey)
 	}
 
+	if err := s.UpdateAvoidanceAreaStatus(id, "rejected"); err != nil {
+		log.Printf("failed to update avoidance area status to rejected: %v", err)
+	}
+	
+
 	// Delete from database
 	return s.routePlanRepo.DeleteAvoidanceArea(id)
 }
@@ -532,7 +543,9 @@ func (s *routePlanService) GetAvoidanceAreasByPermanentStatus(isPermanent bool) 
 
 				// Update the URL in the database
 				area.PhotoURL = newURL
-				s.routePlanRepo.UpdateAvoidanceArea(area)
+				if err := s.routePlanRepo.UpdateAvoidanceArea(area); err != nil {
+					log.Printf("failed to update avoidance area: %v", err)
+				}
 			}
 		}
 

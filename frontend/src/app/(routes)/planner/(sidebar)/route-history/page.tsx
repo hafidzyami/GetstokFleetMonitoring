@@ -118,7 +118,7 @@ const RiwayatRutePage = () => {
 		try {
 			const date = new Date(dateString);
 			return format(date, "dd MMM yyyy, HH:mm", { locale: id });
-		} catch (e) {
+		} catch {
 			return dateString;
 		}
 	};

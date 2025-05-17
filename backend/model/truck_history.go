@@ -28,3 +28,15 @@ type TruckFuelHistory struct {
 	CreatedAt time.Time      `json:"created_at"`
 	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
 }
+
+// DateGroupedPositionHistory mengelompokkan data posisi berdasarkan tanggal
+type DateGroupedPositionHistory struct {
+	Date      string                  `json:"date"`
+	Positions []*TruckPositionHistory `json:"positions"`
+}
+
+// DateGroupedFuelHistory mengelompokkan data fuel berdasarkan tanggal
+type DateGroupedFuelHistory struct {
+	Date  string              `json:"date"`
+	Fuels []*TruckFuelHistory `json:"fuels"`
+}

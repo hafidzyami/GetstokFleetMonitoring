@@ -278,20 +278,20 @@ const TruckManagementPage = () => {
 	};
 
 	// Function to get status color
-	const getStatusColor = (status: string | undefined | null) => {
-		if (!status) return "text-gray-600";
+	// const getStatusColor = (status: string | undefined | null) => {
+	// 	if (!status) return "text-gray-600";
 
-		switch (status.toLowerCase()) {
-			case "active":
-				return "text-green-600";
-			case "maintenance":
-				return "text-orange-500";
-			case "inactive":
-				return "text-red-600";
-			default:
-				return "text-gray-600";
-		}
-	};
+	// 	switch (status.toLowerCase()) {
+	// 		case "active":
+	// 			return "text-green-600";
+	// 		case "maintenance":
+	// 			return "text-orange-500";
+	// 		case "inactive":
+	// 			return "text-red-600";
+	// 		default:
+	// 			return "text-gray-600";
+	// 	}
+	// };
 
 	return (
 		<div className="h-full">
@@ -359,7 +359,7 @@ const TruckManagementPage = () => {
 									)}
 									{searchTerm && (
 										<span className="font-medium">
-											Pencarian: "{searchTerm}"
+											Pencarian: &quot;{searchTerm}&quot;
 										</span>
 									)}
 								</div>

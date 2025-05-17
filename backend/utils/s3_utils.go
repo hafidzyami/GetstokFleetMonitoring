@@ -40,9 +40,7 @@ func ExtractObjectKeyFromURL(fileURL string) (string, error) {
 	path := parsedURL.Path
 	
 	// Remove leading slash if it exists
-	if strings.HasPrefix(path, "/") {
-		path = path[1:]
-	}
+	path = strings.TrimPrefix(path, "/")
 	
 	// Handle URLs with bucket in path (e.g., custom endpoints)
 	if strings.Contains(parsedURL.Host, ".s3.") {

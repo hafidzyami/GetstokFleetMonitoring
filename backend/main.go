@@ -16,8 +16,8 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/swagger"
 	_ "github.com/hafidzyami/GetstokFleetMonitoring/backend/docs" // Import generated docs
-	"github.com/hafidzyami/GetstokFleetMonitoring/backend/model"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/migration"
+	"github.com/hafidzyami/GetstokFleetMonitoring/backend/model"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/seed"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/utils"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/websocket"
@@ -46,6 +46,11 @@ func main() {
 		log.Printf("Error creating driver_locations table: %v", err)
 	}
 
+	// Run fuel receipt migration
+	if err := migration.CreateFuelReceiptsTable(); err != nil {
+		log.Printf("Error creating fuel_receipts table: %v", err)
+	}
+
 	// Seed
 	seed.SeedUsers(config.DB)
 
@@ -54,18 +59,8 @@ func main() {
 	truckRepo := repository.NewTruckRepository()
 	truckHistoryRepo := repository.NewTruckHistoryRepository()
 	routePlanRepo := repository.NewRoutePlanRepository()
-
-	// Set user repository in utils and mqtt package
-	utils.SetUserRepository(userRepo)
-	mqtt.SetTruckRepository(truckRepo)
-	mqtt.SetTruckHistoryRepository(truckHistoryRepo)
-
-	// Websocket
-	websocket.InitHub()
-
-	// S3
-	s3Service, _ := service.NewS3Service()
-	uploadController := controller.NewUploadController(s3Service)
+	deviationRepo := repository.NewRouteDeviationRepository()
+	fuelReceiptRepo := repository.NewFuelReceiptRepository()
 
 	// Initialize services
 	authService := service.NewAuthService(userRepo)
@@ -74,7 +69,15 @@ func main() {
 	routingSerivce := service.NewRoutingService()
 	userService := service.NewUserService(userRepo)
 	routingPlanService := service.NewRoutePlanService(routePlanRepo, truckRepo, userRepo)
-	
+	deviationService := service.NewRouteDeviationService(
+		truckRepo,
+		routePlanRepo,
+		deviationRepo,
+		userRepo, // Add userRepo here so we can get driver names
+	)
+	// Initialize OCR service
+	ocrService := service.NewOCRService()
+
 	// Initialize driver location repository and service
 	driverLocationRepo := repository.NewDriverLocationRepository()
 	driverLocationService := service.NewDriverLocationService(
@@ -83,7 +86,27 @@ func main() {
 		userRepo,
 		routingPlanService,
 	)
-	
+
+	// Set repositories and services for MQTT handlers
+	utils.SetUserRepository(userRepo)
+	mqtt.SetTruckRepository(truckRepo)
+	mqtt.SetTruckHistoryRepository(truckHistoryRepo)
+	mqtt.SetRouteDeviationService(deviationService)
+
+	// Websocket
+	websocket.InitHub()
+
+	// S3
+	s3Service, _ := service.NewS3Service()
+	uploadController := controller.NewUploadController(s3Service)
+
+	// Initialize fuel receipt service
+	fuelReceiptService := service.NewFuelReceiptService(
+		fuelReceiptRepo,
+		truckRepo,
+		userRepo,
+		s3Service,
+	)
 
 	// Initialize controllers
 	authController := controller.NewAuthController(authService)
@@ -93,6 +116,8 @@ func main() {
 	userController := controller.NewUserController(userService)
 	routePlanController := controller.NewRoutePlanController(routingPlanService)
 	driverLocationController := controller.NewDriverLocationController(driverLocationService)
+	fuelReceiptController := controller.NewFuelReceiptController(fuelReceiptService)
+	ocrController := controller.NewOCRController(ocrService)
 
 	// Initialize Fiber app
 	app := fiber.New(fiber.Config{
@@ -139,8 +164,6 @@ func main() {
 
 	// WebSocket endpoint
 	app.Get("/ws", ws.New(func(c *ws.Conn) {
-		log.Println("New WebSocket client connected")
-
 		// Register client
 		client := &websocket.Client{Conn: c, LastPing: time.Now()}
 		hub := websocket.GetHub()
@@ -176,7 +199,6 @@ func main() {
 					pingJSON, _ := json.Marshal(pingMsg)
 
 					if err := c.WriteMessage(ws.TextMessage, pingJSON); err != nil {
-						log.Printf("Error sending ping: %v", err)
 						close(done)
 						return
 					}
@@ -190,12 +212,8 @@ func main() {
 		for {
 			_, message, err := c.ReadMessage()
 			if err != nil {
-				log.Printf("Read error: %v", err)
 				break
 			}
-
-			// Process incoming messages
-			log.Printf("Received message: %s", message)
 
 			// Update the client's LastPing time when we receive any message
 			client.LastPing = time.Now()
@@ -204,7 +222,6 @@ func main() {
 			var msg map[string]interface{}
 			if err := json.Unmarshal(message, &msg); err == nil {
 				if msgType, ok := msg["type"].(string); ok && msgType == "pong" {
-					log.Printf("Received pong from client, updating LastPing")
 					// Explicitly update LastPing in the hub
 					hub.UpdateClientPing(client)
 				}
@@ -243,8 +260,10 @@ func main() {
 	trucks.Put("/id/:id", truckController.UpdateTruckInfoByID)
 	trucks.Post("/", truckController.CreateTruck)
 	// Add truck history routes
-	trucks.Get("/:truckID/positions", truckHistoryController.GetPositionHistory)
-	trucks.Get("/:truckID/fuel", truckHistoryController.GetFuelHistory)
+	trucks.Get("/:truckID/positions", truckHistoryController.GetPositionHistoryLast30Days)
+	trucks.Get("/:truckID/fuel", truckHistoryController.GetFuelHistoryLast30Days)
+	trucks.Get("/:truckID/positions/limited", truckHistoryController.GetPositionHistory)
+	trucks.Get("/:truckID/fuel/limited", truckHistoryController.GetFuelHistory)
 
 	// Routing routes
 	routing := api.Group("/routing")
@@ -275,11 +294,28 @@ func main() {
 	routePlans.Delete("/avoidance/:id", routePlanController.DeleteAvoidanceArea)
 	routePlans.Put("/:id", routePlanController.UpdateRoutePlan)
 
+	// Fuel Receipt routes
+	fuelReceipts := api.Group("/fuel-receipts")
+	fuelReceipts.Use(middleware.Protected())
+	fuelReceipts.Post("/", fuelReceiptController.CreateFuelReceipt)
+	fuelReceipts.Get("/", fuelReceiptController.GetAllFuelReceipts)
+	fuelReceipts.Get("/my-receipts", fuelReceiptController.GetMyFuelReceipts)
+	fuelReceipts.Get("/driver/:driver_id", fuelReceiptController.GetFuelReceiptsByDriverID)
+	fuelReceipts.Get("/truck/:truck_id", fuelReceiptController.GetFuelReceiptsByTruckID)
+	fuelReceipts.Get("/:id", fuelReceiptController.GetFuelReceiptByID)
+	fuelReceipts.Put("/:id", fuelReceiptController.UpdateFuelReceipt)
+	fuelReceipts.Delete("/:id", fuelReceiptController.DeleteFuelReceipt)
+
 	// Upload
 	uploads := api.Group("/uploads")
 	uploads.Use(middleware.Protected())
 	uploads.Post("/photo", uploadController.UploadPhoto)
 	uploads.Post("/photo/base64", uploadController.UploadBase64Photo)
+
+	// OCR routes
+	ocr := api.Group("/ocr")
+	ocr.Use(middleware.Protected())
+	ocr.Post("/process", ocrController.ProcessOCR)
 
 	// Protected routes
 	api.Get("/profile", middleware.Protected(), authController.GetProfile)

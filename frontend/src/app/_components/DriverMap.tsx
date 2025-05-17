@@ -17,7 +17,7 @@ import "leaflet/dist/leaflet.css";
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
-import Image from "next/image";
+
 
 // Define props for the DriverMap component
 interface DriverMapProps {
@@ -88,7 +88,7 @@ const MapClickHandler = ({
   isMarkingMode?: boolean;
   onAddPoint?: (point: [number, number]) => void;
 }) => {
-  const map = useMapEvents({
+  useMapEvents({
     click: (e : any) => {
       if (isMarkingMode && onAddPoint) {
         onAddPoint([e.latlng.lat, e.latlng.lng]);
@@ -138,8 +138,6 @@ const MarkingInstructions = () => {
 
 // Initialize Leaflet icons
 let defaultIcon: any;
-let startIcon: any;
-let endIcon: any;
 let avoidanceIcon: any;
 let newPointIcon: any;
 

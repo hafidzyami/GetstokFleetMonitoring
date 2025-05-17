@@ -117,7 +117,7 @@ const RouteHistoryPage = () => {
 	const [tollways, setTollways] = useState<
 		{ segment: [number, number][]; tollwayValue: number }[]
 	>([]);
-	const [surfaceTypes, setSurfaceTypes] = useState<any>([]);
+	const [setSurfaceTypes] = useState<any>([]);
 	const [requesterNames, setRequesterNames] = useState<{
 		[key: number]: string;
 	}>({});
@@ -145,30 +145,30 @@ const RouteHistoryPage = () => {
 		[]
 	);
 
-	const fetchRole = async (userId: number | undefined) => {
-		try {
-			if (!userId) return;
+	// const fetchRole = async (userId: number | undefined) => {
+	// 	try {
+	// 		if (!userId) return;
 
-			const response = await fetch(`/api/v1/users/${userId}/role`, {
-				method: "GET",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: `Bearer ${localStorage.getItem("token")}`,
-				},
-			});
+	// 		const response = await fetch(`/api/v1/users/${userId}/role`, {
+	// 			method: "GET",
+	// 			headers: {
+	// 				"Content-Type": "application/json",
+	// 				Authorization: `Bearer ${localStorage.getItem("token")}`,
+	// 			},
+	// 		});
 
-			if (!response.ok) {
-				throw new Error("Failed to fetch user data");
-			}
+	// 		if (!response.ok) {
+	// 			throw new Error("Failed to fetch user data");
+	// 		}
 
-			const data = await response.json();
-			console.log("role", data.data.role);
-			return data.data.role;
-		} catch (error) {
-			console.error("Error fetching user data:", error);
-			return `Pengguna ${userId}`;
-		}
-	};
+	// 		const data = await response.json();
+	// 		console.log("role", data.data.role);
+	// 		return data.data.role;
+	// 	} catch (error) {
+	// 		console.error("Error fetching user data:", error);
+	// 		return `Pengguna ${userId}`;
+	// 	}
+	// };
 
 	useEffect(() => {
 		const fetchRoutePlanDetail = async () => {
@@ -470,48 +470,48 @@ const RouteHistoryPage = () => {
 		try {
 			const date = new Date(dateString);
 			return format(date, "dd MMMM yyyy, HH:mm", { locale: id });
-		} catch (e) {
+		} catch  {
 			return dateString;
 		}
 	};
 
 	// Handle route status update
-	const handleStatusUpdate = async (newStatus: string) => {
-		if (!routePlan) return;
+	// const handleStatusUpdate = async (newStatus: string) => {
+	// 	if (!routePlan) return;
 
-		try {
-			const token = localStorage.getItem("token");
-			if (!token) {
-				router.push("/login");
-				return;
-			}
+	// 	try {
+	// 		const token = localStorage.getItem("token");
+	// 		if (!token) {
+	// 			router.push("/login");
+	// 			return;
+	// 		}
 
-			const response = await fetch(
-				`/api/v1/route-plans/${routePlan.id}/status`,
-				{
-					method: "PUT",
-					headers: {
-						"Content-Type": "application/json",
-						Authorization: `Bearer ${token}`,
-					},
-					body: JSON.stringify({ status: newStatus }),
-				}
-			);
+	// 		const response = await fetch(
+	// 			`/api/v1/route-plans/${routePlan.id}/status`,
+	// 			{
+	// 				method: "PUT",
+	// 				headers: {
+	// 					"Content-Type": "application/json",
+	// 					Authorization: `Bearer ${token}`,
+	// 				},
+	// 				body: JSON.stringify({ status: newStatus }),
+	// 			}
+	// 		);
 
-			if (!response.ok) {
-				throw new Error(`Error updating status: ${response.statusText}`);
-			}
+	// 		if (!response.ok) {
+	// 			throw new Error(`Error updating status: ${response.statusText}`);
+	// 		}
 
-			// Update local state
-			setRoutePlan({
-				...routePlan,
-				status: newStatus,
-			});
-		} catch (err) {
-			console.error("Error updating status:", err);
-			alert("Gagal mengubah status rute. Silakan coba lagi.");
-		}
-	};
+	// 		// Update local state
+	// 		setRoutePlan({
+	// 			...routePlan,
+	// 			status: newStatus,
+	// 		});
+	// 	} catch (err) {
+	// 		console.error("Error updating status:", err);
+	// 		alert("Gagal mengubah status rute. Silakan coba lagi.");
+	// 	}
+	// };
 
 	// Handle avoidance area approval
 	const handleApproveAvoidanceArea = async (areaId: number) => {
@@ -1619,3 +1619,5 @@ const RouteHistoryPage = () => {
 };
 
 export default RouteHistoryPage;
+
+

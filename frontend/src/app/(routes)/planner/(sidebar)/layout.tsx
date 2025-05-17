@@ -2,7 +2,7 @@
 
 import "boxicons/css/boxicons.min.css"; // Import Boxicons CSS
 
-import { Bell, ChevronDown, ChevronLeft, Menu, Search } from "lucide-react";
+import { Bell, ChevronDown, ChevronLeft, Menu, KeyRound, LogOut } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -12,6 +12,7 @@ import Image from "next/image";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { useNotification } from "@/app/contexts/NotificationContext";
 import { useRoleProtection } from "@/app/hooks/useRoleProtection";
+import ResetPasswordModal from "../../driver/ResetPasswordModal";
 
 // import { useWindowSize } from "@/app/hooks/useWindowSize";
 
@@ -30,6 +31,8 @@ interface Notification {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
+	const [dropdownOpen, setDropdownOpen] = useState(false);
+	// const router = useRouter();
 	const [sidebarOpen, setSidebarOpen] = useState(true);
 	// const { width } = useWindowSize();
 	const currentPath = usePathname();
@@ -43,6 +46,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 		subscribe,
 		unsubscribe,
 	} = useNotification();
+
+	const [modalOpen, setModalOpen] = useState(false);
 
 	// State untuk menyimpan data notifikasi yang diterima
 	const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -144,11 +149,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 			name: "Riwayat Rute",
 			href: "/planner/route-history",
 		},
-		{
-			icon: "bx-clipboard",
-			name: "Validasi Rute",
-			href: "/planner/route-validation",
-		},
+		// {
+		// 	icon: "bx-clipboard",
+		// 	name: "Validasi Rute",
+		// 	href: "/planner/route-validation",
+		// },
 		{
 			icon: "bx-bell",
 			name: "Notifikasi",
@@ -162,11 +167,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 				logout();
 			},
 		},
-		{
-			icon: "bx-map",
-			name: "[Hafidz] Rute",
-			href: "/routingplan",
-		},
+		// {
+		// 	icon: "bx-map",
+		// 	name: "[Hafidz] Rute",
+		// 	href: "/routingplan",
+		// },
 	];
 
 	// useEffect(() => {
@@ -370,24 +375,44 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 								</div>
 							</button>
 
-							<div className="relative flex items-center">
-								<button className="flex items-center space-x-2 focus:outline-none">
-									<div className="h-8 w-8 rounded-full bg-[#009EFF] flex items-center justify-center text-white font-semibold">
-										{user?.name?.charAt(0)}
-									</div>
-									{/* <Image src={"https://images.pexels.com/photos/1759531/pexels-photo-1759531.jpeg?auto=compress&cs=tinysrgb&w=200"}  alt="profile"/> */}
-									<span className="hidden lg:flex flex-col items-start text-left">
-										<span className="text-sm font-medium text-gray-900 dark:text-white">
-											{user?.name}
-										</span>
-										<span className="text-xs text-gray-500 dark:text-gray-400">
-											User
-										</span>
-									</span>
-									{/* <ChevronDown className="hidden lg:block h-4 w-4 text-gray-400" /> */}
-								</button>
-							</div>
+							<div className="relative flex items-center ml-auto">
+							<button
+								className="flex items-center space-x-2 focus:outline-none"
+								onClick={() => setDropdownOpen(!dropdownOpen)}
+							>
+								<div className="h-8 w-8 rounded-full bg-[#009EFF] flex items-center justify-center text-white font-semibold">
+								{user?.name?.charAt(0) ?? "U"}
+								</div>
+								<span className="hidden lg:flex flex-col items-start text-left">
+								<span className="text-sm font-medium text-gray-900 dark:text-white">
+									{user?.name ?? "User"}
+								</span>
+								<span className="text-xs text-gray-500 dark:text-gray-400">User</span>
+								</span>
+								<ChevronDown className="hidden lg:block h-4 w-4 text-gray-400" />
+							</button>
 
+							{dropdownOpen && (
+								<div className="absolute top-12 right-0 w-44 bg-white border border-gray-200 rounded-md shadow-md z-50 py-2">
+								<button
+									onClick={() => setModalOpen(true)}
+									className="w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+									>
+									<KeyRound className="w-4 h-4" />
+									Reset Password
+									</button>
+
+									<ResetPasswordModal isOpen={modalOpen} onClose={() => setModalOpen(false)} />
+								<button
+									onClick={logout}
+									className="w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+								>
+									<LogOut className="w-4 h-4" />
+									Logout
+								</button>
+								</div>
+							)}
+							</div>
 							{/* Notification Alert */}
 							{showNotificationPanel && (
 								<div className="fixed right-4 top-14 w-80 bg-white shadow-lg rounded-lg z-[1000] border overflow-hidden animate-fadeIn">

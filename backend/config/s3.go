@@ -53,14 +53,7 @@ func InitS3Client() {
 
 	// If using a custom endpoint (e.g., MinIO)
 	if endpoint != "" {
-		options.EndpointResolver = s3.EndpointResolverFunc(
-			func(region string, options s3.EndpointResolverOptions) (aws.Endpoint, error) {
-				return aws.Endpoint{
-					URL:               endpoint,
-					SigningRegion:     region,
-					HostnameImmutable: true,
-				}, nil
-			})
+		options.BaseEndpoint = aws.String(endpoint)
 	}
 
 	// Create the S3 client

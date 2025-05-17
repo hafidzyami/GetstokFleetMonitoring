@@ -17,19 +17,19 @@ logging.basicConfig(
 logger = logging.getLogger("Truck-Simulator")
 
 # Default MQTT broker settings
-DEFAULT_BROKER = "getstokfms.com"
+DEFAULT_BROKER = "staging.getstokfms.com"
 DEFAULT_PORT = 1883
 DEFAULT_TOPIC_PREFIX = "getstokfms"
 
 # Jakarta area coordinates for reference
-JAKARTA_CENTER_LAT = -6.2
-JAKARTA_CENTER_LONG = 106.8
-SPREAD_RADIUS = 0.1  # Roughly 10km spread
+JAKARTA_CENTER_LAT = -6.890562
+JAKARTA_CENTER_LONG = 107.613235
+SPREAD_RADIUS = 0.1 
 
 class TruckSimulator:
     def __init__(self, truck_id, broker_url, port, topic_prefix, interval=5):
         """Initialize a truck simulator with given ID."""
-        self.truck_id = f"truck-{truck_id:03d}"
+        self.truck_id = f"MAC{truck_id}"
         self.broker_url = broker_url
         self.port = port
         self.topic_prefix = topic_prefix

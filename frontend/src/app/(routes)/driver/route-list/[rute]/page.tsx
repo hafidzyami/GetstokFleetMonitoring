@@ -381,8 +381,8 @@ const DriverRouteDetailPage = () => {
         return;
       }
 
-      // Prepare the data
-      const formData = new FormData();
+      // // Prepare the data
+      // const formData = new FormData();
 
       // Convert points to format yang dibutuhkan API
       const pointsData = newAvoidanceArea.points.map((point, index) => ({
@@ -681,7 +681,7 @@ const DriverRouteDetailPage = () => {
     try {
       const date = new Date(dateString);
       return format(date, "dd MMMM yyyy, HH:mm", { locale: id });
-    } catch (e) {
+    } catch {
       return dateString;
     }
   };
@@ -741,8 +741,8 @@ const DriverRouteDetailPage = () => {
       {showSuccessMessage && (
         <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded z-50 shadow-md">
           <span className="font-bold">Berhasil!</span> Area yang tidak dapat
-          dilewati telah ditambahkan dan status rute diubah menjadi "Menunggu
-          Konfirmasi".
+          dilewati telah ditambahkan dan status rute diubah menjadi &quot;Menunggu
+          Konfirmasi&quot;.
         </div>
       )}
 

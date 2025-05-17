@@ -78,13 +78,17 @@ interface ApiResponse {
   context?: string;
   id?: string;
   method?: string;
-  data: RoutePlan;
+  data: {
+    id: number;
+    route_plan: RoutePlan;
+  };
   error?: {
     code: number;
     message: string;
     errors?: any[];
   };
 }
+
 
 // Define the marker types
 interface MapMarker {
@@ -99,7 +103,7 @@ const DriverActiveRoutePage = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [markers, setMarkers] = useState<MapMarker[]>([]);
-  const [center, setCenter] = useState<[number, number]>([-6.8904, 107.6102]); // Default to Bandung
+  const [center] = useState<[number, number]>([-6.8904, 107.6102]); // Default to Bandung
   const [routeLatLngs, setRouteLatLngs] = useState<[number, number][]>([]);
   const mapRef = useRef<any>(null);
   const [segments, setSegments] = useState<{ segment: [number, number][]; typeValue: number }[]>([]);
@@ -166,7 +170,8 @@ const DriverActiveRoutePage = () => {
         throw new Error(`Error ${response.status}: ${response.statusText}`);
       }
 
-      const data: any = await response.json();
+      const data: ApiResponse = await response.json();
+
       console.log("Active route data:", data);
       
       if (!data.data) {
