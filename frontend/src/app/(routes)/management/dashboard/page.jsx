@@ -759,22 +759,18 @@ const DashboardPage = () => {
 
   // Initialize chart when fuel data changes or view mode changes
   useEffect(() => {
-    // Cleanup function untuk menghapus chart sebelumnya
-    const cleanupChart = () => {
-      if (chartRef.current) {
-        console.log('Destroying previous chart');
-        chartRef.current.destroy();
-        chartRef.current = null;
-      }
-    };
-    
     // Skip jika tidak ada truck aktif atau bukan di tab sensor
     if (!activeTruck || viewMode !== "sensor") {
       // Reset chartData jika pindah dari tab sensor
       if (chartData && viewMode !== "sensor") {
         setChartData(null);
       }
-      cleanupChart();
+      // Clean up chart if exists
+      if (chartRef.current) {
+        console.log('Destroying chart on view change');
+        chartRef.current.destroy();
+        chartRef.current = null;
+      }
       return;
     }
     
@@ -791,55 +787,86 @@ const DashboardPage = () => {
     const truckDateKey = `${activeTruck.id}_${selectedDayInfo.isoDate}`;
     const fallbackKey = `${activeTruck.id}_today`;
     
-    console.log(`Looking for fuel data with key: ${truckDateKey} or fallback: ${fallbackKey}`);
-    console.log(`Available cache keys:`, Object.keys(fuelData));
-    
     const dayFuelData = fuelData[truckDateKey] || fuelData[fallbackKey];
 
     if (!dayFuelData) {
-      console.log(`No fuel data for truck ${activeTruck.id} on ${selectedDay}. Waiting for data...`);
-      // If no data yet, update chartData to null and clear chart
+      // No data available
+      console.log(`No fuel data for truck ${activeTruck.id} on ${selectedDay}`);
       setChartData(null);
-      cleanupChart();
       return;
     }
 
     const { times, levels } = dayFuelData;
     
-    // Logging untuk debug
-    console.log(`Rendering chart for truck ${activeTruck.id} with ${times.length} data points. Selected day: ${selectedDay}`);
-    if (times.length > 0) {
-      console.log(`First data point fuel level: ${levels[0]}, last data point: ${levels[levels.length-1]}`);
-    }
-
-    // Update chartData state untuk trigger conditional rendering
-    setChartData(dayFuelData);
-    
-    // Jika tidak ada data, jangan buat chart - UI akan menampilkan pesan "no data"
     if (times.length === 0) {
-      cleanupChart();
+      // Empty data
+      console.log(`Empty data for truck ${activeTruck.id} on ${selectedDay}`);
+      setChartData(dayFuelData);
       return;
     }
 
-    // Hanya lanjutkan membuat chart jika ada data
-    // Tunggu sampai DOM element siap
-    setTimeout(() => {
-      const chartElement = document.querySelector("#fleet-chart");
-      if (!chartElement) {
-        console.log('Chart element not found in DOM');
+    // Update chartData state for conditional rendering
+    console.log(`Setting chart data with ${times.length} points for ${selectedDay}`);
+    setChartData(dayFuelData);
+    
+    // Now create the chart only in another useEffect that depends on chartData
+  }, [activeTruck?.id, selectedDay, viewMode, loadingFuelData, fuelData]);
+  
+  // Separate useEffect to render the chart
+  useEffect(() => {
+    // Only proceed if we have chart data and are in sensor view mode
+    if (!chartData || !chartData.times || viewMode !== "sensor" || !activeTruck) {
+      return;
+    }
+    
+    // Get reference to chart element
+    const chartElement = document.getElementById("fleet-chart");
+    if (!chartElement) {
+      console.log('Chart element not found');
+      return;
+    }
+    
+    // Cleanup old chart
+    if (chartRef.current) {
+      console.log('Cleaning up old chart');
+      chartRef.current.destroy();
+      chartRef.current = null;
+    }
+    
+    // Slight delay to give React time to complete rendering
+    const renderTimer = setTimeout(() => {
+      // Make sure we still have the element (it might have been removed during the timeout)
+      if (!document.getElementById("fleet-chart")) {
+        console.log('Chart element no longer exists after timeout');
         return;
       }
       
-      cleanupChart();
+      console.log(`Creating new chart with ${chartData.times.length} points`);
+      
+      // Get the selected day info
+      const selectedDayInfo = activityDays.find((day) => day.day === selectedDay);
+      if (!selectedDayInfo) return;
 
-      // Logging ke console untuk debug
-      console.log(`Creating chart with ${times.length} data points`);
+      const { times, levels } = chartData;
 
-      // Actual data points exist, render chart
+      // Create chart config
       const options = {
         chart: {
           type: "line",
           height: 200,
+          animations: {
+            enabled: false, // Disable animations to prevent flickering
+            dynamicAnimation: {
+              enabled: false
+            },
+            animateGradually: {
+              enabled: false
+            },
+            easing: 'linear',
+            speed: 100
+          },
+          redrawOnParentResize: false, // Prevent automatic redraws
+          redrawOnWindowResize: false,
           toolbar: {
             show: true,
             tools: {
@@ -971,19 +998,24 @@ const DashboardPage = () => {
         },
       };
 
-      // Buat chart baru di DOM
+      // Create chart
       try {
-        console.log(`Creating new chart for truck ${activeTruck.id}`);
         chartRef.current = new ApexCharts(chartElement, options);
         chartRef.current.render();
-      } catch (err) {
-        console.error("Error creating chart:", err);
+      } catch (error) {
+        console.error("Error creating chart:", error);
       }
-    }, 0);
+    }, 150); // Use a slightly longer delay
 
-    // Cleanup function saat unmount atau rerender
-    return cleanupChart;
-  }, [activeTruck?.id, selectedDay, viewMode, loadingFuelData, fuelData, fuelReceipts]);
+    return () => {
+      // Cleanup
+      clearTimeout(renderTimer);
+      if (chartRef.current) {
+        chartRef.current.destroy();
+        chartRef.current = null;
+      }
+    };
+  }, [chartData, viewMode, activeTruck, selectedDay, fuelReceipts, activityDays]);
 
   useEffect(() => {
     // This ensures we can track if the component is still mounted
