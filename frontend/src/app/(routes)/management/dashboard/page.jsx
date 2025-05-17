@@ -40,6 +40,14 @@ const deviatingTruckIcon = new L.Icon({
   popupAnchor: [0, -32],
 });
 
+// Custom truck icon for idle trucks
+const idleTruckIcon = new L.Icon({
+  iconUrl: "/truck-icon.png", // Create this icon in orange or with idle symbol
+  iconSize: [32, 32],
+  iconAnchor: [16, 32],
+  popupAnchor: [0, -32],
+});
+
 // Reference point icon
 const referencePointIcon = new L.Icon({
   iconUrl: "/marker-icon.png", // Create a small dot/marker icon
@@ -57,6 +65,22 @@ const createDeviationLabelIcon = (distance) => {
     )}m</div>`,
     iconSize: [40, 20],
     iconAnchor: [20, 10],
+  });
+};
+
+// Custom divIcon for showing idle status
+const createIdleLabelIcon = (duration) => {
+  // Format duration from seconds to hours:minutes:seconds
+  const hours = Math.floor(duration / 3600);
+  const minutes = Math.floor((duration % 3600) / 60);
+  const seconds = duration % 60;
+  const formattedDuration = `${hours}h ${minutes}m ${seconds}s`;
+  
+  return L.divIcon({
+    className: "idle-label",
+    html: `<div class="bg-orange-500 text-white px-2 py-1 rounded text-xs font-bold">Idle: ${formattedDuration}</div>`,
+    iconSize: [100, 20],
+    iconAnchor: [50, 10],
   });
 };
 
@@ -145,6 +169,8 @@ const DashboardPage = () => {
   const [loadingRoutePlans, setLoadingRoutePlans] = useState(false);
   const [deviatingTrucks, setDeviatingTrucks] = useState({});
   const [showDeviationAlert, setShowDeviationAlert] = useState(false);
+  const [idleTrucks, setIdleTrucks] = useState({}); // State for idle trucks
+  const [showIdleAlert, setShowIdleAlert] = useState(false); // State for idle alerts
   const [deviationThreshold] = useState(35); // Deviation threshold in meters
   const [deviationReferences, setDeviationReferences] = useState({});
   const socketRef = useRef(null);
@@ -350,6 +376,47 @@ const DashboardPage = () => {
       setActiveRoutePlans([]);
     } finally {
       setLoadingRoutePlans(false);
+    }
+  };
+
+  // Function to fetch active idle trucks
+  const fetchActiveIdleTrucks = async () => {
+    try {
+      const response = await fetch("/api/v1/idle-detections/active", {
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data && data.data) {
+        console.log("Active idle detections received:", data.data.length);
+        
+        // Convert array to object with macID as key for easier updates
+        const idleTrucksMap = {};
+        data.data.forEach((idleDetection) => {
+          idleTrucksMap[idleDetection.mac_id] = {
+            ...idleDetection,
+            timestamp: new Date(),
+          };
+        });
+        
+        setIdleTrucks(idleTrucksMap);
+        setShowIdleAlert(Object.keys(idleTrucksMap).length > 0);
+        
+        console.log("Idle trucks data loaded:", Object.keys(idleTrucksMap).length);
+      } else {
+        console.warn("Empty or invalid response for active idle detections");
+        setIdleTrucks({});
+        setShowIdleAlert(false);
+      }
+    } catch (err) {
+      console.error("Error fetching active idle detections:", err);
     }
   };
 
@@ -701,18 +768,20 @@ const DashboardPage = () => {
     return () => clearTimeout(prefetchTimer);
   }, [activeTruck?.id]);
 
-  // Refresh active route plans secara periodik
+  // Refresh active route plans and idle detections secara periodik
   useEffect(() => {
     // Inisialisasi icon Leaflet
     initLeafletIcons();
 
-    // Fetch route plans
+    // Fetch route plans and idle detections
     fetchActiveRoutePlans();
+    fetchActiveIdleTrucks();
 
     // Set interval untuk refresh data setiap 60 detik
     const interval = setInterval(() => {
       if (componentMountedRef.current) {
         fetchActiveRoutePlans();
+        fetchActiveIdleTrucks();
       }
     }, 60000);
 
@@ -1170,6 +1239,49 @@ const DashboardPage = () => {
                 return updatedTrucks;
               });
             }
+            
+            // Process idle detections
+            if (message.type === "idle_detection") {
+              console.log("Received idle detection notification:", message);
+              
+              // Update idle trucks state
+              setIdleTrucks((prevIdleTrucks) => {
+                const updatedIdleTrucks = { ...prevIdleTrucks };
+                
+                // Add or update idle truck
+                updatedIdleTrucks[message.mac_id] = {
+                  mac_id: message.mac_id,
+                  plate_number: message.plate_number,
+                  latitude: message.latitude,
+                  longitude: message.longitude,
+                  start_time: message.start_time,
+                  duration: message.duration,
+                  timestamp: new Date(),
+                };
+                
+                return updatedIdleTrucks;
+              });
+              
+              // Show idle alert
+              setShowIdleAlert(true);
+            }
+            
+            // Process idle resolved notifications
+            if (message.type === "idle_resolved") {
+              console.log("Received idle resolved notification:", message);
+              
+              // Remove from idle trucks state
+              setIdleTrucks((prevIdleTrucks) => {
+                const updatedIdleTrucks = { ...prevIdleTrucks };
+                
+                // Remove the resolved idle truck
+                if (updatedIdleTrucks[message.mac_id]) {
+                  delete updatedIdleTrucks[message.mac_id];
+                }
+                
+                return updatedIdleTrucks;
+              });
+            }
           } catch (error) {
             console.error(
               "Error processing WebSocket message:",
@@ -1406,6 +1518,58 @@ const DashboardPage = () => {
           </div>
         </div>
       )}
+      
+      {/* Idle Trucks Alert Notification */}
+      {showIdleAlert && (
+        <div className="bg-orange-100 border-l-4 border-orange-500 text-orange-700 p-4 mb-4 rounded shadow-md">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <i className="bx bx-time-five text-2xl text-orange-500"></i>
+            </div>
+            <div className="ml-3">
+              <p className="font-bold">Idle Trucks Alert</p>
+              <p className="text-sm">
+                {Object.keys(idleTrucks).length === 1
+                  ? "1 truck is currently idle."
+                  : `${Object.keys(idleTrucks).length} trucks are currently idle.`}
+              </p>
+            </div>
+            <div className="ml-auto">
+              <button
+                onClick={() => setShowIdleAlert(false)}
+                className="text-orange-500 hover:text-orange-700 focus:outline-none"
+              >
+                <i className="bx bx-x text-xl"></i>
+              </button>
+            </div>
+          </div>
+          <div className="mt-2 max-h-32 overflow-y-auto">
+            {Object.values(idleTrucks).map((idleData) => {
+              const truck = trucks[idleData.mac_id] || { mac_id: idleData.mac_id };
+              return (
+                <div
+                  key={idleData.mac_id}
+                  className="flex justify-between items-center text-sm mt-1 border-t border-orange-200 pt-1"
+                >
+                  <span className="font-medium">
+                    {idleData.plate_number || truck.plate_number || idleData.mac_id}
+                  </span>
+                  <span>
+                    Idle for{" "}
+                    <span className="font-bold">{Math.floor(idleData.duration / 60)} minutes</span>
+                  </span>
+                  <button
+                    onClick={() => handleTruckSelect(truck)}
+                    className="px-2 py-1 bg-orange-200 hover:bg-orange-300 rounded text-xs"
+                  >
+                    View
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {/* Connection Status and Route Legend */}
       <div className="flex justify-between mb-4">
         {/* Legend untuk active routes */}
@@ -1504,6 +1668,8 @@ const DashboardPage = () => {
                       ? "border-l-4 border-[#009EFF] bg-[#E6F5FF] shadow-md"
                       : deviatingTrucks[truck.mac_id]
                       ? "border-l-4 border-red-500 bg-red-50"
+                      : idleTrucks[truck.mac_id]
+                      ? "border-l-4 border-orange-500 bg-orange-50"
                       : truckHasActiveRoute(truck)
                       ? "border-l-4 border-green-500 border-opacity-70"
                       : "border-gray-200"
@@ -1530,6 +1696,15 @@ const DashboardPage = () => {
                           >
                             <i className="bx bxs-error-circle mr-1"></i>
                             Off Route!
+                          </span>
+                        )}
+                        {idleTrucks[truck.mac_id] && (
+                          <span
+                            className="flex items-center text-xs text-orange-500 font-bold ml-1"
+                            title={`Idle for ${Math.floor(idleTrucks[truck.mac_id].duration / 60)} minutes`}
+                          >
+                            <i className="bx bx-time-five mr-1"></i>
+                            Idle
                           </span>
                         )}
                       </div>
@@ -1600,6 +1775,8 @@ const DashboardPage = () => {
                     truck={truck}
                     isDeviating={!!deviatingTrucks[truck.mac_id]}
                     deviation={deviatingTrucks[truck.mac_id]}
+                    isIdle={!!idleTrucks[truck.mac_id]}
+                    idleData={idleTrucks[truck.mac_id]}
                     isActive={
                       activeTruck && activeTruck.mac_id === truck.mac_id
                     }
@@ -2065,6 +2242,8 @@ function TruckMarker({
   truck,
   isDeviating,
   deviation,
+  isIdle,
+  idleData,
   isActive,
   onClick,
   markerRefs,
@@ -2096,39 +2275,68 @@ function TruckMarker({
     }
   }, [isActive]);
 
+  // Determine which icon to use based on truck status
+  const getIcon = () => {
+    if (isDeviating) return deviatingTruckIcon;
+    if (isIdle) return idleTruckIcon;
+    return truckIcon;
+  };
+
   return (
-    <Marker
-      position={[truck.latitude, truck.longitude]}
-      icon={isDeviating ? deviatingTruckIcon : truckIcon}
-      eventHandlers={{
-        ...eventHandlers,
-        click: () => onClick(truck),
-      }}
-    >
-      <Popup ref={popupRef}>
-        <div>
-          <h3 className="font-bold">
-            {truck.plate_number || `Truck ${truck.mac_id}`}
-            {isDeviating && (
-              <span className="ml-2 text-red-500 text-sm">(Off Route!)</span>
-            )}
-          </h3>
-          <p>Type: {truck.type || "Unknown"}</p>
-          <p>
-            Fuel:{" "}
-            {truck.fuel !== undefined ? `${truck.fuel.toFixed(2)}%` : "N/A"}
-          </p>
-          <p>
-            Position: {truck.latitude.toFixed(6)}, {truck.longitude.toFixed(6)}
-          </p>
-          {isDeviating && deviation && (
-            <p className="text-red-500 font-medium mt-2">
-              Off route by {deviation.distance.toFixed(0)} meters!
+    <>
+      <Marker
+        position={[truck.latitude, truck.longitude]}
+        icon={getIcon()}
+        eventHandlers={{
+          ...eventHandlers,
+          click: () => onClick(truck),
+        }}
+      >
+        <Popup ref={popupRef}>
+          <div>
+            <h3 className="font-bold">
+              {truck.plate_number || `Truck ${truck.mac_id}`}
+              {isDeviating && (
+                <span className="ml-2 text-red-500 text-sm">(Off Route!)</span>
+              )}
+              {isIdle && (
+                <span className="ml-2 text-orange-500 text-sm">(Idle)</span>
+              )}
+            </h3>
+            <p>Type: {truck.type || "Unknown"}</p>
+            <p>
+              Fuel:{" "}
+              {truck.fuel !== undefined ? `${truck.fuel.toFixed(2)}%` : "N/A"}
             </p>
-          )}
-        </div>
-      </Popup>
-    </Marker>
+            <p>
+              Position: {truck.latitude.toFixed(6)}, {truck.longitude.toFixed(6)}
+            </p>
+            {isDeviating && deviation && (
+              <p className="text-red-500 font-medium mt-2">
+                Off route by {deviation.distance.toFixed(0)} meters!
+              </p>
+            )}
+            {isIdle && idleData && (
+              <p className="text-orange-500 font-medium mt-2">
+                Idle for {Math.floor(idleData.duration / 60)} minutes and {idleData.duration % 60} seconds
+              </p>
+            )}
+          </div>
+        </Popup>
+      </Marker>
+
+      {/* Show idle duration label above the idle truck */}
+      {isIdle && idleData && (
+        <Marker
+          position={[
+            truck.latitude + 0.0003, // Offset slightly to position above the truck marker
+            truck.longitude
+          ]}
+          icon={createIdleLabelIcon(idleData.duration)}
+          interactive={false}
+        />
+      )}
+    </>
   );
 }
 
