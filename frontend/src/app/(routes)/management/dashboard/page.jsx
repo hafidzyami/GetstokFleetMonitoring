@@ -160,8 +160,41 @@ const DashboardPage = () => {
   const [activityDays, setActivityDays] = useState([]);
   const [loadingFuelData, setLoadingFuelData] = useState(false);
   const [loadingFuelReceipts, setLoadingFuelReceipts] = useState(false);
+  const [selectedDayCategory, setSelectedDayCategory] = useState('recent'); // recent, week1, week2, week3
+  const [searchDay, setSearchDay] = useState('');
 
   const [defaultCenter, setDefaultCenter] = useState([-6.2, 106.816666]);
+  
+  // Filter dan kategorikan hari berdasarkan pencarian dan kategori
+  const filteredActivityDays = useMemo(() => {
+    // Filter berdasarkan pencarian
+    let filtered = activityDays;
+    
+    if (searchDay) {
+      filtered = activityDays.filter(item => {
+        const dayText = item.day.toLowerCase();
+        const dateText = item.date.toLowerCase();
+        return dayText.includes(searchDay.toLowerCase()) || dateText.includes(searchDay.toLowerCase());
+      });
+    } else {
+      // Filter berdasarkan kategori jika tidak ada pencarian
+      if (selectedDayCategory === 'recent') {
+        // Today + 2 days
+        filtered = activityDays.slice(0, 3);
+      } else if (selectedDayCategory === 'week1') {
+        // Day 3-9
+        filtered = activityDays.slice(3, 10); 
+      } else if (selectedDayCategory === 'week2') {
+        // Day 10-16
+        filtered = activityDays.slice(10, 17);
+      } else if (selectedDayCategory === 'week3') {
+        // Day 17+
+        filtered = activityDays.slice(17);
+      }
+    }
+    
+    return filtered;
+  }, [activityDays, searchDay, selectedDayCategory]);
 
   // Effect to get user's current location
   useEffect(() => {
@@ -183,7 +216,7 @@ const DashboardPage = () => {
     }
   }, []);
 
-  // Generate activity days for today and past 4 days
+  // Generate activity days for today and past 29 days (total 30 days)
   useEffect(() => {
     const generateActivityDays = () => {
       const days = [];
@@ -205,13 +238,18 @@ const DashboardPage = () => {
         isoDate: today.toISOString().split("T")[0],
       });
 
-      // Add past 4 days
-      for (let i = 1; i <= 4; i++) {
+      // Add past 29 days for a total of 30 days
+      for (let i = 1; i <= 29; i++) {
         const pastDate = new Date(today);
         pastDate.setDate(today.getDate() - i);
 
+        // For days beyond a week, use date format instead of day name
+        const dayLabel = i <= 6 
+          ? dayNames[pastDate.getDay()] 
+          : pastDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
         days.push({
-          day: dayNames[pastDate.getDay()],
+          day: dayLabel,
           date: pastDate.toLocaleDateString(),
           isoDate: pastDate.toISOString().split("T")[0],
         });
@@ -306,11 +344,9 @@ const DashboardPage = () => {
 
   // Function to fetch fuel history for a specific truck
   const fetchFuelHistory = async (truckId, date) => {
-    if (!truckId) return;
+    if (!truckId) return Promise.reject("No truck ID provided");
 
     try {
-      setLoadingFuelData(true);
-
       // Convert date string to API expected format (YYYY-MM-DD)
       let startDate, endDate;
 
@@ -324,8 +360,18 @@ const DashboardPage = () => {
         endDate = today;
       }
 
-      console.log(`Fetching fuel history for truck ${truckId} from ${startDate} to ${endDate}`);
+      // Create unique cache key using truckId and date
+      const cacheKey = `${truckId}_${date || "today"}`;
       
+      console.log(`Fetching fuel history for truck ${truckId} from ${startDate} to ${endDate}, cache key: ${cacheKey}`);
+      
+      // Check if we already have data cached for this truck + date combination
+      if (fuelData[cacheKey]) {
+        console.log(`Using cached fuel data for ${cacheKey}`);
+        return Promise.resolve(fuelData[cacheKey]);
+      }
+      
+      // If no cached data, proceed with fetch
       const response = await fetch(
         `/api/v1/trucks/${truckId}/fuel?start_date=${startDate}&end_date=${endDate}`,
         {
@@ -340,46 +386,49 @@ const DashboardPage = () => {
       }
 
       const data = await response.json();
-      console.log("Raw fuel history response:", data);
+      console.log(`Raw fuel history response for ${truckId}:`, data);
 
       if (data && data.data) {
-        console.log("Fuel history received:", data.data);
+        console.log(`Fuel history received for truck ${truckId}:`, data.data);
         
         // Handle both the DateGroupedFuelHistory format and direct array format
-        let fuelData;
+        let fuelDataPoints;
         
         if (Array.isArray(data.data)) {
           // This is the direct format from date range queries
-          fuelData = data.data;
+          fuelDataPoints = data.data;
           console.log("Using direct fuel history array format");
         } else if (Array.isArray(data.data.Fuels)) {
           // This might be the grouped format from 30-day query, with a single date
-          fuelData = data.data.Fuels;
+          fuelDataPoints = data.data.Fuels;
           console.log("Using single day fuel history format");
         } else if (Array.isArray(data.data)) {
           // This is the grouped format from 30-day query, with multiple dates
           // Find the entry for our specific date if exists
           const dateEntry = data.data.find(entry => entry.Date === date);
-          fuelData = dateEntry?.Fuels || [];
+          fuelDataPoints = dateEntry?.Fuels || [];
           console.log(`Using fuel history for date ${date}`);
         } else {
-          console.warn("Unknown fuel history data format", data.data);
-          fuelData = [];
+          console.warn(`Unknown fuel history data format for truck ${truckId}`, data.data);
+          fuelDataPoints = [];
         }
 
         // Process fuel data for chart display
-        const processedData = processFuelData(fuelData);
+        const processedData = processFuelData(fuelDataPoints);
 
-        // Update state with the new data
+        // Update state with the new data - use the cache key to store data by truck and date
         setFuelData((prevData) => ({
           ...prevData,
-          [date || "today"]: processedData,
+          [cacheKey]: processedData,
         }));
+        
+        return processedData;
       }
+      
+      return Promise.resolve({times: [], levels: []});
     } catch (err) {
-      console.error("Error fetching fuel history:", err);
-    } finally {
-      setLoadingFuelData(false);
+      console.error(`Error fetching fuel history for truck ${truckId}:`, err);
+      return Promise.reject(err);
     }
   };
 
@@ -400,35 +449,87 @@ const DashboardPage = () => {
     // Extract times and fuel levels
     const times = sortedData.map((item) => {
       const date = new Date(item.timestamp);
-      return date.toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
+      
+      // Format tanggal dan waktu yang lebih lengkap
+      // Untuk visualisasi chart yang lebih baik, gunakan format yang berbeda
+      // berdasarkan pada jumlah data
+      if (sortedData.length > 50) {
+        // Jika data sangat banyak, gunakan format jam:menit + tanggal
+        return `${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')} ${date.getDate()}/${date.getMonth()+1}`;
+      } else {
+        return date.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
     });
 
     const levels = sortedData.map((item) => {
       // Handle different property names - use fuel_level or fuel depending on which exists
+      let value = 0;
       if (typeof item.fuel_level === "number") {
-        return item.fuel_level;
+        value = item.fuel_level;
       } else if (typeof item.fuel === "number") {
-        return item.fuel;
+        value = item.fuel;
       } else {
         console.warn("Missing fuel level data in item:", item);
-        return 0; // Default value
+        value = 0; // Default value
       }
+      
+      // Pastikan nilai tidak memiliki terlalu banyak desimal
+      return Number(parseFloat(value).toFixed(2));
     });
+    
+    // Untuk data yang sangat banyak, lakukan sampling data
+    // untuk performa yang lebih baik pada chart
+    if (times.length > 100) {
+      console.log(`Data terlalu banyak (${times.length} titik), lakukan sampling`);
+      const sampledTimes = [];
+      const sampledLevels = [];
+      const samplingRate = Math.ceil(times.length / 100); // Ambil sekitar 100 titik data
+      
+      for (let i = 0; i < times.length; i += samplingRate) {
+        sampledTimes.push(times[i]);
+        sampledLevels.push(levels[i]);
+      }
+      
+      // Pastikan titik terakhir selalu masuk ke dalam sample
+      if (times.length > 0 && (times.length - 1) % samplingRate !== 0) {
+        sampledTimes.push(times[times.length - 1]);
+        sampledLevels.push(levels[levels.length - 1]);
+      }
+      
+      console.log(`Sampling selesai, sekarang ada ${sampledTimes.length} titik data`);
+      return { times: sampledTimes, levels: sampledLevels };
+    }
 
     console.log(`Processed ${times.length} fuel data points for chart`);
     return { times, levels };
   };
 
+  // Receipts cache to avoid repeated fetches
+  const [receiptsCache, setReceiptsCache] = useState({});
+  
   const fetchFuelReceipts = async (truckId, startDate, endDate) => {
-    if (!truckId) return;
+    if (!truckId) return Promise.reject("No truck ID provided");
 
     try {
+      // Create a cache key based on parameters
+      const cacheKey = `${truckId}_${startDate}_${endDate}`;
+      
+      // Check cache first but for now log what we have
+      console.log(`Checking receipts cache for key ${cacheKey}`, receiptsCache);
+      console.log(`Cache keys available:`, Object.keys(receiptsCache));
+      
+      if (receiptsCache[cacheKey] && receiptsCache[cacheKey].length > 0) {
+        console.log(`Using cached fuel receipts for ${cacheKey} (${receiptsCache[cacheKey].length} items)`);
+        setFuelReceipts(receiptsCache[cacheKey]);
+        return Promise.resolve(receiptsCache[cacheKey]);
+      }
+      
       setLoadingFuelReceipts(true);
 
-      // Fix: Properly construct URL with actual truckId value
+      // Properly construct URL with actual truckId value
       let url = `/api/v1/fuel-receipts/truck/${truckId}`;
 
       // Add query parameters with proper ? and & syntax
@@ -460,42 +561,134 @@ const DashboardPage = () => {
       }
 
       const data = await response.json();
-      console.log("Raw API response:", data);
+      console.log("Raw API response for receipts:", data);
 
       // Fix: Match the actual data structure from the API
+      let receiptsData = [];
+      
       if (data && data.data && data.data.receipts) {
         console.log("Fuel receipts received:", data.data.receipts);
-        setFuelReceipts(data.data.receipts);
+        receiptsData = data.data.receipts;
+      } else if (data && data.data && Array.isArray(data.data)) {
+        // Alternative structure where receipts might be directly in data array
+        console.log("Fuel receipts received in array format:", data.data);
+        receiptsData = data.data;
       } else {
         console.log("No fuel receipts data or empty array received:", data);
-        setFuelReceipts([]);
+        receiptsData = [];
       }
+      
+      // Set the state with the fetched data
+      setFuelReceipts(receiptsData);
+      
+      // Update cache
+      setReceiptsCache(prevCache => ({
+        ...prevCache,
+        [cacheKey]: receiptsData
+      }));
+      
+      return Promise.resolve(receiptsData);
     } catch (err) {
       console.error("Error fetching fuel receipts:", err);
       setFuelReceipts([]);
+      return Promise.reject(err);
     } finally {
       setLoadingFuelReceipts(false);
     }
   };
 
-  // Effect to fetch fuel data when activeTruck or selectedDay changes
   useEffect(() => {
+    // Skip if no truck is selected
     if (!activeTruck) return;
 
-    // Find the selected day in activityDays
-    const selectedDayInfo = activityDays.find((day) => day.day === selectedDay);
-    if (!selectedDayInfo) return;
+    // Use a function to encapsulate the logic for cleaner code
+    const fetchDataForSelectedDay = async () => {
+      // Find the selected day in activityDays
+      const selectedDayInfo = activityDays.find((day) => day.day === selectedDay);
+      if (!selectedDayInfo) return;
 
-    // Fetch fuel history for the selected day
-    fetchFuelHistory(activeTruck.id, selectedDayInfo.isoDate);
-
-    // Fetch fuel receipts for the selected day
-    fetchFuelReceipts(
-      activeTruck.id,
-      selectedDayInfo.isoDate,
-      selectedDayInfo.isoDate
-    );
-  }, [activeTruck, selectedDay, activityDays]);
+      // Generate cache key for truck + date
+      const fuelCacheKey = `${activeTruck.id}_${selectedDayInfo.isoDate}`;
+      const receiptCacheKey = `${activeTruck.id}_${selectedDayInfo.isoDate}_${selectedDayInfo.isoDate}`;
+      
+      console.log(`Selected day: ${selectedDay}, Loading data for ${selectedDayInfo.isoDate}`);
+      console.log(`Checking for fuel cache key: ${fuelCacheKey}`);
+      console.log(`Checking for receipt cache key: ${receiptCacheKey}`);
+      
+      // Set loading indicators
+      setLoadingFuelData(true);
+      setLoadingFuelReceipts(true);
+      
+      try {
+        // Run both fetches concurrently
+        await Promise.all([
+          // Fetch fuel history data if needed
+          !fuelData[fuelCacheKey] ? fetchFuelHistory(activeTruck.id, selectedDayInfo.isoDate) : Promise.resolve(fuelData[fuelCacheKey]),
+          
+          // Always fetch receipt data to ensure we have latest
+          fetchFuelReceipts(activeTruck.id, selectedDayInfo.isoDate, selectedDayInfo.isoDate)
+        ]);
+        
+        console.log(`Data fetching complete for ${selectedDayInfo.isoDate}`);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      } finally {
+        // Ensure loading state is cleared even if there's an error
+        setLoadingFuelData(false);
+        setLoadingFuelReceipts(false);
+      }
+    };
+    
+    // Execute our fetch function
+    fetchDataForSelectedDay();
+    
+  }, [activeTruck?.id, selectedDay]);
+  
+  // Prefetch data for recently selected truck to improve response time
+  useEffect(() => {
+    if (!activeTruck) return;
+    
+    // Prefetch today's data immediately
+    const today = new Date().toISOString().split("T")[0];
+    const todayCacheKey = `${activeTruck.id}_today`;
+    
+    // Only fetch if we don't already have the data cached
+    if (!fuelData[todayCacheKey]) {
+      fetchFuelHistory(activeTruck.id, today);
+    }
+    
+    const todayReceiptKey = `${activeTruck.id}_${today}_${today}`;
+    if (!receiptsCache[todayReceiptKey]) {
+      fetchFuelReceipts(activeTruck.id, today, today);
+    }
+    
+    // Optional: Prefetch last 7 days data in background for quick access
+    const prefetchRecentDays = async () => {
+      // Only prefetch first 7 days to avoid too many requests
+      for (let i = 1; i < 7; i++) {
+        if (activityDays[i]) {
+          const dayDate = activityDays[i].isoDate;
+          const dayCacheKey = `${activeTruck.id}_${dayDate}`;
+          
+          // Skip if we already have the data
+          if (fuelData[dayCacheKey]) {
+            console.log(`Already have data for ${dayCacheKey}, skipping prefetch`);
+            continue;
+          }
+          
+          // Small delay to avoid overloading the API
+          await new Promise(resolve => setTimeout(resolve, 300));
+          // Use the truck ID and date for prefetching
+          fetchFuelHistory(activeTruck.id, dayDate);
+        }
+      }
+    };
+    
+    // Start prefetching with a small delay after initial load
+    const prefetchTimer = setTimeout(prefetchRecentDays, 1000);
+    
+    return () => clearTimeout(prefetchTimer);
+  }, [activeTruck?.id]);
 
   // Refresh active route plans secara periodik
   useEffect(() => {
@@ -556,39 +749,68 @@ const DashboardPage = () => {
   // Initialize chart when fuel data changes
   useEffect(() => {
     if (!activeTruck || viewMode !== "sensor") return;
+    
+    // Skip rendering chart during loading
+    if (loadingFuelData) return;
 
     const chartElement = document.querySelector("#fleet-chart");
     if (!chartElement) return;
 
+    // Clean up existing chart if it exists
     if (chartRef.current) {
       chartRef.current.destroy();
+      chartRef.current = null;
     }
 
     // Find the selected day in activityDays
     const selectedDayInfo = activityDays.find((day) => day.day === selectedDay);
     if (!selectedDayInfo) return;
 
-    // Get fuel data for the selected day
-    const dayFuelData = fuelData[selectedDayInfo.isoDate] || fuelData["today"];
+    // Get fuel data for the selected day and specific truck
+    const truckDateKey = `${activeTruck.id}_${selectedDayInfo.isoDate}`;
+    const fallbackKey = `${activeTruck.id}_today`;
+    
+    console.log(`Looking for fuel data with key: ${truckDateKey} or fallback: ${fallbackKey}`);
+    console.log(`Available cache keys:`, Object.keys(fuelData));
+    const dayFuelData = fuelData[truckDateKey] || fuelData[fallbackKey];
 
     if (!dayFuelData) {
-      console.log("No fuel data for the selected day. Waiting for data...");
+      console.log(`No fuel data for truck ${activeTruck.id} on ${selectedDay}. Waiting for data...`);
       // If no data yet, don't render chart
       return;
     }
 
     const { times, levels } = dayFuelData;
-    console.log(`Rendering chart with ${times.length} data points. Selected day: ${selectedDay}`);
+    console.log(`Rendering chart for truck ${activeTruck.id} with ${times.length} data points. Selected day: ${selectedDay}`);
+    if (times.length > 0) {
+      console.log(`First data point fuel level: ${levels[0]}, last data point: ${levels[levels.length-1]}`);
+    }
 
-    // If no real data available, use placeholder message
+    // Logging ke console untuk debug
+    console.log(`Data for chart: ${times.length} points`);
+    if (times.length > 0) {
+      console.log(`Sample data - time: ${times[0]}, level: ${levels[0]}`);
+      console.log(`Chart title will be: Fuel Levels - ${selectedDayInfo.day} (${selectedDayInfo.date})`);
+    }
+
+    // Clear any previous "no data" message before rendering chart
+    chartElement.innerHTML = '';
+    
+    // Double-check times length to make sure we don't show "no data" message 
+    // and chart at the same time
     if (times.length === 0) {
-      // Create a temporary div with a message
+      // Create a temporary div with a message for no data
       const messageDiv = document.createElement('div');
-      messageDiv.className = 'flex justify-center items-center h-[200px] text-gray-500';
-      messageDiv.innerHTML = 'No fuel sensor data available for the selected day';
+      messageDiv.className = 'flex flex-col justify-center items-center h-[200px] text-gray-500';
+      messageDiv.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-300 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+        </svg>
+        <p class="text-center">No fuel sensor data available for the selected day</p>
+        <p class="text-center text-xs text-gray-400 mt-1">${selectedDayInfo.day} - ${selectedDayInfo.date}</p>
+      `;
       
-      // Clear chart container and append message
-      chartElement.innerHTML = '';
+      // Append message to empty chart container
       chartElement.appendChild(messageDiv);
       return;
     }
@@ -610,6 +832,11 @@ const DashboardPage = () => {
             reset: true,
           },
         },
+        zoom: {
+          enabled: true,
+          type: 'x',
+          autoScaleYaxis: true
+        },
       },
       series: [
         {
@@ -617,6 +844,41 @@ const DashboardPage = () => {
           data: levels,
         },
       ],
+      // Tambah anotasi jika ada fuel receipt pada hari tersebut
+      annotations: fuelReceipts && fuelReceipts.length > 0 ? {
+        points: fuelReceipts.map(receipt => {
+          // Cari waktu untuk anotasi
+          const receiptDate = new Date(receipt.created_at);
+          const formattedTime = receiptDate.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          
+          // Cari indeks waktu terdekat di chart
+          const timeIndex = times.findIndex(time => time.includes(formattedTime));
+          
+          return {
+            x: timeIndex !== -1 ? times[timeIndex] : times[0],
+            y: timeIndex !== -1 ? levels[timeIndex] : 50,
+            marker: {
+              size: 5,
+              fillColor: '#FF7700',
+              strokeColor: '#FFF',
+              strokeWidth: 2,
+              radius: 2,
+            },
+            label: {
+              text: `Isi ${receipt.volume}L`,
+              borderColor: '#FF7700',
+              style: {
+                fontSize: '10px',
+                color: '#fff',
+                background: '#FF7700',
+              },
+            }
+          };
+        })
+      } : undefined,
       xaxis: {
         categories: times,
         title: {
@@ -636,17 +898,29 @@ const DashboardPage = () => {
         min: 0,
         max: 100,
         forceNiceScale: true,
+        decimalsInFloat: 0, // Jangan tampilkan desimal
+        labels: {
+          formatter: (value) => { 
+            return parseInt(value); // Hanya tampilkan nilai bulat
+          }
+        }
       },
       title: {
         text: `Fuel Levels - ${selectedDayInfo.day} (${selectedDayInfo.date})`,
         align: 'center',
         style: {
           fontSize: '14px',
+          fontWeight: 'bold',
+          color: '#333'
         },
       },
       subtitle: {
         text: activeTruck ? `Truck: ${activeTruck.plate_number || activeTruck.mac_id}` : '',
         align: 'center',
+        style: {
+          fontSize: '12px',
+          color: '#666'
+        },
       },
       colors: ["#009EFF"],
       stroke: {
@@ -654,9 +928,10 @@ const DashboardPage = () => {
         width: 3,
       },
       markers: {
-        size: 4,
+        size: times.length > 20 ? 0 : 4, // Hilangkan markers jika data terlalu banyak
         hover: {
           size: 6,
+          sizeOffset: 3
         },
       },
       tooltip: {
@@ -674,10 +949,17 @@ const DashboardPage = () => {
         },
         borderColor: '#f1f1f1'
       },
+      // Zoom sudah dikonfigurasi pada chart di atas
     };
 
-    chartRef.current = new ApexCharts(chartElement, options);
-    chartRef.current.render();
+    // Buat chart baru di DOM
+    try {
+      console.log(`Creating new chart for truck ${activeTruck.id}`);
+      chartRef.current = new ApexCharts(chartElement, options);
+      chartRef.current.render();
+    } catch (err) {
+      console.error("Error creating chart:", err);
+    }
 
     return () => {
       if (chartRef.current) {
@@ -685,7 +967,7 @@ const DashboardPage = () => {
         chartRef.current = null;
       }
     };
-  }, [activeTruck, selectedDay, viewMode, fuelData]);
+  }, [activeTruck?.id, selectedDay, viewMode, loadingFuelData]);
 
   useEffect(() => {
     // This ensures we can track if the component is still mounted
@@ -1438,13 +1720,13 @@ const DashboardPage = () => {
               {viewMode === "sensor" && (
                 <div className="relative">
                   {loadingFuelData ? (
-                    <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-70">
-                      <div className="text-[#009EFF]">
-                        Loading sensor data...
-                      </div>
+                    <div className="flex flex-col justify-center items-center h-[200px] bg-white">
+                      <div className="w-8 h-8 border-4 border-[#009EFF] border-t-transparent rounded-full animate-spin mb-3"></div>
+                      <p className="text-[#009EFF]">Loading sensor data...</p>
                     </div>
-                  ) : null}
-                  <div id="fleet-chart" className="w-full h-[200px]" />
+                  ) : (
+                    <div id="fleet-chart" className="w-full h-[200px] transition-all duration-300" />
+                  )}
                 </div>
               )}
               {viewMode === "data" && (
@@ -1454,63 +1736,71 @@ const DashboardPage = () => {
                   </h4>
                   {loadingFuelReceipts ? (
                     <div className="flex justify-center items-center h-36">
-                      <div className="text-[#009EFF]">
-                        Loading fuel receipt data...
+                      <div className="flex flex-col items-center text-[#009EFF]">
+                        <div className="w-8 h-8 border-4 border-[#009EFF] border-t-transparent rounded-full animate-spin mb-3"></div>
+                        <p>Loading fuel receipt data...</p>
                       </div>
                     </div>
-                  ) : fuelReceipts.length > 0 ? (
-                    <table className="w-full text-sm border border-gray-200 rounded">
-                      <thead className="bg-[#009EFF] text-white">
-                        <tr>
-                          <th className="p-2 border">DateTime</th>
-                          <th className="p-2 border">Product</th>
-                          <th className="p-2 border">Price/Liter</th>
-                          <th className="p-2 border">Volume</th>
-                          <th className="p-2 border">Total Price</th>
-                          <th className="p-2 border">Bukti Foto</th>
-                        </tr>
-                      </thead>
-                      <tbody className="text-center">
-                        {fuelReceipts.map((receipt) => (
-                          <tr key={receipt.id}>
-                            <td className="p-2 border">
-                              {new Date(receipt.created_at).toLocaleString()}
-                            </td>
-                            <td className="p-2 border">
-                              {receipt.product_name}
-                            </td>
-                            <td className="p-2 border">
-                              Rp {receipt.price.toLocaleString()}
-                            </td>
-                            <td className="p-2 border">
-                              {receipt.volume} Liter
-                            </td>
-                            <td className="p-2 border">
-                              Rp {receipt.total_price.toLocaleString()}
-                            </td>
-                            <td className="p-2 border">
-                              {receipt.image_url ? (
-                                <a href={receipt.image_url} target="_blank" rel="noopener noreferrer">
-                                  <div className="flex flex-col items-center">
-                                    <img
-                                      src={receipt.image_url}
-                                      alt="Bukti Receipt"
-                                      className="w-16 h-16 object-cover rounded border border-gray-300 mb-1"
-                                    />
-                                    <span className="text-xs text-blue-500 hover:underline">Lihat Foto</span>
-                                  </div>
-                                </a>
-                              ) : (
-                                <span className="text-gray-400 text-xs">Tidak ada foto</span>
-                              )}
-                            </td>
+                  ) : fuelReceipts && fuelReceipts.length > 0 ? (
+                    <>
+                      <div className="mb-2 text-xs text-gray-500">{fuelReceipts.length} receipt(s) found</div>
+                      <table className="w-full text-sm border border-gray-200 rounded">
+                        <thead className="bg-[#009EFF] text-white">
+                          <tr>
+                            <th className="p-2 border">DateTime</th>
+                            <th className="p-2 border">Product</th>
+                            <th className="p-2 border">Price/Liter</th>
+                            <th className="p-2 border">Volume</th>
+                            <th className="p-2 border">Total Price</th>
+                            <th className="p-2 border">Bukti Foto</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody className="text-center">
+                          {fuelReceipts.map((receipt) => (
+                            <tr key={receipt.id || `receipt-${Math.random()}`}>
+                              <td className="p-2 border">
+                                {receipt.created_at ? new Date(receipt.created_at).toLocaleString() : 'N/A'}
+                              </td>
+                              <td className="p-2 border">
+                                {receipt.product_name || 'N/A'}
+                              </td>
+                              <td className="p-2 border">
+                                {receipt.price ? `Rp ${Number(receipt.price).toLocaleString()}` : 'N/A'}
+                              </td>
+                              <td className="p-2 border">
+                                {receipt.volume ? `${Number(receipt.volume)} Liter` : 'N/A'}
+                              </td>
+                              <td className="p-2 border">
+                                {receipt.total_price ? `Rp ${Number(receipt.total_price).toLocaleString()}` : 'N/A'}
+                              </td>
+                              <td className="p-2 border">
+                                {receipt.image_url ? (
+                                  <a href={receipt.image_url} target="_blank" rel="noopener noreferrer">
+                                    <div className="flex flex-col items-center">
+                                      <img
+                                        src={receipt.image_url}
+                                        alt="Bukti Receipt"
+                                        className="w-16 h-16 object-cover rounded border border-gray-300 mb-1"
+                                      />
+                                      <span className="text-xs text-blue-500 hover:underline">Lihat Foto</span>
+                                    </div>
+                                  </a>
+                                ) : (
+                                  <span className="text-gray-400 text-xs">Tidak ada foto</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </>
                   ) : (
-                    <div className="text-center text-gray-500 py-4">
-                      No fuel receipt data available for {selectedDay}
+                    <div className="flex flex-col items-center justify-center text-center text-gray-500 py-8 rounded-lg border border-gray-200 bg-gray-50">
+                      <svg className="w-12 h-12 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                      </svg>
+                      <p>No fuel receipt data available for {selectedDay}</p>
+                      <p className="text-sm mt-1">Try selecting another date or adding a receipt</p>
                     </div>
                   )}
                 </div>
@@ -1613,35 +1903,87 @@ const DashboardPage = () => {
 
               {/* Right column (Activity) - Only on small screens */}
               <div className="flex-1 pl-4 border-l lg:border-l-0 lg:pl-0 lg:pt-4 lg:mt-4 lg:border-t">
-                <span className="text-xs text-[#009EFF] font-medium block mb-2">
-                  Aktivitas
-                </span>
-                <div className="flex flex-col gap-2 overflow-y-auto text-xs">
-                  {activityDays.map((item, index) => (
-                    <div
-                      key={index}
-                      onClick={() => setSelectedDay(item.day)}
-                      className={`border border-[#F1F1F1] p-3 rounded-md cursor-pointer ${
-                        selectedDay === item.day
-                          ? "bg-[#E6F5FF] border-[#009EFF]"
-                          : ""
-                      }`}
-                    >
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="font-medium text-[#484848]">
-                          {item.day}
-                          {item.date && (
-                            <span className="text-[#ADADAD] font-light ml-2">
-                              {item.date}
-                            </span>
-                          )}
-                        </span>
-                        <span className="text-yellow-500">
-                          <i className="bx bx-calendar"></i>
-                        </span>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs text-[#009EFF] font-medium">
+                    Aktivitas (30 hari terakhir)
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    {activityDays.length} hari
+                  </span>
+                </div>
+                {/* Tambahkan pencarian/filter untuk memudahkan navigasi saat banyak hari */}
+                {/* Tabs untuk kategori hari */}
+                <div className="flex mb-3 bg-gray-100 p-1 rounded-md">
+                  <button 
+                    className={`flex-1 px-3 py-1.5 text-xs rounded-md transition-all ${selectedDayCategory === 'recent' ? 'bg-white text-[#009EFF] shadow' : 'text-gray-600 hover:bg-gray-200'}`}
+                    onClick={() => setSelectedDayCategory('recent')}
+                  >
+                    Terbaru
+                  </button>
+                  <button 
+                    className={`flex-1 px-3 py-1.5 text-xs rounded-md transition-all ${selectedDayCategory === 'week1' ? 'bg-white text-[#009EFF] shadow' : 'text-gray-600 hover:bg-gray-200'}`}
+                    onClick={() => setSelectedDayCategory('week1')}
+                  >
+                    Minggu 1
+                  </button>
+                  <button 
+                    className={`flex-1 px-3 py-1.5 text-xs rounded-md transition-all ${selectedDayCategory === 'week2' ? 'bg-white text-[#009EFF] shadow' : 'text-gray-600 hover:bg-gray-200'}`}
+                    onClick={() => setSelectedDayCategory('week2')}
+                  >
+                    Minggu 2
+                  </button>
+                  <button 
+                    className={`flex-1 px-3 py-1.5 text-xs rounded-md transition-all ${selectedDayCategory === 'week3' ? 'bg-white text-[#009EFF] shadow' : 'text-gray-600 hover:bg-gray-200'}`}
+                    onClick={() => setSelectedDayCategory('week3')}
+                  >
+                    Minggu 3+
+                  </button>
+                </div>
+                
+                {/* Pencarian */}
+                <div className="mb-2">
+                  <input 
+                    type="text" 
+                    placeholder="Cari tanggal..." 
+                    className="w-full p-2 text-xs border border-gray-200 rounded-md focus:outline-none focus:border-[#009EFF]"
+                    onChange={(e) => {
+                      const searchTerm = e.target.value.toLowerCase();
+                      setSearchDay(searchTerm);
+                    }}
+                  />
+                </div>
+                <div className="flex flex-col gap-2 overflow-y-auto max-h-[300px] text-xs">
+                  {filteredActivityDays.length > 0 ? (
+                    filteredActivityDays.map((item, index) => (
+                      <div
+                        key={index}
+                        onClick={() => setSelectedDay(item.day)}
+                        className={`day-item border border-[#F1F1F1] p-2 rounded-md cursor-pointer ${
+                          selectedDay === item.day
+                            ? "bg-[#E6F5FF] border-[#009EFF]"
+                            : ""
+                        }`}
+                      >
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium text-[#484848]">
+                            {item.day}
+                            {item.date && (
+                              <span className="text-[#ADADAD] font-light ml-2">
+                                {item.date}
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-yellow-500">
+                            <i className="bx bx-calendar"></i>
+                          </span>
+                        </div>
                       </div>
+                    ))
+                  ) : (
+                    <div className="text-center text-gray-500 py-3">
+                      Tidak ada data untuk kriteria yang dipilih
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
             </div>
