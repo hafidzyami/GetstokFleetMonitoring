@@ -156,6 +156,7 @@ const DashboardPage = () => {
   const [selectedDay, setSelectedDay] = useState("Today");
   const [viewMode, setViewMode] = useState("sensor"); // default view is 'sensor'
   const [fuelData, setFuelData] = useState({});
+  const [chartData, setChartData] = useState(null); // State untuk menyimpan data chart yang aktif
   const [fuelReceipts, setFuelReceipts] = useState([]);
   const [activityDays, setActivityDays] = useState([]);
   const [loadingFuelData, setLoadingFuelData] = useState(false);
@@ -231,6 +232,15 @@ const DashboardPage = () => {
         "Saturday",
       ];
 
+      // Helper function to format month name
+      const getMonthName = (monthIndex) => {
+        const monthNames = [
+          "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+        ];
+        return monthNames[monthIndex];
+      };
+
       // Add today
       days.push({
         day: "Today",
@@ -243,14 +253,15 @@ const DashboardPage = () => {
         const pastDate = new Date(today);
         pastDate.setDate(today.getDate() - i);
 
-        // For days beyond a week, use date format instead of day name
-        const dayLabel = i <= 6 
-          ? dayNames[pastDate.getDay()] 
-          : pastDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        // Buat format tanggal yang konsisten
+        const formattedDate = `${getMonthName(pastDate.getMonth())} ${pastDate.getDate()}`;
+        
+        // Konsisten selalu gunakan nama hari untuk semua tanggal
+        const dayLabel = dayNames[pastDate.getDay()];
 
         days.push({
           day: dayLabel,
-          date: pastDate.toLocaleDateString(),
+          date: formattedDate,
           isoDate: pastDate.toISOString().split("T")[0],
         });
       }
@@ -746,20 +757,30 @@ const DashboardPage = () => {
     }
   }, [activeTruck]);
 
-  // Initialize chart when fuel data changes
+  // Initialize chart when fuel data changes or view mode changes
   useEffect(() => {
-    if (!activeTruck || viewMode !== "sensor") return;
+    // Cleanup function untuk menghapus chart sebelumnya
+    const cleanupChart = () => {
+      if (chartRef.current) {
+        console.log('Destroying previous chart');
+        chartRef.current.destroy();
+        chartRef.current = null;
+      }
+    };
+    
+    // Skip jika tidak ada truck aktif atau bukan di tab sensor
+    if (!activeTruck || viewMode !== "sensor") {
+      // Reset chartData jika pindah dari tab sensor
+      if (chartData && viewMode !== "sensor") {
+        setChartData(null);
+      }
+      cleanupChart();
+      return;
+    }
     
     // Skip rendering chart during loading
-    if (loadingFuelData) return;
-
-    const chartElement = document.querySelector("#fleet-chart");
-    if (!chartElement) return;
-
-    // Clean up existing chart if it exists
-    if (chartRef.current) {
-      chartRef.current.destroy();
-      chartRef.current = null;
+    if (loadingFuelData) {
+      return;
     }
 
     // Find the selected day in activityDays
@@ -772,202 +793,197 @@ const DashboardPage = () => {
     
     console.log(`Looking for fuel data with key: ${truckDateKey} or fallback: ${fallbackKey}`);
     console.log(`Available cache keys:`, Object.keys(fuelData));
+    
     const dayFuelData = fuelData[truckDateKey] || fuelData[fallbackKey];
 
     if (!dayFuelData) {
       console.log(`No fuel data for truck ${activeTruck.id} on ${selectedDay}. Waiting for data...`);
-      // If no data yet, don't render chart
+      // If no data yet, update chartData to null and clear chart
+      setChartData(null);
+      cleanupChart();
       return;
     }
 
     const { times, levels } = dayFuelData;
+    
+    // Logging untuk debug
     console.log(`Rendering chart for truck ${activeTruck.id} with ${times.length} data points. Selected day: ${selectedDay}`);
     if (times.length > 0) {
       console.log(`First data point fuel level: ${levels[0]}, last data point: ${levels[levels.length-1]}`);
     }
 
-    // Logging ke console untuk debug
-    console.log(`Data for chart: ${times.length} points`);
-    if (times.length > 0) {
-      console.log(`Sample data - time: ${times[0]}, level: ${levels[0]}`);
-      console.log(`Chart title will be: Fuel Levels - ${selectedDayInfo.day} (${selectedDayInfo.date})`);
-    }
-
-    // Clear any previous "no data" message before rendering chart
-    chartElement.innerHTML = '';
+    // Update chartData state untuk trigger conditional rendering
+    setChartData(dayFuelData);
     
-    // Double-check times length to make sure we don't show "no data" message 
-    // and chart at the same time
+    // Jika tidak ada data, jangan buat chart - UI akan menampilkan pesan "no data"
     if (times.length === 0) {
-      // Create a temporary div with a message for no data
-      const messageDiv = document.createElement('div');
-      messageDiv.className = 'flex flex-col justify-center items-center h-[200px] text-gray-500';
-      messageDiv.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-300 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-        </svg>
-        <p class="text-center">No fuel sensor data available for the selected day</p>
-        <p class="text-center text-xs text-gray-400 mt-1">${selectedDayInfo.day} - ${selectedDayInfo.date}</p>
-      `;
-      
-      // Append message to empty chart container
-      chartElement.appendChild(messageDiv);
+      cleanupChart();
       return;
     }
 
-    // Actual data points exist, render chart
-    const options = {
-      chart: {
-        type: "line",
-        height: 200,
-        toolbar: {
-          show: true,
-          tools: {
-            download: true,
-            selection: true,
-            zoom: true,
-            zoomin: true,
-            zoomout: true,
-            pan: true,
-            reset: true,
-          },
-        },
-        zoom: {
-          enabled: true,
-          type: 'x',
-          autoScaleYaxis: true
-        },
-      },
-      series: [
-        {
-          name: "Fuel Level",
-          data: levels,
-        },
-      ],
-      // Tambah anotasi jika ada fuel receipt pada hari tersebut
-      annotations: fuelReceipts && fuelReceipts.length > 0 ? {
-        points: fuelReceipts.map(receipt => {
-          // Cari waktu untuk anotasi
-          const receiptDate = new Date(receipt.created_at);
-          const formattedTime = receiptDate.toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          });
-          
-          // Cari indeks waktu terdekat di chart
-          const timeIndex = times.findIndex(time => time.includes(formattedTime));
-          
-          return {
-            x: timeIndex !== -1 ? times[timeIndex] : times[0],
-            y: timeIndex !== -1 ? levels[timeIndex] : 50,
-            marker: {
-              size: 5,
-              fillColor: '#FF7700',
-              strokeColor: '#FFF',
-              strokeWidth: 2,
-              radius: 2,
-            },
-            label: {
-              text: `Isi ${receipt.volume}L`,
-              borderColor: '#FF7700',
-              style: {
-                fontSize: '10px',
-                color: '#fff',
-                background: '#FF7700',
-              },
-            }
-          };
-        })
-      } : undefined,
-      xaxis: {
-        categories: times,
-        title: {
-          text: "Waktu (Jam)",
-        },
-        labels: {
-          rotate: -45,
-          style: {
-            fontSize: '10px',
-          },
-        },
-      },
-      yaxis: {
-        title: {
-          text: "Level BBM (%)",
-        },
-        min: 0,
-        max: 100,
-        forceNiceScale: true,
-        decimalsInFloat: 0, // Jangan tampilkan desimal
-        labels: {
-          formatter: (value) => { 
-            return parseInt(value); // Hanya tampilkan nilai bulat
-          }
-        }
-      },
-      title: {
-        text: `Fuel Levels - ${selectedDayInfo.day} (${selectedDayInfo.date})`,
-        align: 'center',
-        style: {
-          fontSize: '14px',
-          fontWeight: 'bold',
-          color: '#333'
-        },
-      },
-      subtitle: {
-        text: activeTruck ? `Truck: ${activeTruck.plate_number || activeTruck.mac_id}` : '',
-        align: 'center',
-        style: {
-          fontSize: '12px',
-          color: '#666'
-        },
-      },
-      colors: ["#009EFF"],
-      stroke: {
-        curve: "smooth",
-        width: 3,
-      },
-      markers: {
-        size: times.length > 20 ? 0 : 4, // Hilangkan markers jika data terlalu banyak
-        hover: {
-          size: 6,
-          sizeOffset: 3
-        },
-      },
-      tooltip: {
-        y: {
-          formatter: (value) => `${value}%`,
-        },
-        x: {
-          show: true,
-        },
-      },
-      grid: {
-        row: {
-          colors: ['transparent', 'transparent'],
-          opacity: 0.2
-        },
-        borderColor: '#f1f1f1'
-      },
-      // Zoom sudah dikonfigurasi pada chart di atas
-    };
-
-    // Buat chart baru di DOM
-    try {
-      console.log(`Creating new chart for truck ${activeTruck.id}`);
-      chartRef.current = new ApexCharts(chartElement, options);
-      chartRef.current.render();
-    } catch (err) {
-      console.error("Error creating chart:", err);
-    }
-
-    return () => {
-      if (chartRef.current) {
-        chartRef.current.destroy();
-        chartRef.current = null;
+    // Hanya lanjutkan membuat chart jika ada data
+    // Tunggu sampai DOM element siap
+    setTimeout(() => {
+      const chartElement = document.querySelector("#fleet-chart");
+      if (!chartElement) {
+        console.log('Chart element not found in DOM');
+        return;
       }
-    };
-  }, [activeTruck?.id, selectedDay, viewMode, loadingFuelData]);
+      
+      cleanupChart();
+
+      // Logging ke console untuk debug
+      console.log(`Creating chart with ${times.length} data points`);
+
+      // Actual data points exist, render chart
+      const options = {
+        chart: {
+          type: "line",
+          height: 200,
+          toolbar: {
+            show: true,
+            tools: {
+              download: true,
+              selection: true,
+              zoom: true,
+              zoomin: true,
+              zoomout: true,
+              pan: true,
+              reset: true,
+            },
+          },
+          zoom: {
+            enabled: true,
+            type: 'x',
+            autoScaleYaxis: true
+          },
+        },
+        series: [
+          {
+            name: "Fuel Level",
+            data: levels,
+          },
+        ],
+        // Tambah anotasi jika ada fuel receipt pada hari tersebut
+        annotations: fuelReceipts && fuelReceipts.length > 0 ? {
+          points: fuelReceipts.map(receipt => {
+            // Cari waktu untuk anotasi
+            const receiptDate = new Date(receipt.created_at);
+            const formattedTime = receiptDate.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+            
+            // Cari indeks waktu terdekat di chart
+            const timeIndex = times.findIndex(time => time.includes(formattedTime));
+            
+            return {
+              x: timeIndex !== -1 ? times[timeIndex] : times[0],
+              y: timeIndex !== -1 ? levels[timeIndex] : 50,
+              marker: {
+                size: 5,
+                fillColor: '#FF7700',
+                strokeColor: '#FFF',
+                strokeWidth: 2,
+                radius: 2,
+              },
+              label: {
+                text: `Isi ${receipt.volume}L`,
+                borderColor: '#FF7700',
+                style: {
+                  fontSize: '10px',
+                  color: '#fff',
+                  background: '#FF7700',
+                },
+              }
+            };
+          })
+        } : undefined,
+        xaxis: {
+          categories: times,
+          title: {
+            text: "Waktu (Jam)",
+          },
+          labels: {
+            rotate: -45,
+            style: {
+              fontSize: '10px',
+            },
+          },
+        },
+        yaxis: {
+          title: {
+            text: "Level BBM (%)",
+          },
+          min: 0,
+          max: 100,
+          forceNiceScale: true,
+          decimalsInFloat: 0, // Jangan tampilkan desimal
+          labels: {
+            formatter: (value) => { 
+              return parseInt(value); // Hanya tampilkan nilai bulat
+            }
+          }
+        },
+        title: {
+          text: `Fuel Levels - ${selectedDayInfo.day} (${selectedDayInfo.date})`,
+          align: 'center',
+          style: {
+            fontSize: '14px',
+            fontWeight: 'bold',
+            color: '#333'
+          },
+        },
+        subtitle: {
+          text: activeTruck ? `Truck: ${activeTruck.plate_number || activeTruck.mac_id}` : '',
+          align: 'center',
+          style: {
+            fontSize: '12px',
+            color: '#666'
+          },
+        },
+        colors: ["#009EFF"],
+        stroke: {
+          curve: "smooth",
+          width: 3,
+        },
+        markers: {
+          size: times.length > 20 ? 0 : 4, // Hilangkan markers jika data terlalu banyak
+          hover: {
+            size: 6,
+            sizeOffset: 3
+          },
+        },
+        tooltip: {
+          y: {
+            formatter: (value) => `${value}%`,
+          },
+          x: {
+            show: true,
+          },
+        },
+        grid: {
+          row: {
+            colors: ['transparent', 'transparent'],
+            opacity: 0.2
+          },
+          borderColor: '#f1f1f1'
+        },
+      };
+
+      // Buat chart baru di DOM
+      try {
+        console.log(`Creating new chart for truck ${activeTruck.id}`);
+        chartRef.current = new ApexCharts(chartElement, options);
+        chartRef.current.render();
+      } catch (err) {
+        console.error("Error creating chart:", err);
+      }
+    }, 0);
+
+    // Cleanup function saat unmount atau rerender
+    return cleanupChart;
+  }, [activeTruck?.id, selectedDay, viewMode, loadingFuelData, fuelData, fuelReceipts]);
 
   useEffect(() => {
     // This ensures we can track if the component is still mounted
@@ -1725,7 +1741,23 @@ const DashboardPage = () => {
                       <p className="text-[#009EFF]">Loading sensor data...</p>
                     </div>
                   ) : (
-                    <div id="fleet-chart" className="w-full h-[200px] transition-all duration-300" />
+                    <>
+                      {/* Gunakan React conditional rendering daripada manipulasi DOM langsung */}
+                      {chartData && chartData.times && chartData.times.length > 0 ? (
+                        <div id="fleet-chart" className="w-full h-[200px] transition-all duration-300" />
+                      ) : (
+                        <div className="flex flex-col justify-center items-center h-[200px] text-gray-500">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-300 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                          </svg>
+                          <p className="text-center">No fuel sensor data available for the selected day</p>
+                          <p className="text-center text-xs text-gray-400 mt-1">
+                            {selectedDay === "Today" ? "Today" : selectedDay} - 
+                            {activeTruck ? activeTruck.plate_number || activeTruck.mac_id : ""}
+                          </p>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               )}
@@ -1965,15 +1997,17 @@ const DashboardPage = () => {
                         }`}
                       >
                         <div className="flex justify-between items-center">
-                          <span className="font-medium text-[#484848]">
-                            {item.day}
+                          <div>
+                            <span className="font-medium text-[#484848] mr-2">
+                              {item.day}
+                            </span>
                             {item.date && (
-                              <span className="text-[#ADADAD] font-light ml-2">
-                                {item.date}
+                              <span className="text-[#ADADAD] font-light text-xs">
+                                {item.date} {new Date(item.isoDate).getFullYear()}
                               </span>
                             )}
-                          </span>
-                          <span className="text-yellow-500">
+                          </div>
+                          <span className={`${selectedDay === item.day ? "text-[#009EFF]" : "text-yellow-500"}`}>
                             <i className="bx bx-calendar"></i>
                           </span>
                         </div>
