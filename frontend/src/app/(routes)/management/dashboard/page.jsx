@@ -288,6 +288,7 @@ const DashboardPage = () => {
       // Add today
       days.push({
         day: "Today",
+        displayName: "Today", // Added displayName for UI
         date: today.toLocaleDateString(),
         isoDate: today.toISOString().split("T")[0],
       });
@@ -302,12 +303,18 @@ const DashboardPage = () => {
           pastDate.getMonth()
         )} ${pastDate.getDate()}`;
 
+        // Add year for uniqueness
+        const formattedDateWithYear = `${formattedDate} ${pastDate.getFullYear()}`;
+
         // Konsisten selalu gunakan nama hari untuk semua tanggal
         const dayLabel = dayNames[pastDate.getDay()];
 
         days.push({
-          day: dayLabel,
+          // Create a unique ID combining day & date
+          day: `${dayLabel}_${pastDate.toISOString().split('T')[0]}`,
+          displayName: dayLabel, // What shows in the UI
           date: formattedDate,
+          dateWithYear: formattedDateWithYear,
           isoDate: pastDate.toISOString().split("T")[0],
         });
       }
@@ -2274,7 +2281,8 @@ const DashboardPage = () => {
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
 
-              {Object.values(trucks).map((truck) => {
+              {/* Only show current truck markers when not in GPS historical view */}
+              {(viewMode !== 'gps' || selectedDay === 'Today') && Object.values(trucks).map((truck) => {
                 // For each truck with position data, create a marker with popup
                 if (!truck.latitude || !truck.longitude) return null;
 
@@ -2296,8 +2304,8 @@ const DashboardPage = () => {
                 );
               })}
 
-              {/* Visualisasi Titik Referensi dan Deviasi */}
-              {Object.entries(deviationReferences).map(
+              {/* Visualisasi Titik Referensi dan Deviasi (only when not viewing historical GPS data) */}
+              {viewMode !== 'gps' || selectedDay === 'Today' ? Object.entries(deviationReferences).map(
                 ([mac_id, deviationInfo]) => (
                   <React.Fragment key={`deviation-vis-${mac_id}`}>
                     {/* Titik referensi pada polyline */}
@@ -2349,8 +2357,10 @@ const DashboardPage = () => {
                     />
                   </React.Fragment>
                 )
-              )}
-              {activeTruck && activeTruck.latitude && activeTruck.longitude && (
+              ) : null}
+              {/* Show MapController only when not viewing historical GPS data */}
+              {activeTruck && activeTruck.latitude && activeTruck.longitude && 
+                !(viewMode === 'gps' && selectedDay !== 'Today') && (
                 <MapController
                   activePosition={activeTruck}
                   activeTruck={activeTruck}
@@ -2361,14 +2371,31 @@ const DashboardPage = () => {
               {/* If we're viewing a historical day (not Today), render historical position polyline */}
               {viewMode === "gps" &&
                 selectedDay !== "Today" &&
+                activeTruck && /* Only show positions for the active truck */
                 positionHistory.length > 0 && (
                   <Polyline
                     positions={positionHistory
                       .filter(
-                        (p) =>
-                          p &&
-                          typeof p.latitude === "number" &&
-                          typeof p.longitude === "number"
+                        (p) => {
+                          // Make sure we have valid position data
+                          if (!p || typeof p.latitude !== "number" || typeof p.longitude !== "number") return false;
+                          
+                          // Match truck by mac_id, truck_id, or plate if available
+                          const truckMatches = p.mac_id === activeTruck.mac_id || 
+                                              p.truck_id === activeTruck.id ||
+                                              (!p.mac_id && !p.truck_id);
+                          
+                          // Verify the date matches the selected day
+                          const positionDate = new Date(p.timestamp || p.created_at);
+                          const selectedDayInfo = activityDays.find(day => day.day === selectedDay);
+                          
+                          // If we can't verify the date (missing data), return false
+                          if (!selectedDayInfo || !positionDate) return false;
+                          
+                          // Compare the date to the selected day
+                          const positionIsoDate = positionDate.toISOString().split('T')[0];
+                          return truckMatches && positionIsoDate === selectedDayInfo.isoDate;
+                        }
                       )
                       .map((p) => [p.latitude, p.longitude])}
                     pathOptions={{ color: "#4a90e2", weight: 3, opacity: 0.8 }}
@@ -2379,12 +2406,38 @@ const DashboardPage = () => {
               {/* If we're viewing a historical day in GPS mode, render historical deviations */}
               {viewMode === "gps" &&
                 selectedDay !== "Today" &&
+                activeTruck && /* Only show deviations for the active truck */
                 historicalDeviations
                   .filter(
-                    (d) =>
-                      d &&
-                      typeof d.latitude === "number" &&
-                      typeof d.longitude === "number"
+                    (d) => {
+                      // Make sure we have valid position data
+                      if (!d || typeof d.latitude !== "number" || typeof d.longitude !== "number") return false;
+                      
+                      // Match truck by mac_id or truck_id if available
+                      const truckMatches = d.mac_id === activeTruck.mac_id || 
+                                          d.truck_id === activeTruck.id ||
+                                          (!d.mac_id && !d.truck_id);
+                      
+                      // Verify the date matches the selected day
+                      const deviationDate = new Date(d.timestamp || d.created_at);
+                      const selectedDayInfo = activityDays.find(day => day.day === selectedDay);
+                      
+                      // If we can't verify the date (missing data), return false
+                      if (!selectedDayInfo || !deviationDate) return false;
+                      
+                      // For "Today", check if the date is today
+                      if (selectedDay === "Today") {
+                        const today = new Date();
+                        return truckMatches && 
+                               deviationDate.getDate() === today.getDate() &&
+                               deviationDate.getMonth() === today.getMonth() &&
+                               deviationDate.getFullYear() === today.getFullYear();
+                      }
+                      
+                      // For other days, check the ISO date
+                      const deviationIsoDate = deviationDate.toISOString().split('T')[0];
+                      return truckMatches && deviationIsoDate === selectedDayInfo.isoDate;
+                    }
                   )
                   .map((deviation, index) => (
                     <Marker
@@ -2398,6 +2451,9 @@ const DashboardPage = () => {
                           <h3 className="font-bold text-sm">
                             Historical Deviation
                           </h3>
+                          <p className="text-xs font-semibold">
+                            {activeTruck.plate_number || "Unknown"} | {activeTruck.driver_name || "Unknown Driver"}
+                          </p>
                           <p className="text-xs">
                             Time:{" "}
                             {new Date(
@@ -2408,6 +2464,9 @@ const DashboardPage = () => {
                             Position: {deviation.latitude.toFixed(6)},{" "}
                             {deviation.longitude.toFixed(6)}
                           </p>
+                          <p className="text-xs text-red-500 font-medium">
+                            Distance: {(deviation.deviation_distance || 0).toFixed(0)}m off route
+                          </p>
                         </div>
                       </Popup>
                     </Marker>
@@ -2416,12 +2475,38 @@ const DashboardPage = () => {
               {/* If we're viewing a historical day in GPS mode, render historical idle detections */}
               {viewMode === "gps" &&
                 selectedDay !== "Today" &&
+                activeTruck && /* Only show idle detections for the active truck */
                 historicalIdleDetections
                   .filter(
-                    (i) =>
-                      i &&
-                      typeof i.latitude === "number" &&
-                      typeof i.longitude === "number"
+                    (i) => {
+                      // Make sure we have valid position data
+                      if (!i || typeof i.latitude !== "number" || typeof i.longitude !== "number") return false;
+                      
+                      // Match truck by mac_id or truck_id if available
+                      const truckMatches = i.mac_id === activeTruck.mac_id || 
+                                          i.truck_id === activeTruck.id ||
+                                          (!i.mac_id && !i.truck_id);
+                      
+                      // Verify the date matches the selected day
+                      const idleDate = new Date(i.timestamp || i.start_time || i.created_at);
+                      const selectedDayInfo = activityDays.find(day => day.day === selectedDay);
+                      
+                      // If we can't verify the date (missing data), return false
+                      if (!selectedDayInfo || !idleDate) return false;
+                      
+                      // For "Today", check if the date is today
+                      if (selectedDay === "Today") {
+                        const today = new Date();
+                        return truckMatches && 
+                               idleDate.getDate() === today.getDate() &&
+                               idleDate.getMonth() === today.getMonth() &&
+                               idleDate.getFullYear() === today.getFullYear();
+                      }
+                      
+                      // For other days, check the ISO date
+                      const idleIsoDate = idleDate.toISOString().split('T')[0];
+                      return truckMatches && idleIsoDate === selectedDayInfo.isoDate;
+                    }
                   )
                   .map((idle, index) => (
                     <Marker
@@ -2435,14 +2520,17 @@ const DashboardPage = () => {
                           <h3 className="font-bold text-sm">
                             Historical Idle Detection
                           </h3>
+                          <p className="text-xs font-semibold">
+                            {activeTruck.plate_number || "Unknown"} | {activeTruck.driver_name || "Unknown Driver"}
+                          </p>
                           <p className="text-xs">
                             Time:{" "}
                             {new Date(
                               idle.timestamp || idle.start_time
                             ).toLocaleString()}
                           </p>
-                          <p className="text-xs">
-                            Duration: {Math.floor((idle.duration || 300) / 60)}{" "}
+                          <p className="text-xs text-orange-500 font-medium">
+                            Idle duration: {Math.floor((idle.duration || 300) / 60)}{" "}
                             minutes
                           </p>
                           <p className="text-xs">
@@ -2457,7 +2545,27 @@ const DashboardPage = () => {
               {/* If we're in GPS mode viewing historical, render historical route plans */}
               {viewMode === "gps" &&
                 selectedDay !== "Today" &&
-                historicalRoutePlans.map((routePlan, index) => {
+                activeTruck && /* Only show routes for the active truck */
+                historicalRoutePlans
+                  .filter(routePlan => {
+                    // Extract plate number and macID from vehicle_plate field if available
+                    if (!routePlan.vehicle_plate) return false;
+                    
+                    const [plate, macId] = routePlan.vehicle_plate.split("/");
+                    const truckMatches = plate === activeTruck.plate_number || macId === activeTruck.mac_id;
+                    
+                    // Verify the date matches the selected day
+                    const routeDate = new Date(routePlan.created_at || routePlan.date);
+                    const selectedDayInfo = activityDays.find(day => day.day === selectedDay);
+                    
+                    // If we can't verify the date (missing data), only check truck match
+                    if (!selectedDayInfo || !routeDate) return truckMatches;
+                    
+                    // Compare the date to the selected day
+                    const routeIsoDate = routeDate.toISOString().split('T')[0];
+                    return truckMatches && routeIsoDate === selectedDayInfo.isoDate;
+                  })
+                  .map((routePlan, index) => {
                   const positions = decodeRouteGeometry(
                     routePlan.route_geometry
                   );
@@ -2498,8 +2606,9 @@ const DashboardPage = () => {
                   );
                 })}
 
-              {/* Render polylines dan markers untuk semua active route plans */}
-              {activeRoutePlans.map((routePlan, index) => {
+              {/* Render polylines dan markers untuk route plans */}
+              {/* Only show active route plans when not in GPS historical view */}
+              {(viewMode !== 'gps' || selectedDay === 'Today') && activeRoutePlans.map((routePlan, index) => {
                 // Decode route geometry dengan decoder yang benar
                 const positions = decodeRouteGeometry(routePlan.route_geometry);
                 if (!positions || positions.length === 0) return null;
@@ -2665,17 +2774,53 @@ const DashboardPage = () => {
                   ) : positionHistory.length > 0 ? (
                     <>
                       <div className="mb-2 text-xs text-gray-500">
-                        {positionHistory.length} position points found
-                        {historicalDeviations.length > 0 && (
-                          <span className="ml-2 text-red-500">
-                            • {historicalDeviations.length} route deviations
-                          </span>
-                        )}
-                        {historicalIdleDetections.length > 0 && (
-                          <span className="ml-2 text-orange-500">
-                            • {historicalIdleDetections.length} idle detections
-                          </span>
-                        )}
+                        {(() => {
+                          // Calculate filtered counts based on the selected day
+                          const selectedDayInfo = activityDays.find(day => day.day === selectedDay);
+                          
+                          // Filter position points for the selected day
+                          const filteredPositions = positionHistory.filter(p => {
+                            if (!p || typeof p.latitude !== "number" || typeof p.longitude !== "number") return false;
+                            const positionDate = new Date(p.timestamp || p.created_at);
+                            if (!selectedDayInfo || !positionDate) return false;
+                            const positionIsoDate = positionDate.toISOString().split('T')[0];
+                            return positionIsoDate === selectedDayInfo.isoDate;
+                          });
+                          
+                          // Filter deviations for the selected day
+                          const filteredDeviations = historicalDeviations.filter(d => {
+                            if (!d || typeof d.latitude !== "number" || typeof d.longitude !== "number") return false;
+                            const deviationDate = new Date(d.timestamp || d.created_at);
+                            if (!selectedDayInfo || !deviationDate) return false;
+                            const deviationIsoDate = deviationDate.toISOString().split('T')[0];
+                            return deviationIsoDate === selectedDayInfo.isoDate;
+                          });
+                          
+                          // Filter idle detections for the selected day
+                          const filteredIdles = historicalIdleDetections.filter(i => {
+                            if (!i || typeof i.latitude !== "number" || typeof i.longitude !== "number") return false;
+                            const idleDate = new Date(i.timestamp || i.start_time || i.created_at);
+                            if (!selectedDayInfo || !idleDate) return false;
+                            const idleIsoDate = idleDate.toISOString().split('T')[0];
+                            return idleIsoDate === selectedDayInfo.isoDate;
+                          });
+                          
+                          return (
+                            <>
+                              {filteredPositions.length} position points found
+                              {filteredDeviations.length > 0 && (
+                                <span className="ml-2 text-red-500">
+                                  • {filteredDeviations.length} route deviation{filteredDeviations.length !== 1 ? 's' : ''}
+                                </span>
+                              )}
+                              {filteredIdles.length > 0 && (
+                                <span className="ml-2 text-orange-500">
+                                  • {filteredIdles.length} idle detection{filteredIdles.length !== 1 ? 's' : ''}
+                                </span>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                       <div className="max-h-[140px] overflow-y-auto">
                         <table className="w-full text-xs border border-gray-200 rounded">
