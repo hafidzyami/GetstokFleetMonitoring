@@ -131,6 +131,8 @@ func main() {
 	fuelReceiptController := controller.NewFuelReceiptController(fuelReceiptService)
 	ocrController := controller.NewOCRController(ocrService)
 	truckIdleController := controller.NewTruckIdleController(truckIdleService)
+	// Initialize route deviation controller
+	routeDeviationController := controller.NewRouteDeviationController(deviationService)
 
 	// Initialize Fiber app
 	app := fiber.New(fiber.Config{
@@ -287,6 +289,11 @@ func main() {
 	idle.Get("/", truckIdleController.GetAllIdleDetections)
 	idle.Get("/active", truckIdleController.GetActiveIdleDetections)
 	idle.Put("/:id/resolve", truckIdleController.ResolveIdleDetection)
+	
+	// Route deviation routes
+	deviations := api.Group("/route-deviations")
+	deviations.Use(middleware.Protected())
+	deviations.Get("/", routeDeviationController.GetRouteDeviations)
 
 	// Routing routes
 	routing := api.Group("/routing")

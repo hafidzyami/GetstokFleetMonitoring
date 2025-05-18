@@ -4,7 +4,7 @@ import json
 import datetime
 
 # MQTT settings
-broker = "staging.getstokfms.com"
+broker = "mqtt.eclipseprojects.io"
 port = 1883
 mac_id = "MAC1"
 topic_prefix = "getstokfms"
@@ -39,7 +39,9 @@ position_payload = {
 client = mqtt.Client()
 client.connect(broker, port, 60)
 
+
 client.publish(f"{topic_prefix}/{mac_id}/fuel", json.dumps(fuel_payload), qos=1)
 client.publish(f"{topic_prefix}/{mac_id}/position", json.dumps(position_payload), qos=1)
+    
 
 client.disconnect()

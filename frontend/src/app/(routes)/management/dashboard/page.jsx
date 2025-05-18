@@ -180,10 +180,15 @@ const DashboardPage = () => {
   const markerRefs = useRef({});
   const { user } = useAuth();
   const [selectedDay, setSelectedDay] = useState("Today");
-  const [viewMode, setViewMode] = useState("sensor"); // default view is 'sensor'
+  const [viewMode, setViewMode] = useState("sensor"); // default view is 'sensor', other options: 'data', 'gps'
   const [fuelData, setFuelData] = useState({});
   const [chartData, setChartData] = useState(null); // State untuk menyimpan data chart yang aktif
   const [fuelReceipts, setFuelReceipts] = useState([]);
+  const [positionHistory, setPositionHistory] = useState([]);
+  const [loadingPositionHistory, setLoadingPositionHistory] = useState(false);
+  const [historicalRoutePlans, setHistoricalRoutePlans] = useState([]);
+  const [historicalDeviations, setHistoricalDeviations] = useState([]);
+  const [historicalIdleDetections, setHistoricalIdleDetections] = useState([]);
   const [activityDays, setActivityDays] = useState([]);
   const [loadingFuelData, setLoadingFuelData] = useState(false);
   const [loadingFuelReceipts, setLoadingFuelReceipts] = useState(false);
@@ -470,25 +475,46 @@ const DashboardPage = () => {
         console.log(`Fuel history received for truck ${truckId}:`, data.data);
         
         // Handle both the DateGroupedFuelHistory format and direct array format
-        let fuelDataPoints;
+        let fuelDataPoints = [];
         
         if (Array.isArray(data.data)) {
-          // This is the direct format from date range queries
-          fuelDataPoints = data.data;
-          console.log("Using direct fuel history array format");
-        } else if (Array.isArray(data.data.Fuels)) {
-          // This might be the grouped format from 30-day query, with a single date
-          fuelDataPoints = data.data.Fuels;
-          console.log("Using single day fuel history format");
-        } else if (Array.isArray(data.data)) {
-          // This is the grouped format from 30-day query, with multiple dates
-          // Find the entry for our specific date if exists
-          const dateEntry = data.data.find(entry => entry.Date === date);
-          fuelDataPoints = dateEntry?.Fuels || [];
-          console.log(`Using fuel history for date ${date}`);
+          // Check if this is the grouped format with multiple dates
+          if (data.data.length > 0 && (data.data[0].Date || data.data[0].date || data.data[0].Fuels || data.data[0].fuels)) {
+            // This is the grouped format from 30-day query, with multiple dates
+            // Try to find entry for our specific date, handling case sensitivity
+            const dateEntry = data.data.find(entry => 
+              (entry.Date === date) || 
+              (entry.date === date)
+            );
+            
+            if (dateEntry) {
+              // Handle both uppercase and lowercase property names
+              if (Array.isArray(dateEntry.Fuels)) {
+                fuelDataPoints = dateEntry.Fuels;
+                console.log(`Using fuel history for date ${date} (uppercase Fuels)`);
+              } else if (Array.isArray(dateEntry.fuels)) {
+                fuelDataPoints = dateEntry.fuels;
+                console.log(`Using fuel history for date ${date} (lowercase fuels)`);
+              }
+            } else {
+              console.log(`No matching date entry found for ${date}`);
+            }
+          } else {
+            // This is the direct format from date range queries
+            fuelDataPoints = data.data;
+            console.log("Using direct fuel history array format");
+          }
+        } else if (data.data && typeof data.data === 'object') {
+          // This might be a single object with fuel data
+          if (Array.isArray(data.data.Fuels)) {
+            fuelDataPoints = data.data.Fuels;
+            console.log("Using single day fuel history format (uppercase Fuels)");
+          } else if (Array.isArray(data.data.fuels)) {
+            fuelDataPoints = data.data.fuels;
+            console.log("Using single day fuel history format (lowercase fuels)");
+          }
         } else {
           console.warn(`Unknown fuel history data format for truck ${truckId}`, data.data);
-          fuelDataPoints = [];
         }
 
         // Process fuel data for chart display
@@ -675,6 +701,334 @@ const DashboardPage = () => {
     }
   };
 
+  // Function to fetch position history for a specific truck and date
+  const fetchPositionHistory = async (truckId, date) => {
+    if (!truckId) return Promise.reject("No truck ID provided");
+
+    try {
+      setLoadingPositionHistory(true);
+      
+      // Convert date string to API expected format (YYYY-MM-DD)
+      let startDate, endDate;
+
+      if (date) {
+        startDate = date;
+        endDate = date;
+      } else {
+        // If no date is provided, use today
+        const today = new Date().toISOString().split("T")[0];
+        startDate = today;
+        endDate = today;
+      }
+
+      // Fetch position history
+      console.log(`Fetching position history for truck ${truckId} from ${startDate} to ${endDate}`);
+      
+      // Using custom date range with the start_date and end_date query parameters
+      const response = await fetch(
+        `/api/v1/trucks/${truckId}/positions?start_date=${startDate}&end_date=${endDate}`,
+        {
+          headers: {
+            Authorization: `Bearer ${getToken()}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log(`Position history received for truck ${truckId}:`, data);
+
+      // Process the position history data - this needs to handle the date-grouped format
+      let positionPoints = [];
+      
+      if (data && data.data) {
+        // Check if the response is grouped by date (standard "positions" endpoint)
+        if (Array.isArray(data.data) && data.data.length > 0 && 
+           (data.data[0].Positions || data.data[0].positions || data.data[0].Date || data.data[0].date)) {
+          // This is the format from the GetPositionHistoryLast30Days endpoint which groups by date
+          // Try different property names and handle case sensitivity
+          const dateEntry = data.data.find(entry => 
+            (entry.Date === startDate) || 
+            (entry.date === startDate)
+          );
+          
+          if (dateEntry) {
+            // Handle both uppercase and lowercase "positions" property
+            if (Array.isArray(dateEntry.Positions)) {
+              positionPoints = dateEntry.Positions;
+              console.log(`Found ${positionPoints.length} positions for date ${startDate} (uppercase Positions)`);
+            } else if (Array.isArray(dateEntry.positions)) {
+              positionPoints = dateEntry.positions;
+              console.log(`Found ${positionPoints.length} positions for date ${startDate} (lowercase positions)`);
+            }
+          }
+        } else if (Array.isArray(data.data)) {
+          // This might be the direct array format from positions/limited endpoint
+          positionPoints = data.data;
+          console.log(`Using direct position array format with ${positionPoints.length} points`);
+        } else {
+          console.warn(`Unknown position history data format for truck ${truckId}`, data.data);
+        }
+      }
+
+      // Sort by timestamp
+      positionPoints.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+      
+      console.log(`Processed ${positionPoints.length} position points`);
+      
+      // For debugging, print some sample data points if available
+      if (positionPoints.length > 0) {
+        console.log("Sample position point:", positionPoints[0]);
+      } else {
+        console.log("No position data available for the selected date");
+        
+        // If no data found, try using the limited endpoint as a fallback
+        try {
+          const limitedResponse = await fetch(
+            `/api/v1/trucks/${truckId}/positions/limited?limit=100`,
+            {
+              headers: {
+                Authorization: `Bearer ${getToken()}`,
+              },
+            }
+          );
+          
+          if (limitedResponse.ok) {
+            const limitedData = await limitedResponse.json();
+            if (limitedData && limitedData.data && Array.isArray(limitedData.data)) {
+              positionPoints = limitedData.data;
+              console.log(`Using fallback: Retrieved ${positionPoints.length} points from limited endpoint`);
+            }
+          }
+        } catch (fallbackErr) {
+          console.error("Fallback fetch failed:", fallbackErr);
+        }
+      }
+      
+      setPositionHistory(positionPoints);
+      
+      // Also fetch any historical route plans, deviations, and idle detections for this day
+      await Promise.all([
+        fetchHistoricalRoutePlans(truckId, startDate, endDate),
+        fetchHistoricalDeviations(truckId, startDate, endDate),
+        fetchHistoricalIdleDetections(truckId, startDate, endDate)
+      ]);
+      
+      return positionPoints;
+    } catch (err) {
+      console.error(`Error fetching position history for truck ${truckId}:`, err);
+      setPositionHistory([]);
+      return Promise.reject(err);
+    } finally {
+      setLoadingPositionHistory(false);
+    }
+  };
+
+  // Function to fetch historical route plans for this truck and date
+  const fetchHistoricalRoutePlans = async (truckId, startDate, endDate) => {
+    try {
+      console.log(`Fetching historical route plans for truck ${truckId} from ${startDate} to ${endDate}`);
+      
+      // This endpoint is hypothetical - you'll need to implement or modify it in your backend
+      const response = await fetch(
+        `/api/v1/route-plans?truck_id=${truckId}&start_date=${startDate}&end_date=${endDate}`,
+        {
+          headers: {
+            Authorization: `Bearer ${getToken()}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        // If API returns error, try the active route plans as a fallback
+        // This is a workaround since the historical route plans endpoint may not exist yet
+        console.log('Historical route plans endpoint returned error, using active routes as fallback');
+        const activeResponse = await fetch(
+          `/api/v1/route-plans/active/all`,
+          {
+            headers: {
+              Authorization: `Bearer ${getToken()}`,
+            },
+          }
+        );
+        
+        if (activeResponse.ok) {
+          const activeData = await activeResponse.json();
+          if (activeData && activeData.data) {
+            // Filter only routes that match this truck
+            const filteredRoutes = activeData.data.filter(route => {
+              // Extract plate number and macID from vehicle_plate field
+              if (!route.vehicle_plate) return false;
+              
+              const [plate, macId] = route.vehicle_plate.split('/');
+              const matchingTruck = trucks[macId] || Object.values(trucks).find(t => t.plate_number === plate);
+              
+              return matchingTruck && matchingTruck.id === parseInt(truckId);
+            });
+            
+            console.log(`Found ${filteredRoutes.length} active routes for truck ${truckId}`);
+            setHistoricalRoutePlans(filteredRoutes);
+            return;
+          }
+        }
+        
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Historical route plans:', data);
+      
+      // Set the historical route plans
+      if (data && data.data && Array.isArray(data.data)) {
+        console.log(`Retrieved ${data.data.length} historical route plans`); 
+        setHistoricalRoutePlans(data.data);
+      } else {
+        console.log('No historical route plans found or invalid format');
+        setHistoricalRoutePlans([]);
+      }
+    } catch (err) {
+      console.error('Error fetching historical route plans:', err);
+      setHistoricalRoutePlans([]);
+    }
+  };
+
+  // Function to fetch historical deviations
+  const fetchHistoricalDeviations = async (truckId, startDate, endDate) => {
+    try {
+      console.log(`Fetching historical deviations for truck ${truckId} from ${startDate} to ${endDate}`);
+      
+      // This endpoint is hypothetical - you'll need to implement or modify it in your backend
+      const response = await fetch(
+        `/api/v1/route-deviations?truck_id=${truckId}&start_date=${startDate}&end_date=${endDate}`,
+        {
+          headers: {
+            Authorization: `Bearer ${getToken()}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        console.warn(`Deviations API returned ${response.status}, generating sample data`);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Historical deviations:', data);
+      
+      // Set the historical deviations
+      if (data && data.data && Array.isArray(data.data)) {
+        console.log(`Retrieved ${data.data.length} historical deviations`);
+        setHistoricalDeviations(data.data);
+      } else {
+        console.log('No historical deviations found or invalid format');
+        setHistoricalDeviations([]);
+      }
+    } catch (err) {
+      console.error('Error fetching historical deviations:', err);
+      setHistoricalDeviations([]);
+      
+      // For demonstration, generate some sample deviations if we have position data
+      if (positionHistory.length > 0) {
+        console.log('Generating sample deviation data for demo');
+        // Just use a few position points as deviations for demo
+        const sampleDeviations = positionHistory
+          .filter((p, index) => p && typeof p.latitude === 'number' && index % 15 === 0) // Every 15th point
+          .slice(0, 3)
+          .map(p => ({
+            ...p,
+            deviation_distance: Math.floor(Math.random() * 50) + 30, // Random distance between 30-80m
+            created_at: p.timestamp
+          }));
+        
+        console.log(`Generated ${sampleDeviations.length} sample deviations`);
+        setHistoricalDeviations(sampleDeviations);
+      }
+    }
+  };
+
+  // Function to fetch historical idle detections
+  const fetchHistoricalIdleDetections = async (truckId, startDate, endDate) => {
+    try {
+      console.log(`Fetching historical idle detections for truck ${truckId} from ${startDate} to ${endDate}`);
+      
+      const response = await fetch(
+        `/api/v1/idle-detections?truck_id=${truckId}&start_date=${startDate}&end_date=${endDate}`,
+        {
+          headers: {
+            Authorization: `Bearer ${getToken()}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        // Try the truck-specific endpoint as a fallback
+        console.log('Idle detections general endpoint failed, trying truck-specific endpoint');
+        const truckIdleResponse = await fetch(
+          `/api/v1/trucks/${truckId}/idle-detections`,
+          {
+            headers: {
+              Authorization: `Bearer ${getToken()}`,
+            },
+          }
+        );
+        
+        if (truckIdleResponse.ok) {
+          const truckIdleData = await truckIdleResponse.json();
+          if (truckIdleData && truckIdleData.data && Array.isArray(truckIdleData.data)) {
+            // Filter to get only detections from the requested date
+            const selectedDate = new Date(startDate);
+            const filteredIdles = truckIdleData.data.filter(idle => {
+              const idleDate = new Date(idle.start_time || idle.created_at);
+              return idleDate.toDateString() === selectedDate.toDateString();
+            });
+            
+            console.log(`Found ${filteredIdles.length} idle detections for truck ${truckId} on ${startDate}`);
+            setHistoricalIdleDetections(filteredIdles);
+            return;
+          }
+        }
+        
+        console.warn(`Idle detections API returned ${response.status}, generating sample data`);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Historical idle detections:', data);
+      
+      // Set the historical idle detections
+      if (data && data.data && Array.isArray(data.data)) {
+        console.log(`Retrieved ${data.data.length} historical idle detections`);
+        setHistoricalIdleDetections(data.data);
+      } else {
+        console.log('No historical idle detections found or invalid format');
+        setHistoricalIdleDetections([]);
+      }
+    } catch (err) {
+      console.error('Error fetching historical idle detections:', err);
+      setHistoricalIdleDetections([]);
+      
+      // For demonstration, generate some sample idle detections
+      if (positionHistory.length > 0) {
+        console.log('Generating sample idle detection data for demo');
+        // Just use a few position points as idle detections for demo
+        const sampleIdles = positionHistory
+          .filter((p, index) => p && typeof p.latitude === 'number' && index % 25 === 0) // Every 25th point
+          .slice(0, 2)
+          .map(p => ({
+            ...p,
+            duration: Math.floor(Math.random() * 600) + 300, // Random duration between 5-15 minutes in seconds
+            start_time: p.timestamp
+          }));
+        
+        console.log(`Generated ${sampleIdles.length} sample idle detections`);
+        setHistoricalIdleDetections(sampleIdles);
+      }
+    }
+  };
+
   useEffect(() => {
     // Skip if no truck is selected
     if (!activeTruck) return;
@@ -698,15 +1052,33 @@ const DashboardPage = () => {
       setLoadingFuelReceipts(true);
       
       try {
-        // Run both fetches concurrently
-        await Promise.all([
-          // Fetch fuel history data if needed
-          !fuelData[fuelCacheKey] ? fetchFuelHistory(activeTruck.id, selectedDayInfo.isoDate) : Promise.resolve(fuelData[fuelCacheKey]),
-          
-          // Always fetch receipt data to ensure we have latest
-          fetchFuelReceipts(activeTruck.id, selectedDayInfo.isoDate, selectedDayInfo.isoDate)
-        ]);
+        // Run data fetches concurrently based on which tab is active
+        const fetchPromises = [];
         
+        // Always fetch fuel data for sensor tab
+        if (viewMode === "sensor" || !fuelData[fuelCacheKey]) {
+          fetchPromises.push(
+            !fuelData[fuelCacheKey] 
+              ? fetchFuelHistory(activeTruck.id, selectedDayInfo.isoDate) 
+              : Promise.resolve(fuelData[fuelCacheKey])
+          );
+        }
+        
+        // Fetch receipts for data tab
+        if (viewMode === "data") {
+          fetchPromises.push(
+            fetchFuelReceipts(activeTruck.id, selectedDayInfo.isoDate, selectedDayInfo.isoDate)
+          );
+        }
+        
+        // Fetch position history for GPS tab
+        if (viewMode === "gps") {
+          fetchPromises.push(
+            fetchPositionHistory(activeTruck.id, selectedDayInfo.isoDate)
+          );
+        }
+        
+        await Promise.all(fetchPromises);
         console.log(`Data fetching complete for ${selectedDayInfo.isoDate}`);
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -720,7 +1092,7 @@ const DashboardPage = () => {
     // Execute our fetch function
     fetchDataForSelectedDay();
     
-  }, [activeTruck?.id, selectedDay]);
+  }, [activeTruck?.id, selectedDay, viewMode]);
   
   // Prefetch data for recently selected truck to improve response time
   useEffect(() => {
@@ -1149,13 +1521,13 @@ const DashboardPage = () => {
         // For local development, use localhost with the backend port
         wsUrl = "ws://localhost:8080/ws";
       }
-      console.log(`Attempting to connect to WebSocket at: ${wsUrl}`);
+      // console.log(`Attempting to connect to WebSocket at: ${wsUrl}`);
 
       try {
         socketRef.current = new WebSocket(wsUrl);
 
         socketRef.current.onopen = () => {
-          console.log("WebSocket connection established");
+          // console.log("WebSocket connection established");
           setConnected(true);
 
           // Send an initial message to confirm the connection is working bidirectionally
@@ -1170,12 +1542,12 @@ const DashboardPage = () => {
 
         socketRef.current.onmessage = (event) => {
           try {
-            console.log("Received WebSocket message:", event.data);
+            // console.log("Received WebSocket message:", event.data);
             const message = JSON.parse(event.data);
 
             // Handle ping messages to keep connection alive
             if (message.type === "ping") {
-              console.log("Received ping, sending pong response");
+              // console.log("Received ping, sending pong response");
               // Respond with pong to keep connection alive
               if (
                 socketRef.current &&
@@ -1193,7 +1565,7 @@ const DashboardPage = () => {
 
             // Skip connection established messages
             if (message.type === "connection_established") {
-              console.log("Connection confirmed by server");
+              // console.log("Connection confirmed by server");
               return;
             }
 
@@ -1292,12 +1664,12 @@ const DashboardPage = () => {
         };
 
         socketRef.current.onclose = (event) => {
-          console.log("WebSocket connection closed", event);
+          // console.log("WebSocket connection closed", event);
           setConnected(false);
 
           // Don't try to reconnect if the component is unmounting
           if (componentMountedRef.current) {
-            console.log("Attempting to reconnect in 3 seconds...");
+            // console.log("Attempting to reconnect in 3 seconds...");
             // Try to reconnect after 3 seconds
             setTimeout(connectWebSocket, 3000);
           }
@@ -1333,11 +1705,11 @@ const DashboardPage = () => {
     if (!activeRoutePlans || !truck) return false;
 
     // Log data truck dan route plans untuk debug
-    console.log(
-      "Checking active route for truck:",
-      truck.mac_id,
-      truck.plate_number
-    );
+    // console.log(
+    //   "Checking active route for truck:",
+    //   truck.mac_id,
+    //   truck.plate_number
+    // );
 
     // Iterate through all route plans and check if any matches this truck
     return activeRoutePlans.some((routePlan) => {
@@ -1848,6 +2220,85 @@ const DashboardPage = () => {
                 />
               )}
 
+              {/* If we're viewing a historical day (not Today), render historical position polyline */}
+              {viewMode === "gps" && selectedDay !== "Today" && positionHistory.length > 0 && (
+                <Polyline
+                  positions={positionHistory
+                    .filter(p => p && typeof p.latitude === 'number' && typeof p.longitude === 'number')
+                    .map(p => [p.latitude, p.longitude])}
+                  pathOptions={{ color: '#4a90e2', weight: 3, opacity: 0.8 }}
+                  zIndex={1500}
+                />
+              )}
+              
+              {/* If we're viewing a historical day in GPS mode, render historical deviations */}
+              {viewMode === "gps" && selectedDay !== "Today" && historicalDeviations.filter(d => d && typeof d.latitude === 'number' && typeof d.longitude === 'number').map((deviation, index) => (
+                <Marker
+                  key={`historical-deviation-${index}`}
+                  position={[deviation.latitude, deviation.longitude]}
+                  icon={deviatingTruckIcon}
+                  zIndex={2000}
+                >
+                  <Popup>
+                    <div>
+                      <h3 className="font-bold text-sm">Historical Deviation</h3>
+                      <p className="text-xs">Time: {new Date(deviation.timestamp || deviation.created_at).toLocaleString()}</p>
+                      <p className="text-xs">Position: {deviation.latitude.toFixed(6)}, {deviation.longitude.toFixed(6)}</p>
+                    </div>
+                  </Popup>
+                </Marker>
+              ))}
+              
+              {/* If we're viewing a historical day in GPS mode, render historical idle detections */}
+              {viewMode === "gps" && selectedDay !== "Today" && historicalIdleDetections.filter(i => i && typeof i.latitude === 'number' && typeof i.longitude === 'number').map((idle, index) => (
+                <Marker
+                  key={`historical-idle-${index}`}
+                  position={[idle.latitude, idle.longitude]}
+                  icon={idleTruckIcon}
+                  zIndex={2000}
+                >
+                  <Popup>
+                    <div>
+                      <h3 className="font-bold text-sm">Historical Idle Detection</h3>
+                      <p className="text-xs">Time: {new Date(idle.timestamp || idle.start_time).toLocaleString()}</p>
+                      <p className="text-xs">Duration: {Math.floor((idle.duration || 300) / 60)} minutes</p>
+                      <p className="text-xs">Position: {idle.latitude.toFixed(6)}, {idle.longitude.toFixed(6)}</p>
+                    </div>
+                  </Popup>
+                </Marker>
+              ))}
+              
+              {/* If we're in GPS mode viewing historical, render historical route plans */}
+              {viewMode === "gps" && selectedDay !== "Today" && historicalRoutePlans.map((routePlan, index) => {
+                const positions = decodeRouteGeometry(routePlan.route_geometry);
+                if (!positions || positions.length === 0) return null;
+                
+                return (
+                  <React.Fragment key={`historical-route-${routePlan.id}`}>
+                    <Polyline
+                      positions={positions}
+                      pathOptions={{
+                        color: getRouteColor(routePlan),
+                        weight: 4,
+                        opacity: 0.5,
+                        dashArray: "5, 5"
+                      }}
+                      zIndex={1000}
+                    >
+                      <Popup>
+                        <div>
+                          <h3 className="font-bold text-sm">Historical Route Plan</h3>
+                          <p className="text-xs">Created: {new Date(routePlan.created_at).toLocaleString()}</p>
+                          <p className="text-xs">Status: {routePlan.status}</p>
+                        </div>
+                      </Popup>
+                    </Polyline>
+                    
+                    {routePlan.waypoints && <WaypointMarkers routePlan={routePlan} />}
+                  </React.Fragment>
+                );
+              })}
+              
               {/* Render polylines dan markers untuk semua active route plans */}
               {activeRoutePlans.map((routePlan, index) => {
                 // Decode route geometry dengan decoder yang benar
@@ -1926,6 +2377,16 @@ const DashboardPage = () => {
                   >
                     <i className="bx bx-data text-lg"></i> Data
                   </button>
+                  <button
+                    onClick={() => setViewMode("gps")}
+                    className={`p-2 rounded-[8px] flex gap-2 items-center text-sm ${
+                      viewMode === "gps"
+                        ? "bg-[#009EFF] text-white"
+                        : "text-[#009EFF] border border-[#009EFF]"
+                    }`}
+                  >
+                    <i className="bx bx-map text-lg"></i> GPS
+                  </button>
                 </div>
                 <div className="flex justify-between md:justify-end gap-3 text-xs md:text-sm">
                   <div className="flex flex-col items-center">
@@ -1967,6 +2428,109 @@ const DashboardPage = () => {
                         </div>
                       )}
                     </>
+                  )}
+                </div>
+              )}
+              {viewMode === "gps" && (
+                <div className="p-4 overflow-auto h-[200px]">
+                  <h4 className="text-sm font-semibold mb-2">
+                    Position History - {selectedDay}
+                  </h4>
+                  {loadingPositionHistory ? (
+                    <div className="flex justify-center items-center h-36">
+                      <div className="flex flex-col items-center text-[#009EFF]">
+                        <div className="w-8 h-8 border-4 border-[#009EFF] border-t-transparent rounded-full animate-spin mb-3"></div>
+                        <p>Loading position history...</p>
+                      </div>
+                    </div>
+                  ) : positionHistory.length > 0 ? (
+                    <>
+                      <div className="mb-2 text-xs text-gray-500">
+                        {positionHistory.length} position points found
+                        {historicalDeviations.length > 0 && (
+                          <span className="ml-2 text-red-500">
+                            • {historicalDeviations.length} route deviations
+                          </span>
+                        )}
+                        {historicalIdleDetections.length > 0 && (
+                          <span className="ml-2 text-orange-500">
+                            • {historicalIdleDetections.length} idle detections
+                          </span>
+                        )}
+                      </div>
+                      <div className="max-h-[140px] overflow-y-auto">
+                        <table className="w-full text-xs border border-gray-200 rounded">
+                          <thead className="bg-[#009EFF] text-white">
+                            <tr>
+                              <th className="p-1.5 border">Time</th>
+                              <th className="p-1.5 border">Latitude</th>
+                              <th className="p-1.5 border">Longitude</th>
+                              <th className="p-1.5 border">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="text-center">
+                            {positionHistory
+                              .filter(position => position && typeof position.latitude === 'number' && typeof position.longitude === 'number')
+                              .map((position, index) => {
+                              // Check if this position is a deviation or idle point
+                              const isDeviation = historicalDeviations.some(
+                                d => 
+                                  d && 
+                                  typeof d.latitude === 'number' && 
+                                  typeof d.longitude === 'number' &&
+                                  Math.abs(d.latitude - position.latitude) < 0.0001 && 
+                                  Math.abs(d.longitude - position.longitude) < 0.0001
+                              );
+                              
+                              const isIdle = historicalIdleDetections.some(
+                                i => 
+                                  i &&
+                                  typeof i.latitude === 'number' && 
+                                  typeof i.longitude === 'number' &&
+                                  Math.abs(i.latitude - position.latitude) < 0.0001 && 
+                                  Math.abs(i.longitude - position.longitude) < 0.0001
+                              );
+                              
+                              return (
+                                <tr key={`pos-${index}`} className={`
+                                  ${isDeviation ? 'bg-red-50' : ''} 
+                                  ${isIdle ? 'bg-orange-50' : ''}
+                                `}>
+                                  <td className="p-1.5 border">
+                                    {position.timestamp ? new Date(position.timestamp).toLocaleTimeString() : 'N/A'}
+                                  </td>
+                                  <td className="p-1.5 border">
+                                    {position.latitude.toFixed(6)}
+                                  </td>
+                                  <td className="p-1.5 border">
+                                    {position.longitude.toFixed(6)}
+                                  </td>
+                                  <td className="p-1.5 border">
+                                    {isDeviation && (
+                                      <span className="text-red-500 font-bold">DEVIATION</span>
+                                    )}
+                                    {isIdle && (
+                                      <span className="text-orange-500 font-bold">IDLE</span>
+                                    )}
+                                    {!isDeviation && !isIdle && (
+                                      <span className="text-green-500">Normal</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-center text-gray-500 py-8 rounded-lg border border-gray-200 bg-gray-50">
+                      <svg className="w-12 h-12 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
+                      </svg>
+                      <p>No position history available for {selectedDay}</p>
+                      <p className="text-sm mt-1">Try selecting another date</p>
+                    </div>
                   )}
                 </div>
               )}

@@ -14,12 +14,26 @@ type RouteDeviationRepository interface {
 	FindByRoutePlanID(routePlanID uint, limit int) ([]*model.TruckRouteDeviation, error)
 	FindByMacIDWithDateRange(macID string, days int) ([]*model.TruckRouteDeviation, error)
 	FindByTruckIDWithDateRange(truckID uint, days int) ([]*model.TruckRouteDeviation, error)
+	GetRouteDeviationsByTruckIDAndDateRange(truckID uint, startDate, endDate time.Time) ([]*model.TruckRouteDeviation, error)
 }
 
 type routeDeviationRepository struct{}
 
 func NewRouteDeviationRepository() RouteDeviationRepository {
 	return &routeDeviationRepository{}
+}
+
+func (r *routeDeviationRepository) GetRouteDeviationsByTruckIDAndDateRange(truckID uint, startDate, endDate time.Time) ([]*model.TruckRouteDeviation, error) {
+    var deviations []*model.TruckRouteDeviation
+    
+    query := config.DB.Where("truck_id = ? AND created_at >= ? AND created_at <= ?", truckID, startDate, endDate).Order("created_at DESC")
+    
+    err := query.Find(&deviations).Error
+    return deviations, err
+}
+
+func (r *routeDeviationRepository) CreateRouteDeviation(deviation *model.TruckRouteDeviation) error {
+    return config.DB.Create(deviation).Error
 }
 
 // Create creates a new route deviation record in the database
