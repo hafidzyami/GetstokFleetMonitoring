@@ -817,6 +817,19 @@ paths:
       summary: Get active idle detections
       tags:
       - idle-detections
+  /metrics:
+    get:
+      description: Retrieve Prometheus metrics for monitoring
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Prometheus metrics
+          schema:
+            type: string
+      summary: Get Prometheus metrics
+      tags:
+      - metrics
   /ocr/process:
     post:
       consumes:

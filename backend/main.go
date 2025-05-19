@@ -16,6 +16,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/swagger"
 	_ "github.com/hafidzyami/GetstokFleetMonitoring/backend/docs" // Import generated docs
+
 	// "github.com/hafidzyami/GetstokFleetMonitoring/backend/migration"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/model"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/seed"
@@ -50,7 +51,7 @@ func main() {
 	// if err := migration.CreateFuelReceiptsTable(); err != nil {
 	// 	log.Printf("Error creating fuel_receipts table: %v", err)
 	// }
-	
+
 	// // Run truck idle detection migration
 	// if err := migration.CreateTruckIdleTable(); err != nil {
 	// 	log.Printf("Error creating truck_idle_detections table: %v", err)
@@ -133,6 +134,7 @@ func main() {
 	truckIdleController := controller.NewTruckIdleController(truckIdleService)
 	// Initialize route deviation controller
 	routeDeviationController := controller.NewRouteDeviationController(deviationService)
+	metricsController := controller.NewMetricsController()
 
 	// Initialize Fiber app
 	app := fiber.New(fiber.Config{
@@ -159,6 +161,8 @@ func main() {
 		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
 	}))
 
+	app.Use(middleware.PrometheusMiddleware())
+
 	// Middleware
 	app.Use(logger.New())  // Logger middleware
 	app.Use(recover.New()) // Recover middleware
@@ -176,6 +180,8 @@ func main() {
 		}
 		return fiber.ErrUpgradeRequired
 	})
+
+	app.Get("/metrics", metricsController.GetMetrics)
 
 	// WebSocket endpoint
 	app.Get("/ws", ws.New(func(c *ws.Conn) {
@@ -289,7 +295,7 @@ func main() {
 	idle.Get("/", truckIdleController.GetAllIdleDetections)
 	idle.Get("/active", truckIdleController.GetActiveIdleDetections)
 	idle.Put("/:id/resolve", truckIdleController.ResolveIdleDetection)
-	
+
 	// Route deviation routes
 	deviations := api.Group("/route-deviations")
 	deviations.Use(middleware.Protected())
