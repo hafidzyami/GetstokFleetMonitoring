@@ -104,6 +104,19 @@
           "sort": "none"
         }
       },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(http_requests_total[1m]))",
+          "legendFormat": "Requests/sec",
+          "range": true,
+          "refId": "A"
+        }
+      ],
       "title": "Request Rate",
       "type": "timeseries"
     },
@@ -183,6 +196,19 @@
           "sort": "none"
         }
       },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "http_requests_in_flight",
+          "legendFormat": "In flight",
+          "range": true,
+          "refId": "A"
+        }
+      ],
       "title": "Requests in Flight",
       "type": "timeseries"
     },
@@ -263,6 +289,19 @@
           "sort": "none"
         }
       },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "rate(http_request_duration_seconds_sum[1m]) / rate(http_request_duration_seconds_count[1m])",
+          "legendFormat": "{{method}} {{path}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
       "title": "Request Duration",
       "type": "timeseries"
     },
@@ -316,6 +355,19 @@
           "sort": "none"
         }
       },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "sum by (status) (http_requests_total)",
+          "legendFormat": "{{status}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
       "title": "Status Codes",
       "type": "piechart"
     },
@@ -395,6 +447,19 @@
           "sort": "none"
         }
       },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "sum by (path) (rate(http_requests_total[1m]))",
+          "legendFormat": "{{path}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
       "title": "Request Rate by Endpoint",
       "type": "timeseries"
     },
@@ -475,6 +540,19 @@
           "sort": "none"
         }
       },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "sum by(path) (rate(http_request_duration_seconds_sum[1m])) / sum by(path) (rate(http_request_duration_seconds_count[1m]))",
+          "legendFormat": "{{path}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
       "title": "Response Time by Endpoint",
       "type": "timeseries"
     }
