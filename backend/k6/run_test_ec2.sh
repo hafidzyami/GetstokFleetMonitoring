@@ -15,7 +15,7 @@ echo "1. Run master test (all REST API controllers + WebSocket)"
 echo "2. Exit"
 echo
 
-read -p "Enter your choice (1-4): " choice
+read -p "Enter your choice (1-2): " choice
 
 case $choice in
     1)
