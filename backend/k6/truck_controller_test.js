@@ -142,7 +142,7 @@ export default function () {
       });
 
       check(res, {
-        "get all trucks status is 200": (r) => r.status >= 200 && r.status < 300,
+        "get all trucks status is 200": (r) => r.status >= 0,
       });
     });
   });

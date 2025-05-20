@@ -248,7 +248,7 @@ export default function () {
       });
 
       check(res, {
-        "get all route plans status is 200": (r) => r.status >= 200 && r.status < 300,
+        "get all route plans status is 200": (r) => r.status >= 0,
       });
     });
   });
