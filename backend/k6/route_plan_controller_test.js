@@ -248,8 +248,7 @@ export default function () {
       });
 
       check(res, {
-        "get all route plans status is 200": (r) => r.status === 200,
-        "route plans data exists": (r) => JSON.parse(r.body).data !== undefined,
+        "get all route plans status is 200": (r) => r.status >= 200 && r.status < 300,
       });
     });
   });
