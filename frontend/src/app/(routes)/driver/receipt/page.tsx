@@ -5,7 +5,7 @@ import "boxicons/css/boxicons.min.css";
 import React, { useRef, useState, useEffect } from "react";
 import Image from "next/image";
 // OCR is now handled by the backend
-import { format, set } from "date-fns";
+import { format} from "date-fns";
 import { id } from "date-fns/locale";
 
 interface Truck {
@@ -235,7 +235,8 @@ const KuitansiPage = () => {
       }
 
       // Siapkan timestamp
-      let timestamp = new Date().toISOString();
+      const timestamp = new Date().toISOString();
+
 
       // Buat data yang akan dikirim
       let imageBase64 = "";
@@ -615,14 +616,16 @@ const KuitansiPage = () => {
   });
 
   // Format date for display with time
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      return format(date, "d MMMM yyyy '-' HH:mm:ss", { locale: id });
-    } catch (error) {
-      return dateString;
-    }
-  };
+    const formatDate = (dateString: string) => {
+      try {
+        const date = new Date(dateString);
+        return format(date, "d MMMM yyyy '-' HH:mm:ss", { locale: id });
+      } catch {
+        return dateString;
+      }
+    };
+
+
 
   return (
     <div className="flex flex-col items-center bg-white p-5 rounded-md border-[1px]">
