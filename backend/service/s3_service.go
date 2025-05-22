@@ -134,7 +134,7 @@ func (s *s3Service) GeneratePresignedURL(objectKey string) (string, error) {
 		Bucket: aws.String(s.bucketName),
 		Key:    aws.String(objectKey),
 	}, func(opts *s3.PresignOptions) {
-		opts.Expires = time.Hour * 24 * 365 // URL expires in 1 year
+		opts.Expires = time.Hour * 24 * 7 // URL expires in 1 year
 	})
 
 	if err != nil {
