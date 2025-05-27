@@ -2,12 +2,12 @@
 
 import "boxicons/css/boxicons.min.css"; // Import Boxicons CSS
 
-import { Bell, ChevronDown, ChevronLeft, Menu, KeyRound, LogOut } from "lucide-react";
+import { Bell, ChevronDown, ChevronLeft, KeyRound, LogOut, Menu } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import ResetPasswordModal from "../driver/ResetPasswordModal";
 
 import Image from "next/image";
+import ResetPasswordModal from "../driver/ResetPasswordModal";
 // import Sidebar from "./Sidebar";
 // import { createGlobalStyle } from "styled-components";
 import { useAuth } from "@/app/contexts/AuthContext";
@@ -450,7 +450,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 											{user?.name}
 										</p>
 										<p className="text-xs text-gray-500 dark:text-gray-400">
-											User
+											{user?.role? user.role.charAt(0).toUpperCase() + user.role.slice(1): ""}
 										</p>
 									</div>
 								</div>
@@ -520,7 +520,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 								<span className="text-sm font-medium text-gray-900 dark:text-white">
 									{user?.name ?? "User"}
 								</span>
-								<span className="text-xs text-gray-500 dark:text-gray-400">User</span>
+								<span className="text-xs text-gray-500 dark:text-gray-400">
+									{user?.role? user.role.charAt(0).toUpperCase() + user.role.slice(1): ""}
+								</span>
 								</span>
 								<ChevronDown className="hidden lg:block h-4 w-4 text-gray-400" />
 							</button>

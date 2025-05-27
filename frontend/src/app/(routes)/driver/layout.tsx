@@ -2,12 +2,12 @@
 
 import "boxicons/css/boxicons.min.css"; // Import Boxicons CSS
 
-import { Bell, ChevronDown, ChevronLeft, Menu, KeyRound, LogOut } from "lucide-react";
+import { Bell, ChevronDown, ChevronLeft, KeyRound, LogOut, Menu } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import ResetPasswordModal from "./ResetPasswordModal";
 
 import Image from "next/image";
+import ResetPasswordModal from "./ResetPasswordModal";
 // Tambahkan style untuk animasi
 // import { createGlobalStyle } from "styled-components";
 import { useAuth } from "@/app/contexts/AuthContext";
@@ -306,14 +306,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 							{sidebarOpen && (
 								<div className="flex items-center">
 									<div className="h-8 w-8 rounded-full bg-[#009EFF] flex items-center justify-center text-white font-semibold">
-										{/* {user?.name?.charAt(0)} */}
+										{user?.name?.charAt(0)}
 									</div>
 									<div className="ml-3">
 										<p className="text-sm font-medium text-gray-700 dark:text-gray-200">
-											{/* {user?.name} */}
+											{user?.name}
 										</p>
 										<p className="text-xs text-gray-500 dark:text-gray-400">
-											User
+											{user?.role? user.role.charAt(0).toUpperCase() + user.role.slice(1): ""}
 										</p>
 									</div>
 								</div>
@@ -383,7 +383,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 								<span className="text-sm font-medium text-gray-900 dark:text-white">
 									{user?.name ?? "User"}
 								</span>
-								<span className="text-xs text-gray-500 dark:text-gray-400">User</span>
+								<span className="text-xs text-gray-500 dark:text-gray-400">
+									{user?.role? user.role.charAt(0).toUpperCase() + user.role.slice(1): ""}
+								</span>
 								</span>
 								<ChevronDown className="hidden lg:block h-4 w-4 text-gray-400" />
 							</button>
