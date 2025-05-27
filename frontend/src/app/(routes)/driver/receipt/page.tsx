@@ -2,10 +2,11 @@
 
 import "boxicons/css/boxicons.min.css";
 
-import React, { useRef, useState, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
+
 import Image from "next/image";
 // OCR is now handled by the backend
-import { format} from "date-fns";
+import { format } from "date-fns";
 import { id } from "date-fns/locale";
 
 interface Truck {
@@ -764,7 +765,7 @@ const KuitansiPage = () => {
                       key={receipt.id}
                       className="border-b border-gray-100 hover:bg-[#FFF7EF] transition-colors"
                     >
-                      <td className="p-3 flex justify-center">
+                      <td className="py-3 flex justify-center">
                         <div className="bg-[#BC8644] rounded-full p-2">
                           <Image
                             src="/icons/ShopifyChecklist.svg"
