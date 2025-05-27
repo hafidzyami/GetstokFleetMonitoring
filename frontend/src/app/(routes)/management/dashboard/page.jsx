@@ -10,16 +10,16 @@ import {
   TileLayer,
   useMap,
 } from "react-leaflet";
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { debugTruckRouteMatch, getRouteColor } from "@/app/utils/colorUtils";
 
 import ApexCharts from "apexcharts";
 import L from "leaflet";
 import WaypointMarkers from "@/app/_components/WaypointMarkers";
+import { calculateDistanceToPolyline } from "@/app/utils/distanceUtils";
 import { getLatLngsForMap } from "@/app/utils/polylineDecoder";
 import { initLeafletIcons } from "@/app/utils/leafletIcons";
 import { useAuth } from "@/app/contexts/AuthContext";
-import { calculateDistanceToPolyline } from "@/app/utils/distanceUtils";
 
 // Fix Leaflet icon issue
 delete L.Icon.Default.prototype._getIconUrl;
@@ -1434,12 +1434,31 @@ const DashboardPage = () => {
             tools: {
               download: true,
               selection: true,
-              zoom: true,
-              zoomin: true,
-              zoomout: true,
+              zoom: false,
+              zoomin: false,
+              zoomout: false,
               pan: true,
               reset: true,
             },
+            autoSelected: 'zoom', // optional
+            position: 'bottom', // pindahkan toolbar ke bawah
+            export: {
+            csv: {
+              filename: undefined,
+              columnDelimiter: ',',
+              headerCategory: 'category',
+              headerValue: 'value',
+              dateFormatter(timestamp) {
+                return new Date(timestamp).toDateString()
+              }
+            },
+            svg: {
+              filename: undefined,
+            },
+            png: {
+              filename: undefined,
+            }
+          },
           },
           zoom: {
             enabled: true,
@@ -2164,7 +2183,7 @@ const DashboardPage = () => {
       </div>
 
       {/* Main Content */}
-      <div className="flex flex-col lg:flex-row gap-4 h-[calc(100vh-200px)]">
+      <div className="flex flex-col lg:flex-row gap-4 md:h-[calc(100vh-200px)]">
         {/* Truck List Sidebar (using UI from layout.tsx) */}
         <div className="w-full lg:w-72 bg-white shadow-md rounded-lg p-4 overflow-y-auto max-h-[400px] lg:max-h-full">
           <h2 className="text-lg font-semibold mb-3 pb-2 border-b border-gray-200">
@@ -2261,7 +2280,7 @@ const DashboardPage = () => {
           <div
             ref={mapRef}
             className={`relative flex-1 mb-4 transition-all duration-300 ${
-              activeTruck ? "h-[calc(100%-250px)]" : "h-full"
+              activeTruck ? "md:h-[calc(100%-250px)] h-[400px]" : "h-full"
             }`}
           >
             <MapContainer
@@ -2271,7 +2290,7 @@ const DashboardPage = () => {
                   : defaultCenter
               }
               zoom={13}
-              style={{ height: "100%", width: "100%" }}
+              className="h-[300px] md:h-full w-full"
               whenCreated={(map) => {
                 mapRef.current = map;
               }}
@@ -3070,77 +3089,77 @@ const DashboardPage = () => {
                       <div className="mb-2 text-xs text-gray-500">
                         {fuelReceipts.length} receipt(s) found
                       </div>
-                      <table className="w-full text-sm border border-gray-200 rounded">
-                        <thead className="bg-[#009EFF] text-white">
-                          <tr>
-                            <th className="p-2 border">DateTime</th>
-                            <th className="p-2 border">Product</th>
-                            <th className="p-2 border">Price/Liter</th>
-                            <th className="p-2 border">Volume</th>
-                            <th className="p-2 border">Total Price</th>
-                            <th className="p-2 border">Bukti Foto</th>
-                          </tr>
-                        </thead>
-                        <tbody className="text-center">
-                          {fuelReceipts.map((receipt) => (
-                            <tr key={receipt.id || `receipt-${Math.random()}`}>
-                              <td className="p-2 border">
-                                {receipt.created_at
-                                  ? new Date(
-                                      receipt.created_at
-                                    ).toLocaleString()
-                                  : "N/A"}
-                              </td>
-                              <td className="p-2 border">
-                                {receipt.product_name || "N/A"}
-                              </td>
-                              <td className="p-2 border">
-                                {receipt.price
-                                  ? `Rp ${Number(
-                                      receipt.price
-                                    ).toLocaleString()}`
-                                  : "N/A"}
-                              </td>
-                              <td className="p-2 border">
-                                {receipt.volume
-                                  ? `${Number(receipt.volume)} Liter`
-                                  : "N/A"}
-                              </td>
-                              <td className="p-2 border">
-                                {receipt.total_price
-                                  ? `Rp ${Number(
-                                      receipt.total_price
-                                    ).toLocaleString()}`
-                                  : "N/A"}
-                              </td>
-                              <td className="p-2 border">
-                                {receipt.image_url ? (
-                                  <a
-                                    href={receipt.image_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                  >
-                                    <div className="flex flex-col items-center">
-                                      <img
-                                        src={receipt.image_url}
-                                        alt="Bukti Receipt"
-                                        className="w-16 h-16 object-cover rounded border border-gray-300 mb-1"
-                                      />
-                                      <span className="text-xs text-blue-500 hover:underline">
-                                        Lihat Foto
-                                      </span>
-                                    </div>
-                                  </a>
-                                ) : (
-                                  <span className="text-gray-400 text-xs">
-                                    Tidak ada foto
-                                  </span>
-                                )}
-                              </td>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs border border-gray-200 rounded">
+                          <thead className="bg-[#009EFF] text-white">
+                            <tr>
+                              <th className="p-1.5 border">DateTime</th>
+                              <th className="p-1.5 border">Product</th>
+                              <th className="p-1.5 border">Price/Liter</th>
+                              <th className="p-1.5 border">Volume</th>
+                              <th className="p-1.5 border">Total Price</th>
+                              <th className="p-1.5 border">Bukti Foto</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody className="text-center">
+                            {fuelReceipts.map((receipt) => (
+                              <tr
+                                key={receipt.id || `receipt-${Math.random()}`}
+                                className="border-b border-gray-200"
+                              >
+                                <td className="p-2">
+                                  {receipt.created_at
+                                    ? new Date(
+                                        receipt.created_at
+                                      ).toLocaleString()
+                                    : "N/A"}
+                                </td>
+                                <td className="p-2 truncate">
+                                  {receipt.product_name || "N/A"}
+                                </td>
+                                <td className="p-2 truncate">
+                                  {receipt.price
+                                    ? `Rp ${Number(
+                                        receipt.price
+                                      ).toLocaleString()}`
+                                    : "N/A"}
+                                </td>
+                                <td className="p-2 truncate">
+                                  {receipt.volume
+                                    ? `${Number(receipt.volume)} Liter`
+                                    : "N/A"}
+                                </td>
+                                <td className="p-2 truncate">
+                                  {receipt.total_price
+                                    ? `Rp ${Number(
+                                        receipt.total_price
+                                      ).toLocaleString()}`
+                                    : "N/A"}
+                                </td>
+                                <td className="p-2">
+                                  {receipt.image_url ? (
+                                    <a
+                                      href={receipt.image_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      <div className="flex flex-col items-center">
+                                        <span className="text-xs text-blue-500 hover:underline">
+                                          Lihat Foto
+                                        </span>
+                                      </div>
+                                    </a>
+                                  ) : (
+                                    <span className="text-gray-400 text-xs">
+                                      Tidak ada foto
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </>
                   ) : (
                     <div className="flex flex-col items-center justify-center text-center text-gray-500 py-8 rounded-lg border border-gray-200 bg-gray-50">
