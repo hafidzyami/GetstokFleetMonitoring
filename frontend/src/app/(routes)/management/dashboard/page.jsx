@@ -2412,9 +2412,8 @@ const DashboardPage = () => {
                   />
                 )}
 
-              {/* If we're viewing a historical day (not Today), render historical position polyline */}
+              {/* If we're viewing a historical day, render historical position polyline */}
               {viewMode === "gps" &&
-                selectedDay !== "Today" &&
                 activeTruck /* Only show positions for the active truck */ &&
                 positionHistory.length > 0 && (
                   <Polyline
