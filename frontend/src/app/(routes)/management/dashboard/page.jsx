@@ -1440,25 +1440,25 @@ const DashboardPage = () => {
               pan: true,
               reset: true,
             },
-            autoSelected: 'zoom', // optional
-            position: 'bottom', // pindahkan toolbar ke bawah
+            autoSelected: "zoom", // optional
+            position: "bottom", // pindahkan toolbar ke bawah
             export: {
-            csv: {
-              filename: undefined,
-              columnDelimiter: ',',
-              headerCategory: 'category',
-              headerValue: 'value',
-              dateFormatter(timestamp) {
-                return new Date(timestamp).toDateString()
-              }
+              csv: {
+                filename: undefined,
+                columnDelimiter: ",",
+                headerCategory: "category",
+                headerValue: "value",
+                dateFormatter(timestamp) {
+                  return new Date(timestamp).toDateString();
+                },
+              },
+              svg: {
+                filename: undefined,
+              },
+              png: {
+                filename: undefined,
+              },
             },
-            svg: {
-              filename: undefined,
-            },
-            png: {
-              filename: undefined,
-            }
-          },
           },
           zoom: {
             enabled: true,
@@ -2303,6 +2303,16 @@ const DashboardPage = () => {
               {/* Only show current truck markers when not in GPS historical view */}
               {(viewMode !== "gps" || selectedDay === "Today") &&
                 Object.values(trucks).map((truck) => {
+                  if (
+                    viewMode === "gps" &&
+                    selectedDay === "Today" &&
+                    activeTruck
+                  ) {
+                    // Jika sedang di GPS mode dan hari ini, hanya tampilkan truck yang aktif
+                    if (truck.mac_id !== activeTruck.mac_id) {
+                      return null;
+                    }
+                  }
                   // For each truck with position data, create a marker with popup
                   if (!truck.latitude || !truck.longitude) return null;
 
@@ -2325,9 +2335,16 @@ const DashboardPage = () => {
                 })}
 
               {/* Visualisasi Titik Referensi dan Deviasi (only when not viewing historical GPS data) */}
-              {viewMode !== "gps" || selectedDay === "Today"
-                ? Object.entries(deviationReferences).map(
-                    ([mac_id, deviationInfo]) => (
+              {(viewMode !== "gps" || selectedDay === "Today") && activeTruck // TAMBAHKAN aktiveTruck check
+                ? Object.entries(deviationReferences)
+                    .filter(([mac_id, deviationInfo]) => {
+                      // TAMBAHKAN FILTER: Jika GPS "Today", hanya tampilkan deviasi untuk truck yang aktif
+                      if (viewMode === "gps" && selectedDay === "Today") {
+                        return mac_id === activeTruck.mac_id;
+                      }
+                      return true;
+                    })
+                    .map(([mac_id, deviationInfo]) => (
                       <React.Fragment key={`deviation-vis-${mac_id}`}>
                         {/* Titik referensi pada polyline */}
                         <Marker
@@ -2381,8 +2398,7 @@ const DashboardPage = () => {
                           interactive={false}
                         />
                       </React.Fragment>
-                    )
-                  )
+                    ))
                 : null}
               {/* Show MapController only when not viewing historical GPS data */}
               {activeTruck &&
@@ -2439,7 +2455,12 @@ const DashboardPage = () => {
                         );
                       })
                       .map((p) => [p.latitude, p.longitude])}
-                    pathOptions={{ color: "#4a90e2", weight: 3, opacity: 0.8 }}
+                    pathOptions={{
+                      color: "#FF6B6B", // Ubah ke warna merah terang
+                      weight: 4, // Lebih tebal
+                      opacity: 0.9, // Lebih solid
+                      dashArray: "10, 5", // Pattern dash yang lebih jelas
+                    }}
                     zIndex={1500}
                   />
                 )}
@@ -2526,8 +2547,7 @@ const DashboardPage = () => {
                             {deviation.longitude.toFixed(6)}
                           </p>
                           <p className="text-xs text-red-500 font-medium">
-                            Distance:{" "}
-                            {(deviation.distance || 0).toFixed(0)} m
+                            Distance: {(deviation.distance || 0).toFixed(0)} m
                             off route
                           </p>
                         </div>
@@ -2667,9 +2687,10 @@ const DashboardPage = () => {
                           positions={positions}
                           pathOptions={{
                             color: getRouteColor(routePlan),
-                            weight: 4,
-                            opacity: 0.5,
-                            dashArray: "5, 5",
+                            weight: 5,
+                            opacity: 0.8,
+                            dashArray: "15, 10",
+                            lineCap: "round",
                           }}
                           zIndex={1000}
                         >
@@ -2701,57 +2722,69 @@ const DashboardPage = () => {
               {/* Render polylines dan markers untuk route plans */}
               {/* Only show active route plans when not in GPS historical view */}
               {(viewMode !== "gps" || selectedDay === "Today") &&
-                activeRoutePlans.map((routePlan, index) => {
-                  // Decode route geometry dengan decoder yang benar
-                  const positions = decodeRouteGeometry(
-                    routePlan.route_geometry
-                  );
-                  if (!positions || positions.length === 0) return null;
+                activeRoutePlans
+                  .filter((routePlan) => {
+                    // TAMBAHKAN FILTER: Jika GPS "Today" dan ada activeTruck, hanya tampilkan rute untuk truck tersebut
+                    if (
+                      viewMode === "gps" &&
+                      selectedDay === "Today" &&
+                      activeTruck
+                    ) {
+                      return debugTruckRouteMatch(activeTruck, routePlan);
+                    }
+                    return true;
+                  })
+                  .map((routePlan, index) => {
+                    // Decode route geometry dengan decoder yang benar
+                    const positions = decodeRouteGeometry(
+                      routePlan.route_geometry
+                    );
+                    if (!positions || positions.length === 0) return null;
 
-                  // Tentukan apakah route plan ini milik truck yang aktif
-                  let isMatch = false;
-                  if (activeTruck) {
-                    const routePlanPlate =
-                      routePlan.vehicle_plate?.split("/")[0] || "";
-                    const routePlanMacId =
-                      routePlan.vehicle_plate?.split("/")[1] || "";
-                    isMatch =
-                      routePlanPlate === activeTruck.plate_number ||
-                      routePlanMacId === activeTruck.mac_id;
-                  }
+                    // Tentukan apakah route plan ini milik truck yang aktif
+                    let isMatch = false;
+                    if (activeTruck) {
+                      const routePlanPlate =
+                        routePlan.vehicle_plate?.split("/")[0] || "";
+                      const routePlanMacId =
+                        routePlan.vehicle_plate?.split("/")[1] || "";
+                      isMatch =
+                        routePlanPlate === activeTruck.plate_number ||
+                        routePlanMacId === activeTruck.mac_id;
+                    }
 
-                  // Tentukan warna berdasarkan truck aktif
-                  const color = activeTruck
-                    ? isMatch
-                      ? getRouteColor(routePlan)
-                      : "#dddddd"
-                    : getRouteColor(routePlan);
+                    // Tentukan warna berdasarkan truck aktif
+                    const color = activeTruck
+                      ? isMatch
+                        ? getRouteColor(routePlan)
+                        : "#dddddd"
+                      : getRouteColor(routePlan);
 
-                  // Tentukan ketebalan dan opasitas berdasarkan status
-                  const weight = activeTruck ? (isMatch ? 5 : 2) : 5;
-                  const opacity = activeTruck ? (isMatch ? 0.9 : 0.3) : 0.7;
+                    // Tentukan ketebalan dan opasitas berdasarkan status
+                    const weight = activeTruck ? (isMatch ? 5 : 2) : 5;
+                    const opacity = activeTruck ? (isMatch ? 0.9 : 0.3) : 0.7;
 
-                  return (
-                    <React.Fragment key={`route-${routePlan.id}`}>
-                      {/* Render polyline untuk rute */}
-                      <Polyline
-                        positions={positions}
-                        pathOptions={{
-                          color: color,
-                          weight: weight,
-                          opacity: opacity,
-                          dashArray: !isMatch && activeTruck ? "5, 5" : null,
-                        }}
-                        zIndex={isMatch ? 1000 : 100}
-                      />
+                    return (
+                      <React.Fragment key={`route-${routePlan.id}`}>
+                        {/* Render polyline untuk rute */}
+                        <Polyline
+                          positions={positions}
+                          pathOptions={{
+                            color: color,
+                            weight: weight,
+                            opacity: opacity,
+                            dashArray: !isMatch && activeTruck ? "5, 5" : null,
+                          }}
+                          zIndex={isMatch ? 1000 : 100}
+                        />
 
-                      {/* Render markers untuk waypoints jika tidak ada truck yang dipilih atau jika ini adalah truck yang dipilih */}
-                      {(!activeTruck || isMatch) && (
-                        <WaypointMarkers routePlan={routePlan} />
-                      )}
-                    </React.Fragment>
-                  );
-                })}
+                        {/* Render markers untuk waypoints jika tidak ada truck yang dipilih atau jika ini adalah truck yang dipilih */}
+                        {(!activeTruck || isMatch) && (
+                          <WaypointMarkers routePlan={routePlan} />
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
             </MapContainer>
           </div>
 
