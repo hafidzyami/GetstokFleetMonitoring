@@ -373,7 +373,7 @@ const UserManagementPage = () => {
       )}
     </div>
   ) : (
-    <div className="flex flex-col gap-3 h-[650px] overflow-y-auto pr-2">
+    <div className="flex flex-col gap-3 h-screen overflow-y-auto pr-2">
       {filteredUsers.map((user, index) => (
         <div
           key={user.id}

@@ -30,6 +30,7 @@ type NotificationRequest struct {
 
 type RouteDeviationService interface {
 	DetectAndSaveDeviation(macID string, latitude, longitude float64, timestamp time.Time) error
+	GetRouteDeviationsByTruckIDAndDateRange(truckID uint, startDate, endDate time.Time) ([]*model.TruckRouteDeviation, error)
 }
 
 type routeDeviationService struct {
@@ -51,6 +52,10 @@ func NewRouteDeviationService(
 		deviationRepo:     deviationRepo,
 		userRepo:          userRepo,
 	}
+}
+
+func (s *routeDeviationService) GetRouteDeviationsByTruckIDAndDateRange(truckID uint, startDate, endDate time.Time) ([]*model.TruckRouteDeviation, error) {
+    return s.deviationRepo.GetRouteDeviationsByTruckIDAndDateRange(truckID, startDate, endDate)
 }
 
 // DetectAndSaveDeviation checks if a truck position deviates from its route plan

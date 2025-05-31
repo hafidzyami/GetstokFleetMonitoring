@@ -921,6 +921,11 @@ const BuatRutePage = () => {
       return;
     }
 
+    if (routeGeometry === "") {
+      alert('Silakan klik "Buat Rute" terlebih dahulu');
+      return;
+    }
+
     // Show loading indicator
     setIsLoadingRoute(true);
 
@@ -1561,10 +1566,10 @@ const BuatRutePage = () => {
         {/* Generate button */}
         <button
           onClick={handleGenerate}
-          className="w-full text-sm px-6 py-4 border-[2px] bg-[#009EFF] text-white rounded-[8px] flex items-center justify-center gap-2 font-semibold mt-4 mb-8"
+          className="w-full text-sm px-6 py-4 border-[2px]  bg-blue-500 hover:bg-blue-600 text-white rounded-[8px] flex items-center justify-center gap-2 font-semibold mt-4 mb-8"
           type="button"
         >
-          Generate
+          Kirim Rute
         </button>
       </div>
       {isLoadingRoute && (

@@ -2,10 +2,11 @@
 
 import "boxicons/css/boxicons.min.css";
 
-import React, { useRef, useState, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
+
 import Image from "next/image";
 // OCR is now handled by the backend
-import { format, set } from "date-fns";
+import { format } from "date-fns";
 import { id } from "date-fns/locale";
 
 interface Truck {
@@ -235,7 +236,8 @@ const KuitansiPage = () => {
       }
 
       // Siapkan timestamp
-      let timestamp = new Date().toISOString();
+      const timestamp = new Date().toISOString();
+
 
       // Buat data yang akan dikirim
       let imageBase64 = "";
@@ -392,17 +394,43 @@ const KuitansiPage = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Validasi ukuran file maksimal 5MB (tetap ada)
     if (file.size > 5 * 1024 * 1024) {
       alert("Ukuran file maksimal 5MB.");
       return;
     }
 
+    // Validasi ukuran file untuk OCR - tidak boleh lebih dari 1MB
+    if (file.size > 1 * 1024 * 1024) {
+      // File lebih dari 1MB, tampilkan preview tapi tidak lakukan OCR
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        setPreviewImage(result);
+        
+        // Tampilkan alert bahwa OCR tidak dapat dilakukan
+        alert("File melebihi 1MB. OCR tidak dapat dilakukan, silakan isi data secara manual.");
+        
+        // Reset OCR data supaya user harus isi manual
+        setOcrData({
+          waktu: "",
+          namaProduk: "",
+          hargaPerLiter: "",
+          volume: "",
+          totalHarga: "",
+        });
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    // File di bawah 1MB, lakukan OCR seperti biasa
     const reader = new FileReader();
     reader.onload = () => {
       const result = reader.result as string;
       setPreviewImage(result);
 
-      // Otomatis proses OCR saat file dipilih
+      // Otomatis proses OCR saat file dipilih (hanya jika ≤ 1MB)
       processOCR(result);
     };
     reader.readAsDataURL(file);
@@ -588,12 +616,41 @@ const KuitansiPage = () => {
   const handleCapture = async () => {
     const imageData = captureImage();
     if (imageData) {
-      setPreviewImage(imageData); // Save captured image for submission
-      try {
-        await processOCR(imageData);
-      } catch (error) {
-        console.error("Error during capture OCR:", error);
-        handleOCRResult(false, "Terjadi kesalahan saat memproses gambar");
+      // Konversi base64 ke blob untuk mendapatkan ukuran file
+      const base64Data = imageData.split(',')[1];
+      const binaryString = window.atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: 'image/jpeg' });
+      const fileSize = blob.size;
+
+      // Validasi ukuran file untuk OCR - tidak boleh lebih dari 1MB
+      if (fileSize > 1 * 1024 * 1024) {
+        // File lebih dari 1MB, tampilkan preview tapi tidak lakukan OCR
+        setPreviewImage(imageData);
+        
+        // Tampilkan alert bahwa OCR tidak dapat dilakukan
+        alert("File melebihi 1MB. OCR tidak dapat dilakukan, silakan isi data secara manual.");
+        
+        // Reset OCR data supaya user harus isi manual
+        setOcrData({
+          waktu: "",
+          namaProduk: "",
+          hargaPerLiter: "",
+          volume: "",
+          totalHarga: "",
+        });
+      } else {
+        // File di bawah 1MB, lakukan OCR seperti biasa
+        setPreviewImage(imageData); // Save captured image for submission
+        try {
+          await processOCR(imageData);
+        } catch (error) {
+          console.error("Error during capture OCR:", error);
+          handleOCRResult(false, "Terjadi kesalahan saat memproses gambar");
+        }
       }
     }
     stopCamera();
@@ -615,14 +672,16 @@ const KuitansiPage = () => {
   });
 
   // Format date for display with time
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      return format(date, "d MMMM yyyy '-' HH:mm:ss", { locale: id });
-    } catch (error) {
-      return dateString;
-    }
-  };
+    const formatDate = (dateString: string) => {
+      try {
+        const date = new Date(dateString);
+        return format(date, "d MMMM yyyy '-' HH:mm:ss", { locale: id });
+      } catch {
+        return dateString;
+      }
+    };
+
+
 
   return (
     <div className="flex flex-col items-center bg-white p-5 rounded-md border-[1px]">
@@ -706,7 +765,7 @@ const KuitansiPage = () => {
                       key={receipt.id}
                       className="border-b border-gray-100 hover:bg-[#FFF7EF] transition-colors"
                     >
-                      <td className="p-3 flex justify-center">
+                      <td className="py-3 flex justify-center">
                         <div className="bg-[#BC8644] rounded-full p-2">
                           <Image
                             src="/icons/ShopifyChecklist.svg"
@@ -846,11 +905,11 @@ const KuitansiPage = () => {
           {/* Modal dengan animasi dan layout lebih baik */}
           <div className="fixed inset-0 flex items-center justify-center z-50 px-4">
             <div
-              className="bg-white w-full max-w-md rounded-lg shadow-xl overflow-hidden transform transition-all duration-300 scale-95 animate-fadeIn"
+              className="bg-white w-full max-w-md max-h-[90vh] rounded-lg shadow-xl overflow-hidden transform transition-all duration-300 scale-95 animate-fadeIn flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header Modal */}
-              <div className="bg-[#009EFF] p-6 text-white">
+              <div className="bg-[#009EFF] p-6 text-white flex-shrink-0">
                 <div className="flex items-center gap-3">
                   <i className="bx bx-receipt text-2xl"></i>
                   <h2 className="text-xl font-bold">Unggah Kuitansi</h2>
@@ -860,8 +919,8 @@ const KuitansiPage = () => {
                 </p>
               </div>
 
-              {/* Body Modal */}
-              <div className="p-6 space-y-6">
+              {/* Body Modal - Scrollable */}
+              <div className="p-6 space-y-6 overflow-y-auto flex-1">
                 <div className="space-y-2">
                   <label className="block text-gray-700 font-medium">
                     Plat Nomor Kendaraan
@@ -899,7 +958,15 @@ const KuitansiPage = () => {
                       <li>Ambil foto dengan pencahayaan yang cukup</li>
                       <li>Posisikan kamera tegak lurus</li>
                       <li>Pastikan seluruh kuitansi terlihat jelas</li>
+                      <li className="text-red-600 font-medium">
+                        <strong>Ukuran file maksimal 1MB untuk OCR otomatis</strong>
+                      </li>
                     </ul>
+                    <div className="mt-2 p-2 bg-yellow-50 border-l-4 border-yellow-400">
+                      <p className="text-yellow-700 text-xs">
+                        ⚠️ File yang melebihi 1MB tidak akan diproses dengan OCR dan harus diisi secara manual.
+                      </p>
+                    </div>
                   </div>
 
                   <div className="flex gap-2">
@@ -937,7 +1004,7 @@ const KuitansiPage = () => {
                         <Image
                           src={previewImage}
                           alt="Preview"
-                          className="rounded border"
+                          className="rounded border w-full h-auto max-h-64 object-contain"
                           width={400}
                           height={300}
                         />
@@ -962,8 +1029,8 @@ const KuitansiPage = () => {
                 </div>
               </div>
 
-              {/* Footer Modal */}
-              <div className="bg-gray-50 px-6 py-4 flex justify-end gap-3">
+              {/* Footer Modal - Fixed */}
+              <div className="bg-gray-50 px-6 py-4 flex justify-end gap-3 flex-shrink-0">
                 <button
                   className="px-6 py-2 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-100 transition"
                   onClick={() =>
@@ -984,8 +1051,12 @@ const KuitansiPage = () => {
                         HasilDeteksiKuitanasi: true,
                       });
                     } else if (previewImage) {
-                      // Jika OCR belum selesai, proses OCR terlebih dahulu
-                      processOCR(previewImage);
+                      // Jika preview ada tapi OCR belum/tidak diproses (file > 1MB), langsung ke form manual
+                      setIsOpen({
+                        UnggahKuitansi: false,
+                        DeteksiKuitansi: false,
+                        HasilDeteksiKuitanasi: true,
+                      });
                     }
                   }}
                   disabled={!selectedTruckId || !previewImage}

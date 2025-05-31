@@ -16,7 +16,8 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/swagger"
 	_ "github.com/hafidzyami/GetstokFleetMonitoring/backend/docs" // Import generated docs
-	"github.com/hafidzyami/GetstokFleetMonitoring/backend/migration"
+
+	// "github.com/hafidzyami/GetstokFleetMonitoring/backend/migration"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/model"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/seed"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/utils"
@@ -42,14 +43,19 @@ func main() {
 	config.ConnectDB()
 
 	// Run migrations
-	if err := migration.CreateDriverLocationsTable(); err != nil {
-		log.Printf("Error creating driver_locations table: %v", err)
-	}
+	// if err := migration.CreateDriverLocationsTable(); err != nil {
+	// 	log.Printf("Error creating driver_locations table: %v", err)
+	// }
 
-	// Run fuel receipt migration
-	if err := migration.CreateFuelReceiptsTable(); err != nil {
-		log.Printf("Error creating fuel_receipts table: %v", err)
-	}
+	// // Run fuel receipt migration
+	// if err := migration.CreateFuelReceiptsTable(); err != nil {
+	// 	log.Printf("Error creating fuel_receipts table: %v", err)
+	// }
+
+	// // Run truck idle detection migration
+	// if err := migration.CreateTruckIdleTable(); err != nil {
+	// 	log.Printf("Error creating truck_idle_detections table: %v", err)
+	// }
 
 	// Seed
 	seed.SeedUsers(config.DB)
@@ -61,6 +67,7 @@ func main() {
 	routePlanRepo := repository.NewRoutePlanRepository()
 	deviationRepo := repository.NewRouteDeviationRepository()
 	fuelReceiptRepo := repository.NewFuelReceiptRepository()
+	truckIdleRepo := repository.NewTruckIdleRepository()
 
 	// Initialize services
 	authService := service.NewAuthService(userRepo)
@@ -74,6 +81,11 @@ func main() {
 		routePlanRepo,
 		deviationRepo,
 		userRepo, // Add userRepo here so we can get driver names
+	)
+	// Initialize idle detection service
+	truckIdleService := service.NewTruckIdleService(
+		truckIdleRepo,
+		truckRepo,
 	)
 	// Initialize OCR service
 	ocrService := service.NewOCRService()
@@ -92,6 +104,7 @@ func main() {
 	mqtt.SetTruckRepository(truckRepo)
 	mqtt.SetTruckHistoryRepository(truckHistoryRepo)
 	mqtt.SetRouteDeviationService(deviationService)
+	mqtt.SetTruckIdleService(truckIdleService)
 
 	// Websocket
 	websocket.InitHub()
@@ -118,6 +131,10 @@ func main() {
 	driverLocationController := controller.NewDriverLocationController(driverLocationService)
 	fuelReceiptController := controller.NewFuelReceiptController(fuelReceiptService)
 	ocrController := controller.NewOCRController(ocrService)
+	truckIdleController := controller.NewTruckIdleController(truckIdleService)
+	// Initialize route deviation controller
+	routeDeviationController := controller.NewRouteDeviationController(deviationService)
+	metricsController := controller.NewMetricsController()
 
 	// Initialize Fiber app
 	app := fiber.New(fiber.Config{
@@ -144,6 +161,8 @@ func main() {
 		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
 	}))
 
+	app.Use(middleware.PrometheusMiddleware())
+
 	// Middleware
 	app.Use(logger.New())  // Logger middleware
 	app.Use(recover.New()) // Recover middleware
@@ -161,6 +180,8 @@ func main() {
 		}
 		return fiber.ErrUpgradeRequired
 	})
+
+	app.Get("/metrics", metricsController.GetMetrics)
 
 	// WebSocket endpoint
 	app.Get("/ws", ws.New(func(c *ws.Conn) {
@@ -264,6 +285,21 @@ func main() {
 	trucks.Get("/:truckID/fuel", truckHistoryController.GetFuelHistoryLast30Days)
 	trucks.Get("/:truckID/positions/limited", truckHistoryController.GetPositionHistory)
 	trucks.Get("/:truckID/fuel/limited", truckHistoryController.GetFuelHistory)
+	// Add truck idle detection routes
+	trucks.Get("/:id/idle-detections", truckIdleController.GetIdleDetectionsByTruckID)
+	trucks.Get("/mac/:macID/idle-detections", truckIdleController.GetIdleDetectionsByMacID)
+
+	// Idle detection routes
+	idle := api.Group("/idle-detections")
+	idle.Use(middleware.Protected())
+	idle.Get("/", truckIdleController.GetAllIdleDetections)
+	idle.Get("/active", truckIdleController.GetActiveIdleDetections)
+	idle.Put("/:id/resolve", truckIdleController.ResolveIdleDetection)
+
+	// Route deviation routes
+	deviations := api.Group("/route-deviations")
+	deviations.Use(middleware.Protected())
+	deviations.Get("/", routeDeviationController.GetRouteDeviations)
 
 	// Routing routes
 	routing := api.Group("/routing")

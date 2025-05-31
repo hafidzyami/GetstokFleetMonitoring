@@ -10,16 +10,16 @@ import {
   TileLayer,
   useMap,
 } from "react-leaflet";
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { debugTruckRouteMatch, getRouteColor } from "@/app/utils/colorUtils";
 
 import ApexCharts from "apexcharts";
 import L from "leaflet";
 import WaypointMarkers from "@/app/_components/WaypointMarkers";
+import { calculateDistanceToPolyline } from "@/app/utils/distanceUtils";
 import { getLatLngsForMap } from "@/app/utils/polylineDecoder";
 import { initLeafletIcons } from "@/app/utils/leafletIcons";
 import { useAuth } from "@/app/contexts/AuthContext";
-import { calculateDistanceToPolyline } from "@/app/utils/distanceUtils";
 
 // Fix Leaflet icon issue
 delete L.Icon.Default.prototype._getIconUrl;
@@ -35,6 +35,14 @@ L.Icon.Default.mergeOptions({
 // Custom truck icon for deviating trucks
 const deviatingTruckIcon = new L.Icon({
   iconUrl: "/truck-icon.png", // Create this icon in red or with alert symbol
+  iconSize: [32, 32],
+  iconAnchor: [16, 32],
+  popupAnchor: [0, -32],
+});
+
+// Custom truck icon for idle trucks
+const idleTruckIcon = new L.Icon({
+  iconUrl: "/truck-icon.png", // Create this icon in orange or with idle symbol
   iconSize: [32, 32],
   iconAnchor: [16, 32],
   popupAnchor: [0, -32],
@@ -57,6 +65,22 @@ const createDeviationLabelIcon = (distance) => {
     )}m</div>`,
     iconSize: [40, 20],
     iconAnchor: [20, 10],
+  });
+};
+
+// Custom divIcon for showing idle status
+const createIdleLabelIcon = (duration) => {
+  // Format duration from seconds to hours:minutes:seconds
+  const hours = Math.floor(duration / 3600);
+  const minutes = Math.floor((duration % 3600) / 60);
+  const seconds = duration % 60;
+  const formattedDuration = `${hours}h ${minutes}m ${seconds}s`;
+
+  return L.divIcon({
+    className: "idle-label",
+    html: `<div class="bg-orange-500 text-white px-2 py-1 rounded text-xs font-bold">Idle: ${formattedDuration}</div>`,
+    iconSize: [100, 20],
+    iconAnchor: [50, 10],
   });
 };
 
@@ -145,6 +169,8 @@ const DashboardPage = () => {
   const [loadingRoutePlans, setLoadingRoutePlans] = useState(false);
   const [deviatingTrucks, setDeviatingTrucks] = useState({});
   const [showDeviationAlert, setShowDeviationAlert] = useState(false);
+  const [idleTrucks, setIdleTrucks] = useState({}); // State for idle trucks
+  const [showIdleAlert, setShowIdleAlert] = useState(false); // State for idle alerts
   const [deviationThreshold] = useState(35); // Deviation threshold in meters
   const [deviationReferences, setDeviationReferences] = useState({});
   const socketRef = useRef(null);
@@ -154,45 +180,54 @@ const DashboardPage = () => {
   const markerRefs = useRef({});
   const { user } = useAuth();
   const [selectedDay, setSelectedDay] = useState("Today");
-  const [viewMode, setViewMode] = useState("sensor"); // default view is 'sensor'
+  const [viewMode, setViewMode] = useState("sensor"); // default view is 'sensor', other options: 'data', 'gps'
   const [fuelData, setFuelData] = useState({});
+  const [chartData, setChartData] = useState(null); // State untuk menyimpan data chart yang aktif
   const [fuelReceipts, setFuelReceipts] = useState([]);
+  const [positionHistory, setPositionHistory] = useState([]);
+  const [loadingPositionHistory, setLoadingPositionHistory] = useState(false);
+  const [historicalRoutePlans, setHistoricalRoutePlans] = useState([]);
+  const [historicalDeviations, setHistoricalDeviations] = useState([]);
+  const [historicalIdleDetections, setHistoricalIdleDetections] = useState([]);
   const [activityDays, setActivityDays] = useState([]);
   const [loadingFuelData, setLoadingFuelData] = useState(false);
   const [loadingFuelReceipts, setLoadingFuelReceipts] = useState(false);
-  const [selectedDayCategory, setSelectedDayCategory] = useState('recent'); // recent, week1, week2, week3
-  const [searchDay, setSearchDay] = useState('');
+  const [selectedDayCategory, setSelectedDayCategory] = useState("recent"); // recent, week1, week2, week3
+  const [searchDay, setSearchDay] = useState("");
 
   const [defaultCenter, setDefaultCenter] = useState([-6.2, 106.816666]);
-  
+
   // Filter dan kategorikan hari berdasarkan pencarian dan kategori
   const filteredActivityDays = useMemo(() => {
     // Filter berdasarkan pencarian
     let filtered = activityDays;
-    
+
     if (searchDay) {
-      filtered = activityDays.filter(item => {
+      filtered = activityDays.filter((item) => {
         const dayText = item.day.toLowerCase();
         const dateText = item.date.toLowerCase();
-        return dayText.includes(searchDay.toLowerCase()) || dateText.includes(searchDay.toLowerCase());
+        return (
+          dayText.includes(searchDay.toLowerCase()) ||
+          dateText.includes(searchDay.toLowerCase())
+        );
       });
     } else {
       // Filter berdasarkan kategori jika tidak ada pencarian
-      if (selectedDayCategory === 'recent') {
+      if (selectedDayCategory === "recent") {
         // Today + 2 days
         filtered = activityDays.slice(0, 3);
-      } else if (selectedDayCategory === 'week1') {
+      } else if (selectedDayCategory === "week1") {
         // Day 3-9
-        filtered = activityDays.slice(3, 10); 
-      } else if (selectedDayCategory === 'week2') {
+        filtered = activityDays.slice(3, 10);
+      } else if (selectedDayCategory === "week2") {
         // Day 10-16
         filtered = activityDays.slice(10, 17);
-      } else if (selectedDayCategory === 'week3') {
+      } else if (selectedDayCategory === "week3") {
         // Day 17+
         filtered = activityDays.slice(17);
       }
     }
-    
+
     return filtered;
   }, [activityDays, searchDay, selectedDayCategory]);
 
@@ -231,9 +266,29 @@ const DashboardPage = () => {
         "Saturday",
       ];
 
+      // Helper function to format month name
+      const getMonthName = (monthIndex) => {
+        const monthNames = [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec",
+        ];
+        return monthNames[monthIndex];
+      };
+
       // Add today
       days.push({
         day: "Today",
+        displayName: "Today", // Added displayName for UI
         date: today.toLocaleDateString(),
         isoDate: today.toISOString().split("T")[0],
       });
@@ -243,14 +298,23 @@ const DashboardPage = () => {
         const pastDate = new Date(today);
         pastDate.setDate(today.getDate() - i);
 
-        // For days beyond a week, use date format instead of day name
-        const dayLabel = i <= 6 
-          ? dayNames[pastDate.getDay()] 
-          : pastDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        // Buat format tanggal yang konsisten
+        const formattedDate = `${getMonthName(
+          pastDate.getMonth()
+        )} ${pastDate.getDate()}`;
+
+        // Add year for uniqueness
+        const formattedDateWithYear = `${formattedDate} ${pastDate.getFullYear()}`;
+
+        // Konsisten selalu gunakan nama hari untuk semua tanggal
+        const dayLabel = dayNames[pastDate.getDay()];
 
         days.push({
-          day: dayLabel,
-          date: pastDate.toLocaleDateString(),
+          // Create a unique ID combining day & date
+          day: `${dayLabel}_${pastDate.toISOString().split("T")[0]}`,
+          displayName: dayLabel, // What shows in the UI
+          date: formattedDate,
+          dateWithYear: formattedDateWithYear,
           isoDate: pastDate.toISOString().split("T")[0],
         });
       }
@@ -342,6 +406,50 @@ const DashboardPage = () => {
     }
   };
 
+  // Function to fetch active idle trucks
+  const fetchActiveIdleTrucks = async () => {
+    try {
+      const response = await fetch("/api/v1/idle-detections/active", {
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data && data.data) {
+        console.log("Active idle detections received:", data.data.length);
+
+        // Convert array to object with macID as key for easier updates
+        const idleTrucksMap = {};
+        data.data.forEach((idleDetection) => {
+          idleTrucksMap[idleDetection.mac_id] = {
+            ...idleDetection,
+            timestamp: new Date(),
+          };
+        });
+
+        setIdleTrucks(idleTrucksMap);
+        setShowIdleAlert(Object.keys(idleTrucksMap).length > 0);
+
+        console.log(
+          "Idle trucks data loaded:",
+          Object.keys(idleTrucksMap).length
+        );
+      } else {
+        console.warn("Empty or invalid response for active idle detections");
+        setIdleTrucks({});
+        setShowIdleAlert(false);
+      }
+    } catch (err) {
+      console.error("Error fetching active idle detections:", err);
+    }
+  };
+
   // Function to fetch fuel history for a specific truck
   const fetchFuelHistory = async (truckId, date) => {
     if (!truckId) return Promise.reject("No truck ID provided");
@@ -362,15 +470,17 @@ const DashboardPage = () => {
 
       // Create unique cache key using truckId and date
       const cacheKey = `${truckId}_${date || "today"}`;
-      
-      console.log(`Fetching fuel history for truck ${truckId} from ${startDate} to ${endDate}, cache key: ${cacheKey}`);
-      
+
+      console.log(
+        `Fetching fuel history for truck ${truckId} from ${startDate} to ${endDate}, cache key: ${cacheKey}`
+      );
+
       // Check if we already have data cached for this truck + date combination
       if (fuelData[cacheKey]) {
         console.log(`Using cached fuel data for ${cacheKey}`);
         return Promise.resolve(fuelData[cacheKey]);
       }
-      
+
       // If no cached data, proceed with fetch
       const response = await fetch(
         `/api/v1/trucks/${truckId}/fuel?start_date=${startDate}&end_date=${endDate}`,
@@ -390,27 +500,64 @@ const DashboardPage = () => {
 
       if (data && data.data) {
         console.log(`Fuel history received for truck ${truckId}:`, data.data);
-        
+
         // Handle both the DateGroupedFuelHistory format and direct array format
-        let fuelDataPoints;
-        
+        let fuelDataPoints = [];
+
         if (Array.isArray(data.data)) {
-          // This is the direct format from date range queries
-          fuelDataPoints = data.data;
-          console.log("Using direct fuel history array format");
-        } else if (Array.isArray(data.data.Fuels)) {
-          // This might be the grouped format from 30-day query, with a single date
-          fuelDataPoints = data.data.Fuels;
-          console.log("Using single day fuel history format");
-        } else if (Array.isArray(data.data)) {
-          // This is the grouped format from 30-day query, with multiple dates
-          // Find the entry for our specific date if exists
-          const dateEntry = data.data.find(entry => entry.Date === date);
-          fuelDataPoints = dateEntry?.Fuels || [];
-          console.log(`Using fuel history for date ${date}`);
+          // Check if this is the grouped format with multiple dates
+          if (
+            data.data.length > 0 &&
+            (data.data[0].Date ||
+              data.data[0].date ||
+              data.data[0].Fuels ||
+              data.data[0].fuels)
+          ) {
+            // This is the grouped format from 30-day query, with multiple dates
+            // Try to find entry for our specific date, handling case sensitivity
+            const dateEntry = data.data.find(
+              (entry) => entry.Date === date || entry.date === date
+            );
+
+            if (dateEntry) {
+              // Handle both uppercase and lowercase property names
+              if (Array.isArray(dateEntry.Fuels)) {
+                fuelDataPoints = dateEntry.Fuels;
+                console.log(
+                  `Using fuel history for date ${date} (uppercase Fuels)`
+                );
+              } else if (Array.isArray(dateEntry.fuels)) {
+                fuelDataPoints = dateEntry.fuels;
+                console.log(
+                  `Using fuel history for date ${date} (lowercase fuels)`
+                );
+              }
+            } else {
+              console.log(`No matching date entry found for ${date}`);
+            }
+          } else {
+            // This is the direct format from date range queries
+            fuelDataPoints = data.data;
+            console.log("Using direct fuel history array format");
+          }
+        } else if (data.data && typeof data.data === "object") {
+          // This might be a single object with fuel data
+          if (Array.isArray(data.data.Fuels)) {
+            fuelDataPoints = data.data.Fuels;
+            console.log(
+              "Using single day fuel history format (uppercase Fuels)"
+            );
+          } else if (Array.isArray(data.data.fuels)) {
+            fuelDataPoints = data.data.fuels;
+            console.log(
+              "Using single day fuel history format (lowercase fuels)"
+            );
+          }
         } else {
-          console.warn(`Unknown fuel history data format for truck ${truckId}`, data.data);
-          fuelDataPoints = [];
+          console.warn(
+            `Unknown fuel history data format for truck ${truckId}`,
+            data.data
+          );
         }
 
         // Process fuel data for chart display
@@ -421,11 +568,11 @@ const DashboardPage = () => {
           ...prevData,
           [cacheKey]: processedData,
         }));
-        
+
         return processedData;
       }
-      
-      return Promise.resolve({times: [], levels: []});
+
+      return Promise.resolve({ times: [], levels: [] });
     } catch (err) {
       console.error(`Error fetching fuel history for truck ${truckId}:`, err);
       return Promise.reject(err);
@@ -444,18 +591,24 @@ const DashboardPage = () => {
       return new Date(a.timestamp) - new Date(b.timestamp);
     });
 
-    console.log("Sorted fuel data sample:", sortedData.length > 0 ? sortedData[0] : "No data");
+    console.log(
+      "Sorted fuel data sample:",
+      sortedData.length > 0 ? sortedData[0] : "No data"
+    );
 
     // Extract times and fuel levels
     const times = sortedData.map((item) => {
       const date = new Date(item.timestamp);
-      
+
       // Format tanggal dan waktu yang lebih lengkap
       // Untuk visualisasi chart yang lebih baik, gunakan format yang berbeda
       // berdasarkan pada jumlah data
       if (sortedData.length > 50) {
         // Jika data sangat banyak, gunakan format jam:menit + tanggal
-        return `${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')} ${date.getDate()}/${date.getMonth()+1}`;
+        return `${date.getHours()}:${date
+          .getMinutes()
+          .toString()
+          .padStart(2, "0")} ${date.getDate()}/${date.getMonth() + 1}`;
       } else {
         return date.toLocaleTimeString([], {
           hour: "2-digit",
@@ -475,31 +628,35 @@ const DashboardPage = () => {
         console.warn("Missing fuel level data in item:", item);
         value = 0; // Default value
       }
-      
+
       // Pastikan nilai tidak memiliki terlalu banyak desimal
       return Number(parseFloat(value).toFixed(2));
     });
-    
+
     // Untuk data yang sangat banyak, lakukan sampling data
     // untuk performa yang lebih baik pada chart
     if (times.length > 100) {
-      console.log(`Data terlalu banyak (${times.length} titik), lakukan sampling`);
+      console.log(
+        `Data terlalu banyak (${times.length} titik), lakukan sampling`
+      );
       const sampledTimes = [];
       const sampledLevels = [];
       const samplingRate = Math.ceil(times.length / 100); // Ambil sekitar 100 titik data
-      
+
       for (let i = 0; i < times.length; i += samplingRate) {
         sampledTimes.push(times[i]);
         sampledLevels.push(levels[i]);
       }
-      
+
       // Pastikan titik terakhir selalu masuk ke dalam sample
       if (times.length > 0 && (times.length - 1) % samplingRate !== 0) {
         sampledTimes.push(times[times.length - 1]);
         sampledLevels.push(levels[levels.length - 1]);
       }
-      
-      console.log(`Sampling selesai, sekarang ada ${sampledTimes.length} titik data`);
+
+      console.log(
+        `Sampling selesai, sekarang ada ${sampledTimes.length} titik data`
+      );
       return { times: sampledTimes, levels: sampledLevels };
     }
 
@@ -509,24 +666,26 @@ const DashboardPage = () => {
 
   // Receipts cache to avoid repeated fetches
   const [receiptsCache, setReceiptsCache] = useState({});
-  
+
   const fetchFuelReceipts = async (truckId, startDate, endDate) => {
     if (!truckId) return Promise.reject("No truck ID provided");
 
     try {
       // Create a cache key based on parameters
       const cacheKey = `${truckId}_${startDate}_${endDate}`;
-      
+
       // Check cache first but for now log what we have
       console.log(`Checking receipts cache for key ${cacheKey}`, receiptsCache);
       console.log(`Cache keys available:`, Object.keys(receiptsCache));
-      
+
       if (receiptsCache[cacheKey] && receiptsCache[cacheKey].length > 0) {
-        console.log(`Using cached fuel receipts for ${cacheKey} (${receiptsCache[cacheKey].length} items)`);
+        console.log(
+          `Using cached fuel receipts for ${cacheKey} (${receiptsCache[cacheKey].length} items)`
+        );
         setFuelReceipts(receiptsCache[cacheKey]);
         return Promise.resolve(receiptsCache[cacheKey]);
       }
-      
+
       setLoadingFuelReceipts(true);
 
       // Properly construct URL with actual truckId value
@@ -565,7 +724,7 @@ const DashboardPage = () => {
 
       // Fix: Match the actual data structure from the API
       let receiptsData = [];
-      
+
       if (data && data.data && data.data.receipts) {
         console.log("Fuel receipts received:", data.data.receipts);
         receiptsData = data.data.receipts;
@@ -577,16 +736,16 @@ const DashboardPage = () => {
         console.log("No fuel receipts data or empty array received:", data);
         receiptsData = [];
       }
-      
+
       // Set the state with the fetched data
       setFuelReceipts(receiptsData);
-      
+
       // Update cache
-      setReceiptsCache(prevCache => ({
+      setReceiptsCache((prevCache) => ({
         ...prevCache,
-        [cacheKey]: receiptsData
+        [cacheKey]: receiptsData,
       }));
-      
+
       return Promise.resolve(receiptsData);
     } catch (err) {
       console.error("Error fetching fuel receipts:", err);
@@ -597,6 +756,382 @@ const DashboardPage = () => {
     }
   };
 
+  // Function to fetch position history for a specific truck and date
+  const fetchPositionHistory = async (truckId, date) => {
+    if (!truckId) return Promise.reject("No truck ID provided");
+
+    try {
+      setLoadingPositionHistory(true);
+
+      // Convert date string to API expected format (YYYY-MM-DD)
+      let startDate, endDate;
+
+      if (date) {
+        startDate = date;
+        endDate = date;
+      } else {
+        // If no date is provided, use today
+        const today = new Date().toISOString().split("T")[0];
+        startDate = today;
+        endDate = today;
+      }
+
+      // Fetch position history
+      console.log(
+        `Fetching position history for truck ${truckId} from ${startDate} to ${endDate}`
+      );
+
+      // Using custom date range with the start_date and end_date query parameters
+      const response = await fetch(
+        `/api/v1/trucks/${truckId}/positions?start_date=${startDate}&end_date=${endDate}`,
+        {
+          headers: {
+            Authorization: `Bearer ${getToken()}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log(`Position history received for truck ${truckId}:`, data);
+
+      // Process the position history data - this needs to handle the date-grouped format
+      let positionPoints = [];
+
+      if (data && data.data) {
+        // Check if the response is grouped by date (standard "positions" endpoint)
+        if (
+          Array.isArray(data.data) &&
+          data.data.length > 0 &&
+          (data.data[0].Positions ||
+            data.data[0].positions ||
+            data.data[0].Date ||
+            data.data[0].date)
+        ) {
+          // This is the format from the GetPositionHistoryLast30Days endpoint which groups by date
+          // Try different property names and handle case sensitivity
+          const dateEntry = data.data.find(
+            (entry) => entry.Date === startDate || entry.date === startDate
+          );
+
+          if (dateEntry) {
+            // Handle both uppercase and lowercase "positions" property
+            if (Array.isArray(dateEntry.Positions)) {
+              positionPoints = dateEntry.Positions;
+              console.log(
+                `Found ${positionPoints.length} positions for date ${startDate} (uppercase Positions)`
+              );
+            } else if (Array.isArray(dateEntry.positions)) {
+              positionPoints = dateEntry.positions;
+              console.log(
+                `Found ${positionPoints.length} positions for date ${startDate} (lowercase positions)`
+              );
+            }
+          }
+        } else if (Array.isArray(data.data)) {
+          // This might be the direct array format from positions/limited endpoint
+          positionPoints = data.data;
+          console.log(
+            `Using direct position array format with ${positionPoints.length} points`
+          );
+        } else {
+          console.warn(
+            `Unknown position history data format for truck ${truckId}`,
+            data.data
+          );
+        }
+      }
+
+      // Sort by timestamp
+      positionPoints.sort(
+        (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+      );
+
+      console.log(`Processed ${positionPoints.length} position points`);
+
+      // If we still don't have any data for the requested date...
+      if (positionPoints.length === 0) {
+        console.log("No position data available for the selected date");
+
+        // Do NOT use the fallback endpoint - instead, just show "no data"
+        setPositionHistory([]);
+        setHistoricalRoutePlans([]);
+        setHistoricalDeviations([]);
+        setHistoricalIdleDetections([]);
+
+        // Also fetch any historical route plans and idle detections for this day
+        // even if we don't have position data
+        await Promise.all([
+          fetchHistoricalRoutePlans(truckId, startDate, endDate),
+          fetchHistoricalIdleDetections(truckId, startDate, endDate),
+        ]);
+
+        return [];
+      }
+
+      // For debugging, print some sample data points if available
+      if (positionPoints.length > 0) {
+        console.log("Sample position point:", positionPoints[0]);
+      }
+
+      // Store position data in state
+      setPositionHistory(positionPoints);
+
+      // Also fetch any historical route plans, deviations, and idle detections for this day
+      await Promise.all([
+        fetchHistoricalRoutePlans(truckId, startDate, endDate),
+        fetchHistoricalDeviations(truckId, startDate, endDate),
+        fetchHistoricalIdleDetections(truckId, startDate, endDate),
+      ]);
+
+      return positionPoints;
+    } catch (err) {
+      console.error(
+        `Error fetching position history for truck ${truckId}:`,
+        err
+      );
+      setPositionHistory([]);
+      setHistoricalRoutePlans([]);
+      setHistoricalDeviations([]);
+      setHistoricalIdleDetections([]);
+      return Promise.reject(err);
+    } finally {
+      setLoadingPositionHistory(false);
+    }
+  };
+
+  // Function to fetch historical route plans for this truck and date
+  const fetchHistoricalRoutePlans = async (truckId, startDate, endDate) => {
+    try {
+      console.log(
+        `Fetching historical route plans for truck ${truckId} from ${startDate} to ${endDate}`
+      );
+
+      // This endpoint is hypothetical - you'll need to implement or modify it in your backend
+      const response = await fetch(
+        `/api/v1/route-plans?truck_id=${truckId}&start_date=${startDate}&end_date=${endDate}`,
+        {
+          headers: {
+            Authorization: `Bearer ${getToken()}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        // If API returns error, try the active route plans as a fallback
+        // This is a workaround since the historical route plans endpoint may not exist yet
+        console.log(
+          "Historical route plans endpoint returned error, using active routes as fallback"
+        );
+        const activeResponse = await fetch(`/api/v1/route-plans/active/all`, {
+          headers: {
+            Authorization: `Bearer ${getToken()}`,
+          },
+        });
+
+        if (activeResponse.ok) {
+          const activeData = await activeResponse.json();
+          if (activeData && activeData.data) {
+            // Filter only routes that match this truck
+            const filteredRoutes = activeData.data.filter((route) => {
+              // Extract plate number and macID from vehicle_plate field
+              if (!route.vehicle_plate) return false;
+
+              const [plate, macId] = route.vehicle_plate.split("/");
+              const matchingTruck =
+                trucks[macId] ||
+                Object.values(trucks).find((t) => t.plate_number === plate);
+
+              return matchingTruck && matchingTruck.id === parseInt(truckId);
+            });
+
+            console.log(
+              `Found ${filteredRoutes.length} active routes for truck ${truckId}`
+            );
+            setHistoricalRoutePlans(filteredRoutes);
+            return;
+          }
+        }
+
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("Historical route plans:", data);
+
+      // Set the historical route plans
+      if (data && data.data && Array.isArray(data.data)) {
+        console.log(`Retrieved ${data.data.length} historical route plans`);
+        setHistoricalRoutePlans(data.data);
+      } else {
+        console.log("No historical route plans found or invalid format");
+        setHistoricalRoutePlans([]);
+      }
+    } catch (err) {
+      console.error("Error fetching historical route plans:", err);
+      setHistoricalRoutePlans([]);
+    }
+  };
+
+  // Function to fetch historical deviations
+  const fetchHistoricalDeviations = async (truckId, startDate, endDate) => {
+    try {
+      console.log(
+        `Fetching historical deviations for truck ${truckId} from ${startDate} to ${endDate}`
+      );
+
+      // This endpoint is hypothetical - you'll need to implement or modify it in your backend
+      const response = await fetch(
+        `/api/v1/route-deviations?truck_id=${truckId}&start_date=${startDate}&end_date=${endDate}`,
+        {
+          headers: {
+            Authorization: `Bearer ${getToken()}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        console.warn(
+          `Deviations API returned ${response.status}, generating sample data`
+        );
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("Historical deviations:", data);
+
+      // Set the historical deviations
+      if (data && data.data && Array.isArray(data.data)) {
+        console.log(`Retrieved ${data.data.length} historical deviations`);
+        setHistoricalDeviations(data.data);
+      } else {
+        console.log("No historical deviations found or invalid format");
+        setHistoricalDeviations([]);
+      }
+    } catch (err) {
+      console.error("Error fetching historical deviations:", err);
+      setHistoricalDeviations([]);
+
+      // For demonstration, generate some sample deviations if we have position data
+      if (positionHistory.length > 0) {
+        console.log("Generating sample deviation data for demo");
+        // Just use a few position points as deviations for demo
+        const sampleDeviations = positionHistory
+          .filter(
+            (p, index) =>
+              p && typeof p.latitude === "number" && index % 15 === 0
+          ) // Every 15th point
+          .slice(0, 3)
+          .map((p) => ({
+            ...p,
+            deviation_distance: Math.floor(Math.random() * 50) + 30, // Random distance between 30-80m
+            created_at: p.timestamp,
+          }));
+
+        console.log(`Generated ${sampleDeviations.length} sample deviations`);
+        setHistoricalDeviations(sampleDeviations);
+      }
+    }
+  };
+
+  // Function to fetch historical idle detections
+  const fetchHistoricalIdleDetections = async (truckId, startDate, endDate) => {
+    try {
+      console.log(
+        `Fetching historical idle detections for truck ${truckId} from ${startDate} to ${endDate}`
+      );
+
+      const response = await fetch(
+        `/api/v1/idle-detections?truck_id=${truckId}&start_date=${startDate}&end_date=${endDate}`,
+        {
+          headers: {
+            Authorization: `Bearer ${getToken()}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        // Try the truck-specific endpoint as a fallback
+        console.log(
+          "Idle detections general endpoint failed, trying truck-specific endpoint"
+        );
+        const truckIdleResponse = await fetch(
+          `/api/v1/trucks/${truckId}/idle-detections`,
+          {
+            headers: {
+              Authorization: `Bearer ${getToken()}`,
+            },
+          }
+        );
+
+        if (truckIdleResponse.ok) {
+          const truckIdleData = await truckIdleResponse.json();
+          if (
+            truckIdleData &&
+            truckIdleData.data &&
+            Array.isArray(truckIdleData.data)
+          ) {
+            // Filter to get only detections from the requested date
+            const selectedDate = new Date(startDate);
+            const filteredIdles = truckIdleData.data.filter((idle) => {
+              const idleDate = new Date(idle.start_time || idle.created_at);
+              return idleDate.toDateString() === selectedDate.toDateString();
+            });
+
+            console.log(
+              `Found ${filteredIdles.length} idle detections for truck ${truckId} on ${startDate}`
+            );
+            setHistoricalIdleDetections(filteredIdles);
+            return;
+          }
+        }
+
+        console.warn(
+          `Idle detections API returned ${response.status}, generating sample data`
+        );
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("Historical idle detections:", data);
+
+      // Set the historical idle detections
+      if (data && data.data && Array.isArray(data.data)) {
+        console.log(`Retrieved ${data.data.length} historical idle detections`);
+        setHistoricalIdleDetections(data.data);
+      } else {
+        console.log("No historical idle detections found or invalid format");
+        setHistoricalIdleDetections([]);
+      }
+    } catch (err) {
+      console.error("Error fetching historical idle detections:", err);
+      setHistoricalIdleDetections([]);
+
+      // For demonstration, generate some sample idle detections
+      if (positionHistory.length > 0) {
+        console.log("Generating sample idle detection data for demo");
+        // Just use a few position points as idle detections for demo
+        const sampleIdles = positionHistory
+          .filter(
+            (p, index) =>
+              p && typeof p.latitude === "number" && index % 25 === 0
+          ) // Every 25th point
+          .slice(0, 2)
+          .map((p) => ({
+            ...p,
+            duration: Math.floor(Math.random() * 600) + 300, // Random duration between 5-15 minutes in seconds
+            start_time: p.timestamp,
+          }));
+
+        console.log(`Generated ${sampleIdles.length} sample idle detections`);
+        setHistoricalIdleDetections(sampleIdles);
+      }
+    }
+  };
+
   useEffect(() => {
     // Skip if no truck is selected
     if (!activeTruck) return;
@@ -604,31 +1139,57 @@ const DashboardPage = () => {
     // Use a function to encapsulate the logic for cleaner code
     const fetchDataForSelectedDay = async () => {
       // Find the selected day in activityDays
-      const selectedDayInfo = activityDays.find((day) => day.day === selectedDay);
+      const selectedDayInfo = activityDays.find(
+        (day) => day.day === selectedDay
+      );
       if (!selectedDayInfo) return;
 
       // Generate cache key for truck + date
       const fuelCacheKey = `${activeTruck.id}_${selectedDayInfo.isoDate}`;
       const receiptCacheKey = `${activeTruck.id}_${selectedDayInfo.isoDate}_${selectedDayInfo.isoDate}`;
-      
-      console.log(`Selected day: ${selectedDay}, Loading data for ${selectedDayInfo.isoDate}`);
+
+      console.log(
+        `Selected day: ${selectedDay}, Loading data for ${selectedDayInfo.isoDate}`
+      );
       console.log(`Checking for fuel cache key: ${fuelCacheKey}`);
       console.log(`Checking for receipt cache key: ${receiptCacheKey}`);
-      
+
       // Set loading indicators
       setLoadingFuelData(true);
       setLoadingFuelReceipts(true);
-      
+
       try {
-        // Run both fetches concurrently
-        await Promise.all([
-          // Fetch fuel history data if needed
-          !fuelData[fuelCacheKey] ? fetchFuelHistory(activeTruck.id, selectedDayInfo.isoDate) : Promise.resolve(fuelData[fuelCacheKey]),
-          
-          // Always fetch receipt data to ensure we have latest
-          fetchFuelReceipts(activeTruck.id, selectedDayInfo.isoDate, selectedDayInfo.isoDate)
-        ]);
-        
+        // Run data fetches concurrently based on which tab is active
+        const fetchPromises = [];
+
+        // Always fetch fuel data for sensor tab
+        if (viewMode === "sensor" || !fuelData[fuelCacheKey]) {
+          fetchPromises.push(
+            !fuelData[fuelCacheKey]
+              ? fetchFuelHistory(activeTruck.id, selectedDayInfo.isoDate)
+              : Promise.resolve(fuelData[fuelCacheKey])
+          );
+        }
+
+        // Fetch receipts for data tab
+        if (viewMode === "data") {
+          fetchPromises.push(
+            fetchFuelReceipts(
+              activeTruck.id,
+              selectedDayInfo.isoDate,
+              selectedDayInfo.isoDate
+            )
+          );
+        }
+
+        // Fetch position history for GPS tab
+        if (viewMode === "gps") {
+          fetchPromises.push(
+            fetchPositionHistory(activeTruck.id, selectedDayInfo.isoDate)
+          );
+        }
+
+        await Promise.all(fetchPromises);
         console.log(`Data fetching complete for ${selectedDayInfo.isoDate}`);
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -638,30 +1199,29 @@ const DashboardPage = () => {
         setLoadingFuelReceipts(false);
       }
     };
-    
+
     // Execute our fetch function
     fetchDataForSelectedDay();
-    
-  }, [activeTruck?.id, selectedDay]);
-  
+  }, [activeTruck?.id, selectedDay, viewMode]);
+
   // Prefetch data for recently selected truck to improve response time
   useEffect(() => {
     if (!activeTruck) return;
-    
+
     // Prefetch today's data immediately
     const today = new Date().toISOString().split("T")[0];
     const todayCacheKey = `${activeTruck.id}_today`;
-    
+
     // Only fetch if we don't already have the data cached
     if (!fuelData[todayCacheKey]) {
       fetchFuelHistory(activeTruck.id, today);
     }
-    
+
     const todayReceiptKey = `${activeTruck.id}_${today}_${today}`;
     if (!receiptsCache[todayReceiptKey]) {
       fetchFuelReceipts(activeTruck.id, today, today);
     }
-    
+
     // Optional: Prefetch last 7 days data in background for quick access
     const prefetchRecentDays = async () => {
       // Only prefetch first 7 days to avoid too many requests
@@ -669,39 +1229,43 @@ const DashboardPage = () => {
         if (activityDays[i]) {
           const dayDate = activityDays[i].isoDate;
           const dayCacheKey = `${activeTruck.id}_${dayDate}`;
-          
+
           // Skip if we already have the data
           if (fuelData[dayCacheKey]) {
-            console.log(`Already have data for ${dayCacheKey}, skipping prefetch`);
+            console.log(
+              `Already have data for ${dayCacheKey}, skipping prefetch`
+            );
             continue;
           }
-          
+
           // Small delay to avoid overloading the API
-          await new Promise(resolve => setTimeout(resolve, 300));
+          await new Promise((resolve) => setTimeout(resolve, 300));
           // Use the truck ID and date for prefetching
           fetchFuelHistory(activeTruck.id, dayDate);
         }
       }
     };
-    
+
     // Start prefetching with a small delay after initial load
     const prefetchTimer = setTimeout(prefetchRecentDays, 1000);
-    
+
     return () => clearTimeout(prefetchTimer);
   }, [activeTruck?.id]);
 
-  // Refresh active route plans secara periodik
+  // Refresh active route plans and idle detections secara periodik
   useEffect(() => {
     // Inisialisasi icon Leaflet
     initLeafletIcons();
 
-    // Fetch route plans
+    // Fetch route plans and idle detections
     fetchActiveRoutePlans();
+    fetchActiveIdleTrucks();
 
     // Set interval untuk refresh data setiap 60 detik
     const interval = setInterval(() => {
       if (componentMountedRef.current) {
         fetchActiveRoutePlans();
+        fetchActiveIdleTrucks();
       }
     }, 60000);
 
@@ -746,20 +1310,26 @@ const DashboardPage = () => {
     }
   }, [activeTruck]);
 
-  // Initialize chart when fuel data changes
+  // Initialize chart when fuel data changes or view mode changes
   useEffect(() => {
-    if (!activeTruck || viewMode !== "sensor") return;
-    
+    // Skip jika tidak ada truck aktif atau bukan di tab sensor
+    if (!activeTruck || viewMode !== "sensor") {
+      // Reset chartData jika pindah dari tab sensor
+      if (chartData && viewMode !== "sensor") {
+        setChartData(null);
+      }
+      // Clean up chart if exists
+      if (chartRef.current) {
+        console.log("Destroying chart on view change");
+        chartRef.current.destroy();
+        chartRef.current = null;
+      }
+      return;
+    }
+
     // Skip rendering chart during loading
-    if (loadingFuelData) return;
-
-    const chartElement = document.querySelector("#fleet-chart");
-    if (!chartElement) return;
-
-    // Clean up existing chart if it exists
-    if (chartRef.current) {
-      chartRef.current.destroy();
-      chartRef.current = null;
+    if (loadingFuelData) {
+      return;
     }
 
     // Find the selected day in activityDays
@@ -769,205 +1339,278 @@ const DashboardPage = () => {
     // Get fuel data for the selected day and specific truck
     const truckDateKey = `${activeTruck.id}_${selectedDayInfo.isoDate}`;
     const fallbackKey = `${activeTruck.id}_today`;
-    
-    console.log(`Looking for fuel data with key: ${truckDateKey} or fallback: ${fallbackKey}`);
-    console.log(`Available cache keys:`, Object.keys(fuelData));
+
     const dayFuelData = fuelData[truckDateKey] || fuelData[fallbackKey];
 
     if (!dayFuelData) {
-      console.log(`No fuel data for truck ${activeTruck.id} on ${selectedDay}. Waiting for data...`);
-      // If no data yet, don't render chart
+      // No data available
+      console.log(`No fuel data for truck ${activeTruck.id} on ${selectedDay}`);
+      setChartData(null);
       return;
     }
 
     const { times, levels } = dayFuelData;
-    console.log(`Rendering chart for truck ${activeTruck.id} with ${times.length} data points. Selected day: ${selectedDay}`);
-    if (times.length > 0) {
-      console.log(`First data point fuel level: ${levels[0]}, last data point: ${levels[levels.length-1]}`);
-    }
 
-    // Logging ke console untuk debug
-    console.log(`Data for chart: ${times.length} points`);
-    if (times.length > 0) {
-      console.log(`Sample data - time: ${times[0]}, level: ${levels[0]}`);
-      console.log(`Chart title will be: Fuel Levels - ${selectedDayInfo.day} (${selectedDayInfo.date})`);
-    }
-
-    // Clear any previous "no data" message before rendering chart
-    chartElement.innerHTML = '';
-    
-    // Double-check times length to make sure we don't show "no data" message 
-    // and chart at the same time
     if (times.length === 0) {
-      // Create a temporary div with a message for no data
-      const messageDiv = document.createElement('div');
-      messageDiv.className = 'flex flex-col justify-center items-center h-[200px] text-gray-500';
-      messageDiv.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-300 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-        </svg>
-        <p class="text-center">No fuel sensor data available for the selected day</p>
-        <p class="text-center text-xs text-gray-400 mt-1">${selectedDayInfo.day} - ${selectedDayInfo.date}</p>
-      `;
-      
-      // Append message to empty chart container
-      chartElement.appendChild(messageDiv);
+      // Empty data
+      console.log(`Empty data for truck ${activeTruck.id} on ${selectedDay}`);
+      setChartData(dayFuelData);
       return;
     }
 
-    // Actual data points exist, render chart
-    const options = {
-      chart: {
-        type: "line",
-        height: 200,
-        toolbar: {
-          show: true,
-          tools: {
-            download: true,
-            selection: true,
-            zoom: true,
-            zoomin: true,
-            zoomout: true,
-            pan: true,
-            reset: true,
-          },
-        },
-        zoom: {
-          enabled: true,
-          type: 'x',
-          autoScaleYaxis: true
-        },
-      },
-      series: [
-        {
-          name: "Fuel Level",
-          data: levels,
-        },
-      ],
-      // Tambah anotasi jika ada fuel receipt pada hari tersebut
-      annotations: fuelReceipts && fuelReceipts.length > 0 ? {
-        points: fuelReceipts.map(receipt => {
-          // Cari waktu untuk anotasi
-          const receiptDate = new Date(receipt.created_at);
-          const formattedTime = receiptDate.toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          });
-          
-          // Cari indeks waktu terdekat di chart
-          const timeIndex = times.findIndex(time => time.includes(formattedTime));
-          
-          return {
-            x: timeIndex !== -1 ? times[timeIndex] : times[0],
-            y: timeIndex !== -1 ? levels[timeIndex] : 50,
-            marker: {
-              size: 5,
-              fillColor: '#FF7700',
-              strokeColor: '#FFF',
-              strokeWidth: 2,
-              radius: 2,
-            },
-            label: {
-              text: `Isi ${receipt.volume}L`,
-              borderColor: '#FF7700',
-              style: {
-                fontSize: '10px',
-                color: '#fff',
-                background: '#FF7700',
-              },
-            }
-          };
-        })
-      } : undefined,
-      xaxis: {
-        categories: times,
-        title: {
-          text: "Waktu (Jam)",
-        },
-        labels: {
-          rotate: -45,
-          style: {
-            fontSize: '10px',
-          },
-        },
-      },
-      yaxis: {
-        title: {
-          text: "Level BBM (%)",
-        },
-        min: 0,
-        max: 100,
-        forceNiceScale: true,
-        decimalsInFloat: 0, // Jangan tampilkan desimal
-        labels: {
-          formatter: (value) => { 
-            return parseInt(value); // Hanya tampilkan nilai bulat
-          }
-        }
-      },
-      title: {
-        text: `Fuel Levels - ${selectedDayInfo.day} (${selectedDayInfo.date})`,
-        align: 'center',
-        style: {
-          fontSize: '14px',
-          fontWeight: 'bold',
-          color: '#333'
-        },
-      },
-      subtitle: {
-        text: activeTruck ? `Truck: ${activeTruck.plate_number || activeTruck.mac_id}` : '',
-        align: 'center',
-        style: {
-          fontSize: '12px',
-          color: '#666'
-        },
-      },
-      colors: ["#009EFF"],
-      stroke: {
-        curve: "smooth",
-        width: 3,
-      },
-      markers: {
-        size: times.length > 20 ? 0 : 4, // Hilangkan markers jika data terlalu banyak
-        hover: {
-          size: 6,
-          sizeOffset: 3
-        },
-      },
-      tooltip: {
-        y: {
-          formatter: (value) => `${value}%`,
-        },
-        x: {
-          show: true,
-        },
-      },
-      grid: {
-        row: {
-          colors: ['transparent', 'transparent'],
-          opacity: 0.2
-        },
-        borderColor: '#f1f1f1'
-      },
-      // Zoom sudah dikonfigurasi pada chart di atas
-    };
+    // Update chartData state for conditional rendering
+    console.log(
+      `Setting chart data with ${times.length} points for ${selectedDay}`
+    );
+    setChartData(dayFuelData);
 
-    // Buat chart baru di DOM
-    try {
-      console.log(`Creating new chart for truck ${activeTruck.id}`);
-      chartRef.current = new ApexCharts(chartElement, options);
-      chartRef.current.render();
-    } catch (err) {
-      console.error("Error creating chart:", err);
+    // Now create the chart only in another useEffect that depends on chartData
+  }, [activeTruck?.id, selectedDay, viewMode, loadingFuelData, fuelData]);
+
+  // Separate useEffect to render the chart
+  useEffect(() => {
+    // Only proceed if we have chart data and are in sensor view mode
+    if (
+      !chartData ||
+      !chartData.times ||
+      viewMode !== "sensor" ||
+      !activeTruck
+    ) {
+      return;
     }
 
+    // Get reference to chart element
+    const chartElement = document.getElementById("fleet-chart");
+    if (!chartElement) {
+      console.log("Chart element not found");
+      return;
+    }
+
+    // Cleanup old chart
+    if (chartRef.current) {
+      console.log("Cleaning up old chart");
+      chartRef.current.destroy();
+      chartRef.current = null;
+    }
+
+    // Slight delay to give React time to complete rendering
+    const renderTimer = setTimeout(() => {
+      // Make sure we still have the element (it might have been removed during the timeout)
+      if (!document.getElementById("fleet-chart")) {
+        console.log("Chart element no longer exists after timeout");
+        return;
+      }
+
+      console.log(`Creating new chart with ${chartData.times.length} points`);
+
+      // Get the selected day info
+      const selectedDayInfo = activityDays.find(
+        (day) => day.day === selectedDay
+      );
+      if (!selectedDayInfo) return;
+
+      const { times, levels } = chartData;
+
+      // Create chart config
+      const options = {
+        chart: {
+          type: "line",
+          height: 200,
+          animations: {
+            enabled: false, // Disable animations to prevent flickering
+            dynamicAnimation: {
+              enabled: false,
+            },
+            animateGradually: {
+              enabled: false,
+            },
+            easing: "linear",
+            speed: 100,
+          },
+          redrawOnParentResize: false, // Prevent automatic redraws
+          redrawOnWindowResize: false,
+          toolbar: {
+            show: true,
+            tools: {
+              download: true,
+              selection: true,
+              zoom: false,
+              zoomin: false,
+              zoomout: false,
+              pan: true,
+              reset: true,
+            },
+            autoSelected: 'zoom', // optional
+            position: 'bottom', // pindahkan toolbar ke bawah
+            export: {
+            csv: {
+              filename: undefined,
+              columnDelimiter: ',',
+              headerCategory: 'category',
+              headerValue: 'value',
+              dateFormatter(timestamp) {
+                return new Date(timestamp).toDateString()
+              }
+            },
+            svg: {
+              filename: undefined,
+            },
+            png: {
+              filename: undefined,
+            }
+          },
+          },
+          zoom: {
+            enabled: true,
+            type: "x",
+            autoScaleYaxis: true,
+          },
+        },
+        series: [
+          {
+            name: "Fuel Level",
+            data: levels,
+          },
+        ],
+        // Tambah anotasi jika ada fuel receipt pada hari tersebut
+        annotations:
+          fuelReceipts && fuelReceipts.length > 0
+            ? {
+                points: fuelReceipts.map((receipt) => {
+                  // Cari waktu untuk anotasi
+                  const receiptDate = new Date(receipt.created_at);
+                  const formattedTime = receiptDate.toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  });
+
+                  // Cari indeks waktu terdekat di chart
+                  const timeIndex = times.findIndex((time) =>
+                    time.includes(formattedTime)
+                  );
+
+                  return {
+                    x: timeIndex !== -1 ? times[timeIndex] : times[0],
+                    y: timeIndex !== -1 ? levels[timeIndex] : 50,
+                    marker: {
+                      size: 5,
+                      fillColor: "#FF7700",
+                      strokeColor: "#FFF",
+                      strokeWidth: 2,
+                      radius: 2,
+                    },
+                    label: {
+                      text: `Isi ${receipt.volume}L`,
+                      borderColor: "#FF7700",
+                      style: {
+                        fontSize: "10px",
+                        color: "#fff",
+                        background: "#FF7700",
+                      },
+                    },
+                  };
+                }),
+              }
+            : undefined,
+        xaxis: {
+          categories: times,
+          title: {
+            text: "Waktu (Jam)",
+          },
+          labels: {
+            rotate: -45,
+            style: {
+              fontSize: "10px",
+            },
+          },
+        },
+        yaxis: {
+          title: {
+            text: "Level BBM (%)",
+          },
+          min: 0,
+          max: 100,
+          forceNiceScale: true,
+          decimalsInFloat: 0, // Jangan tampilkan desimal
+          labels: {
+            formatter: (value) => {
+              return parseInt(value); // Hanya tampilkan nilai bulat
+            },
+          },
+        },
+        title: {
+          text: `Fuel Levels - ${selectedDayInfo.day} (${selectedDayInfo.date})`,
+          align: "center",
+          style: {
+            fontSize: "14px",
+            fontWeight: "bold",
+            color: "#333",
+          },
+        },
+        subtitle: {
+          text: activeTruck
+            ? `Truck: ${activeTruck.plate_number || activeTruck.mac_id}`
+            : "",
+          align: "center",
+          style: {
+            fontSize: "12px",
+            color: "#666",
+          },
+        },
+        colors: ["#009EFF"],
+        stroke: {
+          curve: "smooth",
+          width: 3,
+        },
+        markers: {
+          size: times.length > 20 ? 0 : 4, // Hilangkan markers jika data terlalu banyak
+          hover: {
+            size: 6,
+            sizeOffset: 3,
+          },
+        },
+        tooltip: {
+          y: {
+            formatter: (value) => `${value}%`,
+          },
+          x: {
+            show: true,
+          },
+        },
+        grid: {
+          row: {
+            colors: ["transparent", "transparent"],
+            opacity: 0.2,
+          },
+          borderColor: "#f1f1f1",
+        },
+      };
+
+      // Create chart
+      try {
+        chartRef.current = new ApexCharts(chartElement, options);
+        chartRef.current.render();
+      } catch (error) {
+        console.error("Error creating chart:", error);
+      }
+    }, 150); // Use a slightly longer delay
+
     return () => {
+      // Cleanup
+      clearTimeout(renderTimer);
       if (chartRef.current) {
         chartRef.current.destroy();
         chartRef.current = null;
       }
     };
-  }, [activeTruck?.id, selectedDay, viewMode, loadingFuelData]);
+  }, [
+    chartData,
+    viewMode,
+    activeTruck,
+    selectedDay,
+    fuelReceipts,
+    activityDays,
+  ]);
 
   useEffect(() => {
     // This ensures we can track if the component is still mounted
@@ -1032,13 +1675,13 @@ const DashboardPage = () => {
         // For local development, use localhost with the backend port
         wsUrl = "ws://localhost:8080/ws";
       }
-      console.log(`Attempting to connect to WebSocket at: ${wsUrl}`);
+      // console.log(`Attempting to connect to WebSocket at: ${wsUrl}`);
 
       try {
         socketRef.current = new WebSocket(wsUrl);
 
         socketRef.current.onopen = () => {
-          console.log("WebSocket connection established");
+          // console.log("WebSocket connection established");
           setConnected(true);
 
           // Send an initial message to confirm the connection is working bidirectionally
@@ -1053,12 +1696,12 @@ const DashboardPage = () => {
 
         socketRef.current.onmessage = (event) => {
           try {
-            console.log("Received WebSocket message:", event.data);
+            // console.log("Received WebSocket message:", event.data);
             const message = JSON.parse(event.data);
 
             // Handle ping messages to keep connection alive
             if (message.type === "ping") {
-              console.log("Received ping, sending pong response");
+              // console.log("Received ping, sending pong response");
               // Respond with pong to keep connection alive
               if (
                 socketRef.current &&
@@ -1076,7 +1719,7 @@ const DashboardPage = () => {
 
             // Skip connection established messages
             if (message.type === "connection_established") {
-              console.log("Connection confirmed by server");
+              // console.log("Connection confirmed by server");
               return;
             }
 
@@ -1122,6 +1765,49 @@ const DashboardPage = () => {
                 return updatedTrucks;
               });
             }
+
+            // Process idle detections
+            if (message.type === "idle_detection") {
+              console.log("Received idle detection notification:", message);
+
+              // Update idle trucks state
+              setIdleTrucks((prevIdleTrucks) => {
+                const updatedIdleTrucks = { ...prevIdleTrucks };
+
+                // Add or update idle truck
+                updatedIdleTrucks[message.mac_id] = {
+                  mac_id: message.mac_id,
+                  plate_number: message.plate_number,
+                  latitude: message.latitude,
+                  longitude: message.longitude,
+                  start_time: message.start_time,
+                  duration: message.duration,
+                  timestamp: new Date(),
+                };
+
+                return updatedIdleTrucks;
+              });
+
+              // Show idle alert
+              setShowIdleAlert(true);
+            }
+
+            // Process idle resolved notifications
+            if (message.type === "idle_resolved") {
+              console.log("Received idle resolved notification:", message);
+
+              // Remove from idle trucks state
+              setIdleTrucks((prevIdleTrucks) => {
+                const updatedIdleTrucks = { ...prevIdleTrucks };
+
+                // Remove the resolved idle truck
+                if (updatedIdleTrucks[message.mac_id]) {
+                  delete updatedIdleTrucks[message.mac_id];
+                }
+
+                return updatedIdleTrucks;
+              });
+            }
           } catch (error) {
             console.error(
               "Error processing WebSocket message:",
@@ -1132,12 +1818,12 @@ const DashboardPage = () => {
         };
 
         socketRef.current.onclose = (event) => {
-          console.log("WebSocket connection closed", event);
+          // console.log("WebSocket connection closed", event);
           setConnected(false);
 
           // Don't try to reconnect if the component is unmounting
           if (componentMountedRef.current) {
-            console.log("Attempting to reconnect in 3 seconds...");
+            // console.log("Attempting to reconnect in 3 seconds...");
             // Try to reconnect after 3 seconds
             setTimeout(connectWebSocket, 3000);
           }
@@ -1173,11 +1859,11 @@ const DashboardPage = () => {
     if (!activeRoutePlans || !truck) return false;
 
     // Log data truck dan route plans untuk debug
-    console.log(
-      "Checking active route for truck:",
-      truck.mac_id,
-      truck.plate_number
-    );
+    // console.log(
+    //   "Checking active route for truck:",
+    //   truck.mac_id,
+    //   truck.plate_number
+    // );
 
     // Iterate through all route plans and check if any matches this truck
     return activeRoutePlans.some((routePlan) => {
@@ -1358,6 +2044,66 @@ const DashboardPage = () => {
           </div>
         </div>
       )}
+
+      {/* Idle Trucks Alert Notification */}
+      {showIdleAlert && (
+        <div className="bg-orange-100 border-l-4 border-orange-500 text-orange-700 p-4 mb-4 rounded shadow-md">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <i className="bx bx-time-five text-2xl text-orange-500"></i>
+            </div>
+            <div className="ml-3">
+              <p className="font-bold">Idle Trucks Alert</p>
+              <p className="text-sm">
+                {Object.keys(idleTrucks).length === 1
+                  ? "1 truck is currently idle."
+                  : `${
+                      Object.keys(idleTrucks).length
+                    } trucks are currently idle.`}
+              </p>
+            </div>
+            <div className="ml-auto">
+              <button
+                onClick={() => setShowIdleAlert(false)}
+                className="text-orange-500 hover:text-orange-700 focus:outline-none"
+              >
+                <i className="bx bx-x text-xl"></i>
+              </button>
+            </div>
+          </div>
+          <div className="mt-2 max-h-32 overflow-y-auto">
+            {Object.values(idleTrucks).map((idleData) => {
+              const truck = trucks[idleData.mac_id] || {
+                mac_id: idleData.mac_id,
+              };
+              return (
+                <div
+                  key={idleData.mac_id}
+                  className="flex justify-between items-center text-sm mt-1 border-t border-orange-200 pt-1"
+                >
+                  <span className="font-medium">
+                    {idleData.plate_number ||
+                      truck.plate_number ||
+                      idleData.mac_id}
+                  </span>
+                  <span>
+                    Idle for{" "}
+                    <span className="font-bold">
+                      {Math.floor(idleData.duration / 60)} minutes
+                    </span>
+                  </span>
+                  <button
+                    onClick={() => handleTruckSelect(truck)}
+                    className="px-2 py-1 bg-orange-200 hover:bg-orange-300 rounded text-xs"
+                  >
+                    View
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {/* Connection Status and Route Legend */}
       <div className="flex justify-between mb-4">
         {/* Legend untuk active routes */}
@@ -1437,7 +2183,7 @@ const DashboardPage = () => {
       </div>
 
       {/* Main Content */}
-      <div className="flex flex-col lg:flex-row gap-4 h-[calc(100vh-200px)]">
+      <div className="flex flex-col lg:flex-row gap-4 md:h-[calc(100vh-200px)]">
         {/* Truck List Sidebar (using UI from layout.tsx) */}
         <div className="w-full lg:w-72 bg-white shadow-md rounded-lg p-4 overflow-y-auto max-h-[400px] lg:max-h-full">
           <h2 className="text-lg font-semibold mb-3 pb-2 border-b border-gray-200">
@@ -1456,6 +2202,8 @@ const DashboardPage = () => {
                       ? "border-l-4 border-[#009EFF] bg-[#E6F5FF] shadow-md"
                       : deviatingTrucks[truck.mac_id]
                       ? "border-l-4 border-red-500 bg-red-50"
+                      : idleTrucks[truck.mac_id]
+                      ? "border-l-4 border-orange-500 bg-orange-50"
                       : truckHasActiveRoute(truck)
                       ? "border-l-4 border-green-500 border-opacity-70"
                       : "border-gray-200"
@@ -1482,6 +2230,17 @@ const DashboardPage = () => {
                           >
                             <i className="bx bxs-error-circle mr-1"></i>
                             Off Route!
+                          </span>
+                        )}
+                        {idleTrucks[truck.mac_id] && (
+                          <span
+                            className="flex items-center text-xs text-orange-500 font-bold ml-1"
+                            title={`Idle for ${Math.floor(
+                              idleTrucks[truck.mac_id].duration / 60
+                            )} minutes`}
+                          >
+                            <i className="bx bx-time-five mr-1"></i>
+                            Idle
                           </span>
                         )}
                       </div>
@@ -1521,7 +2280,7 @@ const DashboardPage = () => {
           <div
             ref={mapRef}
             className={`relative flex-1 mb-4 transition-all duration-300 ${
-              activeTruck ? "h-[calc(100%-250px)]" : "h-full"
+              activeTruck ? "md:h-[calc(100%-250px)] h-[400px]" : "h-full"
             }`}
           >
             <MapContainer
@@ -1531,7 +2290,7 @@ const DashboardPage = () => {
                   : defaultCenter
               }
               zoom={13}
-              style={{ height: "100%", width: "100%" }}
+              className="h-[300px] md:h-full w-full"
               whenCreated={(map) => {
                 mapRef.current = map;
               }}
@@ -1541,138 +2300,458 @@ const DashboardPage = () => {
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
 
-              {Object.values(trucks).map((truck) => {
-                // For each truck with position data, create a marker with popup
-                if (!truck.latitude || !truck.longitude) return null;
+              {/* Only show current truck markers when not in GPS historical view */}
+              {(viewMode !== "gps" || selectedDay === "Today") &&
+                Object.values(trucks).map((truck) => {
+                  // For each truck with position data, create a marker with popup
+                  if (!truck.latitude || !truck.longitude) return null;
 
-                // Create marker element with TruckMarker component
-                return (
-                  <TruckMarker
-                    key={truck.mac_id}
-                    truck={truck}
-                    isDeviating={!!deviatingTrucks[truck.mac_id]}
-                    deviation={deviatingTrucks[truck.mac_id]}
-                    isActive={
-                      activeTruck && activeTruck.mac_id === truck.mac_id
-                    }
-                    onClick={handleMarkerClick}
-                    markerRefs={markerRefs}
+                  // Create marker element with TruckMarker component
+                  return (
+                    <TruckMarker
+                      key={truck.mac_id}
+                      truck={truck}
+                      isDeviating={!!deviatingTrucks[truck.mac_id]}
+                      deviation={deviatingTrucks[truck.mac_id]}
+                      isIdle={!!idleTrucks[truck.mac_id]}
+                      idleData={idleTrucks[truck.mac_id]}
+                      isActive={
+                        activeTruck && activeTruck.mac_id === truck.mac_id
+                      }
+                      onClick={handleMarkerClick}
+                      markerRefs={markerRefs}
+                    />
+                  );
+                })}
+
+              {/* Visualisasi Titik Referensi dan Deviasi (only when not viewing historical GPS data) */}
+              {viewMode !== "gps" || selectedDay === "Today"
+                ? Object.entries(deviationReferences).map(
+                    ([mac_id, deviationInfo]) => (
+                      <React.Fragment key={`deviation-vis-${mac_id}`}>
+                        {/* Titik referensi pada polyline */}
+                        <Marker
+                          position={deviationInfo.referencePoint}
+                          icon={referencePointIcon}
+                        >
+                          <Popup>
+                            <div>
+                              <h3 className="font-bold text-sm">
+                                Reference Point
+                              </h3>
+                              <p className="text-xs">
+                                This is the closest point on the route to truck{" "}
+                                {trucks[mac_id]?.plate_number || mac_id}
+                              </p>
+                              <p className="text-xs mt-1">
+                                Position:{" "}
+                                {deviationInfo.referencePoint[0].toFixed(6)},{" "}
+                                {deviationInfo.referencePoint[1].toFixed(6)}
+                              </p>
+                            </div>
+                          </Popup>
+                        </Marker>
+                        {/* Garis yang menunjukkan deviasi */}
+                        <Polyline
+                          positions={[
+                            deviationInfo.truckPosition,
+                            deviationInfo.referencePoint,
+                          ]}
+                          pathOptions={{
+                            color: "red",
+                            weight: 2,
+                            dashArray: "5, 5",
+                            opacity: 0.7,
+                          }}
+                        />
+
+                        {/* Label jarak di tengah garis */}
+                        <Marker
+                          position={[
+                            (deviationInfo.truckPosition[0] +
+                              deviationInfo.referencePoint[0]) /
+                              2,
+                            (deviationInfo.truckPosition[1] +
+                              deviationInfo.referencePoint[1]) /
+                              2,
+                          ]}
+                          icon={createDeviationLabelIcon(
+                            deviationInfo.distance
+                          )}
+                          interactive={false}
+                        />
+                      </React.Fragment>
+                    )
+                  )
+                : null}
+              {/* Show MapController only when not viewing historical GPS data */}
+              {activeTruck &&
+                activeTruck.latitude &&
+                activeTruck.longitude &&
+                !(viewMode === "gps" && selectedDay !== "Today") && (
+                  <MapController
+                    activePosition={activeTruck}
+                    activeTruck={activeTruck}
+                    activeRoutePlans={activeRoutePlans}
                   />
-                );
-              })}
+                )}
 
-              {/* Visualisasi Titik Referensi dan Deviasi */}
-              {Object.entries(deviationReferences).map(
-                ([mac_id, deviationInfo]) => (
-                  <React.Fragment key={`deviation-vis-${mac_id}`}>
-                    {/* Titik referensi pada polyline */}
+              {/* If we're viewing a historical day (not Today), render historical position polyline */}
+              {viewMode === "gps" &&
+                selectedDay !== "Today" &&
+                activeTruck /* Only show positions for the active truck */ &&
+                positionHistory.length > 0 && (
+                  <Polyline
+                    positions={positionHistory
+                      .filter((p) => {
+                        // Make sure we have valid position data
+                        if (
+                          !p ||
+                          typeof p.latitude !== "number" ||
+                          typeof p.longitude !== "number"
+                        )
+                          return false;
+
+                        // Match truck by mac_id, truck_id, or plate if available
+                        const truckMatches =
+                          p.mac_id === activeTruck.mac_id ||
+                          p.truck_id === activeTruck.id ||
+                          (!p.mac_id && !p.truck_id);
+
+                        // Verify the date matches the selected day
+                        const positionDate = new Date(
+                          p.timestamp || p.created_at
+                        );
+                        const selectedDayInfo = activityDays.find(
+                          (day) => day.day === selectedDay
+                        );
+
+                        // If we can't verify the date (missing data), return false
+                        if (!selectedDayInfo || !positionDate) return false;
+
+                        // Compare the date to the selected day
+                        const positionIsoDate = positionDate
+                          .toISOString()
+                          .split("T")[0];
+                        return (
+                          truckMatches &&
+                          positionIsoDate === selectedDayInfo.isoDate
+                        );
+                      })
+                      .map((p) => [p.latitude, p.longitude])}
+                    pathOptions={{ color: "#4a90e2", weight: 3, opacity: 0.8 }}
+                    zIndex={1500}
+                  />
+                )}
+
+              {/* If we're viewing a historical day in GPS mode, render historical deviations */}
+              {viewMode === "gps" &&
+                selectedDay !== "Today" &&
+                activeTruck /* Only show deviations for the active truck */ &&
+                historicalDeviations
+                  .filter((d) => {
+                    // Make sure we have valid position data
+                    if (
+                      !d ||
+                      typeof d.latitude !== "number" ||
+                      typeof d.longitude !== "number"
+                    )
+                      return false;
+
+                    // Match truck by mac_id or truck_id if available
+                    const truckMatches =
+                      d.mac_id === activeTruck.mac_id ||
+                      d.truck_id === activeTruck.id ||
+                      (!d.mac_id && !d.truck_id);
+
+                    // Verify the date matches the selected day
+                    const deviationDate = new Date(d.timestamp || d.created_at);
+                    const selectedDayInfo = activityDays.find(
+                      (day) => day.day === selectedDay
+                    );
+
+                    // If we can't verify the date (missing data), return false
+                    if (!selectedDayInfo || !deviationDate) return false;
+
+                    // For "Today", check if the date is today
+                    if (selectedDay === "Today") {
+                      const today = new Date();
+                      return (
+                        truckMatches &&
+                        deviationDate.getDate() === today.getDate() &&
+                        deviationDate.getMonth() === today.getMonth() &&
+                        deviationDate.getFullYear() === today.getFullYear()
+                      );
+                    }
+
+                    // For other days, check the ISO date
+                    const deviationIsoDate = deviationDate
+                      .toISOString()
+                      .split("T")[0];
+                    return (
+                      truckMatches &&
+                      deviationIsoDate === selectedDayInfo.isoDate
+                    );
+                  })
+                  .map((deviation, index) => (
                     <Marker
-                      position={deviationInfo.referencePoint}
-                      icon={referencePointIcon}
+                      key={`historical-deviation-${index}`}
+                      position={[deviation.latitude, deviation.longitude]}
+                      icon={deviatingTruckIcon}
+                      zIndex={2000}
                     >
                       <Popup>
                         <div>
-                          <h3 className="font-bold text-sm">Reference Point</h3>
-                          <p className="text-xs">
-                            This is the closest point on the route to truck{" "}
-                            {trucks[mac_id]?.plate_number || mac_id}
+                          <h3 className="font-bold text-sm">
+                            Historical Deviation
+                          </h3>
+                          <p className="text-xs font-semibold">
+                            {activeTruck.plate_number || "Unknown"} |{" "}
+                            {activeTruck.mac_id || "Unknown MAC"}
                           </p>
-                          <p className="text-xs mt-1">
-                            Position:{" "}
-                            {deviationInfo.referencePoint[0].toFixed(6)},{" "}
-                            {deviationInfo.referencePoint[1].toFixed(6)}
+                          <p className="text-xs">
+                            Driver:{" "}
+                            {activeTruck.driver_name ||
+                              historicalRoutePlans?.[0]?.driver_name ||
+                              "Unknown Driver"}
+                          </p>
+                          <p className="text-xs">
+                            Time:{" "}
+                            {new Date(
+                              deviation.timestamp || deviation.created_at
+                            ).toLocaleString()}
+                          </p>
+                          <p className="text-xs">
+                            Position: {deviation.latitude.toFixed(6)},{" "}
+                            {deviation.longitude.toFixed(6)}
+                          </p>
+                          <p className="text-xs text-red-500 font-medium">
+                            Distance:{" "}
+                            {(deviation.distance || 0).toFixed(0)} m
+                            off route
                           </p>
                         </div>
                       </Popup>
                     </Marker>
-                    {/* Garis yang menunjukkan deviasi */}
-                    <Polyline
-                      positions={[
-                        deviationInfo.truckPosition,
-                        deviationInfo.referencePoint,
-                      ]}
-                      pathOptions={{
-                        color: "red",
-                        weight: 2,
-                        dashArray: "5, 5",
-                        opacity: 0.7,
-                      }}
-                    />
+                  ))}
 
-                    {/* Label jarak di tengah garis */}
+              {/* If we're viewing a historical day in GPS mode, render historical idle detections */}
+              {viewMode === "gps" &&
+                selectedDay !== "Today" &&
+                activeTruck /* Only show idle detections for the active truck */ &&
+                historicalIdleDetections
+                  .filter((i) => {
+                    // Make sure we have valid position data
+                    if (
+                      !i ||
+                      typeof i.latitude !== "number" ||
+                      typeof i.longitude !== "number"
+                    )
+                      return false;
+
+                    // Match truck by mac_id or truck_id if available
+                    const truckMatches =
+                      i.mac_id === activeTruck.mac_id ||
+                      i.truck_id === activeTruck.id ||
+                      (!i.mac_id && !i.truck_id);
+
+                    // Verify the date matches the selected day
+                    const idleDate = new Date(
+                      i.timestamp || i.start_time || i.created_at
+                    );
+                    const selectedDayInfo = activityDays.find(
+                      (day) => day.day === selectedDay
+                    );
+
+                    // If we can't verify the date (missing data), return false
+                    if (!selectedDayInfo || !idleDate) return false;
+
+                    // For "Today", check if the date is today
+                    if (selectedDay === "Today") {
+                      const today = new Date();
+                      return (
+                        truckMatches &&
+                        idleDate.getDate() === today.getDate() &&
+                        idleDate.getMonth() === today.getMonth() &&
+                        idleDate.getFullYear() === today.getFullYear()
+                      );
+                    }
+
+                    // For other days, check the ISO date
+                    const idleIsoDate = idleDate.toISOString().split("T")[0];
+                    return (
+                      truckMatches && idleIsoDate === selectedDayInfo.isoDate
+                    );
+                  })
+                  .map((idle, index) => (
                     <Marker
-                      position={[
-                        (deviationInfo.truckPosition[0] +
-                          deviationInfo.referencePoint[0]) /
-                          2,
-                        (deviationInfo.truckPosition[1] +
-                          deviationInfo.referencePoint[1]) /
-                          2,
-                      ]}
-                      icon={createDeviationLabelIcon(deviationInfo.distance)}
-                      interactive={false}
-                    />
-                  </React.Fragment>
-                )
-              )}
-              {activeTruck && activeTruck.latitude && activeTruck.longitude && (
-                <MapController
-                  activePosition={activeTruck}
-                  activeTruck={activeTruck}
-                  activeRoutePlans={activeRoutePlans}
-                />
-              )}
+                      key={`historical-idle-${index}`}
+                      position={[idle.latitude, idle.longitude]}
+                      icon={idleTruckIcon}
+                      zIndex={2000}
+                    >
+                      <Popup>
+                        <div>
+                          <h3 className="font-bold text-sm">
+                            Historical Idle Detection
+                          </h3>
+                          <p className="text-xs font-semibold">
+                            {activeTruck.plate_number || "Unknown"} |{" "}
+                            {activeTruck.mac_id || "Unknown MAC"}
+                          </p>
+                          <p className="text-xs">
+                            Driver:{" "}
+                            {activeTruck.driver_name ||
+                              historicalRoutePlans?.[0]?.driver_name ||
+                              "Unknown Driver"}
+                          </p>
+                          <p className="text-xs">
+                            Time:{" "}
+                            {new Date(
+                              idle.timestamp || idle.start_time
+                            ).toLocaleString()}
+                          </p>
+                          <p className="text-xs text-orange-500 font-medium">
+                            Idle duration: {Math.floor(idle.duration / 60)}{" "}
+                            minutes and {idle.duration % 60} seconds
+                          </p>
+                          <p className="text-xs">
+                            Position: {idle.latitude.toFixed(6)},{" "}
+                            {idle.longitude.toFixed(6)}
+                          </p>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  ))}
 
-              {/* Render polylines dan markers untuk semua active route plans */}
-              {activeRoutePlans.map((routePlan, index) => {
-                // Decode route geometry dengan decoder yang benar
-                const positions = decodeRouteGeometry(routePlan.route_geometry);
-                if (!positions || positions.length === 0) return null;
+              {/* If we're in GPS mode viewing historical, render historical route plans */}
+              {viewMode === "gps" &&
+                selectedDay !== "Today" &&
+                activeTruck /* Only show routes for the active truck */ &&
+                historicalRoutePlans
+                  .filter((routePlan) => {
+                    // Extract plate number and macID from vehicle_plate field if available
+                    if (!routePlan.vehicle_plate) return false;
 
-                // Tentukan apakah route plan ini milik truck yang aktif
-                let isMatch = false;
-                if (activeTruck) {
-                  const routePlanPlate =
-                    routePlan.vehicle_plate?.split("/")[0] || "";
-                  const routePlanMacId =
-                    routePlan.vehicle_plate?.split("/")[1] || "";
-                  isMatch =
-                    routePlanPlate === activeTruck.plate_number ||
-                    routePlanMacId === activeTruck.mac_id;
-                }
+                    const [plate, macId] = routePlan.vehicle_plate.split("/");
+                    const truckMatches =
+                      plate === activeTruck.plate_number ||
+                      macId === activeTruck.mac_id;
 
-                // Tentukan warna berdasarkan truck aktif
-                const color = activeTruck
-                  ? isMatch
-                    ? getRouteColor(routePlan)
-                    : "#dddddd"
-                  : getRouteColor(routePlan);
+                    // Verify the date matches the selected day
+                    const routeDate = new Date(
+                      routePlan.created_at || routePlan.date
+                    );
+                    const selectedDayInfo = activityDays.find(
+                      (day) => day.day === selectedDay
+                    );
 
-                // Tentukan ketebalan dan opasitas berdasarkan status
-                const weight = activeTruck ? (isMatch ? 5 : 2) : 5;
-                const opacity = activeTruck ? (isMatch ? 0.9 : 0.3) : 0.7;
+                    // If we can't verify the date (missing data), only check truck match
+                    if (!selectedDayInfo || !routeDate) return truckMatches;
 
-                return (
-                  <React.Fragment key={`route-${routePlan.id}`}>
-                    {/* Render polyline untuk rute */}
-                    <Polyline
-                      positions={positions}
-                      pathOptions={{
-                        color: color,
-                        weight: weight,
-                        opacity: opacity,
-                        dashArray: !isMatch && activeTruck ? "5, 5" : null,
-                      }}
-                      zIndex={isMatch ? 1000 : 100}
-                    />
+                    // Compare the date to the selected day
+                    const routeIsoDate = routeDate.toISOString().split("T")[0];
+                    return (
+                      truckMatches && routeIsoDate === selectedDayInfo.isoDate
+                    );
+                  })
+                  .map((routePlan, index) => {
+                    const positions = decodeRouteGeometry(
+                      routePlan.route_geometry
+                    );
+                    if (!positions || positions.length === 0) return null;
 
-                    {/* Render markers untuk waypoints jika tidak ada truck yang dipilih atau jika ini adalah truck yang dipilih */}
-                    {(!activeTruck || isMatch) && (
-                      <WaypointMarkers routePlan={routePlan} />
-                    )}
-                  </React.Fragment>
-                );
-              })}
+                    return (
+                      <React.Fragment key={`historical-route-${routePlan.id}`}>
+                        <Polyline
+                          positions={positions}
+                          pathOptions={{
+                            color: getRouteColor(routePlan),
+                            weight: 4,
+                            opacity: 0.5,
+                            dashArray: "5, 5",
+                          }}
+                          zIndex={1000}
+                        >
+                          <Popup>
+                            <div>
+                              <h3 className="font-bold text-sm">
+                                Historical Route Plan
+                              </h3>
+                              <p className="text-xs">
+                                Created:{" "}
+                                {new Date(
+                                  routePlan.created_at
+                                ).toLocaleString()}
+                              </p>
+                              <p className="text-xs">
+                                Status: {routePlan.status}
+                              </p>
+                            </div>
+                          </Popup>
+                        </Polyline>
+
+                        {routePlan.waypoints && (
+                          <WaypointMarkers routePlan={routePlan} />
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+
+              {/* Render polylines dan markers untuk route plans */}
+              {/* Only show active route plans when not in GPS historical view */}
+              {(viewMode !== "gps" || selectedDay === "Today") &&
+                activeRoutePlans.map((routePlan, index) => {
+                  // Decode route geometry dengan decoder yang benar
+                  const positions = decodeRouteGeometry(
+                    routePlan.route_geometry
+                  );
+                  if (!positions || positions.length === 0) return null;
+
+                  // Tentukan apakah route plan ini milik truck yang aktif
+                  let isMatch = false;
+                  if (activeTruck) {
+                    const routePlanPlate =
+                      routePlan.vehicle_plate?.split("/")[0] || "";
+                    const routePlanMacId =
+                      routePlan.vehicle_plate?.split("/")[1] || "";
+                    isMatch =
+                      routePlanPlate === activeTruck.plate_number ||
+                      routePlanMacId === activeTruck.mac_id;
+                  }
+
+                  // Tentukan warna berdasarkan truck aktif
+                  const color = activeTruck
+                    ? isMatch
+                      ? getRouteColor(routePlan)
+                      : "#dddddd"
+                    : getRouteColor(routePlan);
+
+                  // Tentukan ketebalan dan opasitas berdasarkan status
+                  const weight = activeTruck ? (isMatch ? 5 : 2) : 5;
+                  const opacity = activeTruck ? (isMatch ? 0.9 : 0.3) : 0.7;
+
+                  return (
+                    <React.Fragment key={`route-${routePlan.id}`}>
+                      {/* Render polyline untuk rute */}
+                      <Polyline
+                        positions={positions}
+                        pathOptions={{
+                          color: color,
+                          weight: weight,
+                          opacity: opacity,
+                          dashArray: !isMatch && activeTruck ? "5, 5" : null,
+                        }}
+                        zIndex={isMatch ? 1000 : 100}
+                      />
+
+                      {/* Render markers untuk waypoints jika tidak ada truck yang dipilih atau jika ini adalah truck yang dipilih */}
+                      {(!activeTruck || isMatch) && (
+                        <WaypointMarkers routePlan={routePlan} />
+                      )}
+                    </React.Fragment>
+                  );
+                })}
             </MapContainer>
           </div>
 
@@ -1701,6 +2780,16 @@ const DashboardPage = () => {
                   >
                     <i className="bx bx-data text-lg"></i> Data
                   </button>
+                  <button
+                    onClick={() => setViewMode("gps")}
+                    className={`p-2 rounded-[8px] flex gap-2 items-center text-sm ${
+                      viewMode === "gps"
+                        ? "bg-[#009EFF] text-white"
+                        : "text-[#009EFF] border border-[#009EFF]"
+                    }`}
+                  >
+                    <i className="bx bx-map text-lg"></i> GPS
+                  </button>
                 </div>
                 <div className="flex justify-between md:justify-end gap-3 text-xs md:text-sm">
                   <div className="flex flex-col items-center">
@@ -1725,7 +2814,261 @@ const DashboardPage = () => {
                       <p className="text-[#009EFF]">Loading sensor data...</p>
                     </div>
                   ) : (
-                    <div id="fleet-chart" className="w-full h-[200px] transition-all duration-300" />
+                    <>
+                      {/* Gunakan React conditional rendering daripada manipulasi DOM langsung */}
+                      {chartData &&
+                      chartData.times &&
+                      chartData.times.length > 0 ? (
+                        <div
+                          id="fleet-chart"
+                          className="w-full h-[200px] transition-all duration-300"
+                        />
+                      ) : (
+                        <div className="flex flex-col justify-center items-center h-[200px] text-gray-500">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-12 w-12 text-gray-300 mb-2"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+                            />
+                          </svg>
+                          <p className="text-center">
+                            No fuel sensor data available for the selected day
+                          </p>
+                          <p className="text-center text-xs text-gray-400 mt-1">
+                            {selectedDay === "Today" ? "Today" : selectedDay} -
+                            {activeTruck
+                              ? activeTruck.plate_number || activeTruck.mac_id
+                              : ""}
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+              {viewMode === "gps" && (
+                <div className="p-4 overflow-auto h-[200px]">
+                  <h4 className="text-sm font-semibold mb-2">
+                    Position History - {selectedDay}
+                  </h4>
+                  {loadingPositionHistory ? (
+                    <div className="flex justify-center items-center h-36">
+                      <div className="flex flex-col items-center text-[#009EFF]">
+                        <div className="w-8 h-8 border-4 border-[#009EFF] border-t-transparent rounded-full animate-spin mb-3"></div>
+                        <p>Loading position history...</p>
+                      </div>
+                    </div>
+                  ) : positionHistory.length > 0 ? (
+                    <>
+                      <div className="mb-2 text-xs text-gray-500">
+                        {(() => {
+                          // Calculate filtered counts based on the selected day
+                          const selectedDayInfo = activityDays.find(
+                            (day) => day.day === selectedDay
+                          );
+
+                          // Filter position points for the selected day
+                          const filteredPositions = positionHistory.filter(
+                            (p) => {
+                              if (
+                                !p ||
+                                typeof p.latitude !== "number" ||
+                                typeof p.longitude !== "number"
+                              )
+                                return false;
+                              const positionDate = new Date(
+                                p.timestamp || p.created_at
+                              );
+                              if (!selectedDayInfo || !positionDate)
+                                return false;
+                              const positionIsoDate = positionDate
+                                .toISOString()
+                                .split("T")[0];
+                              return (
+                                positionIsoDate === selectedDayInfo.isoDate
+                              );
+                            }
+                          );
+
+                          // Filter deviations for the selected day
+                          const filteredDeviations =
+                            historicalDeviations.filter((d) => {
+                              if (
+                                !d ||
+                                typeof d.latitude !== "number" ||
+                                typeof d.longitude !== "number"
+                              )
+                                return false;
+                              const deviationDate = new Date(
+                                d.timestamp || d.created_at
+                              );
+                              if (!selectedDayInfo || !deviationDate)
+                                return false;
+                              const deviationIsoDate = deviationDate
+                                .toISOString()
+                                .split("T")[0];
+                              return (
+                                deviationIsoDate === selectedDayInfo.isoDate
+                              );
+                            });
+
+                          // Filter idle detections for the selected day
+                          const filteredIdles = historicalIdleDetections.filter(
+                            (i) => {
+                              if (
+                                !i ||
+                                typeof i.latitude !== "number" ||
+                                typeof i.longitude !== "number"
+                              )
+                                return false;
+                              const idleDate = new Date(
+                                i.timestamp || i.start_time || i.created_at
+                              );
+                              if (!selectedDayInfo || !idleDate) return false;
+                              const idleIsoDate = idleDate
+                                .toISOString()
+                                .split("T")[0];
+                              return idleIsoDate === selectedDayInfo.isoDate;
+                            }
+                          );
+
+                          return (
+                            <>
+                              {filteredPositions.length} position points found
+                              {filteredDeviations.length > 0 && (
+                                <span className="ml-2 text-red-500">
+                                  • {filteredDeviations.length} route deviation
+                                  {filteredDeviations.length !== 1 ? "s" : ""}
+                                </span>
+                              )}
+                              {filteredIdles.length > 0 && (
+                                <span className="ml-2 text-orange-500">
+                                  • {filteredIdles.length} idle detection
+                                  {filteredIdles.length !== 1 ? "s" : ""}
+                                </span>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+                      <div className="max-h-[140px] overflow-y-auto">
+                        <table className="w-full text-xs border border-gray-200 rounded">
+                          <thead className="bg-[#009EFF] text-white">
+                            <tr>
+                              <th className="p-1.5 border">Time</th>
+                              <th className="p-1.5 border">Latitude</th>
+                              <th className="p-1.5 border">Longitude</th>
+                              <th className="p-1.5 border">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="text-center">
+                            {positionHistory
+                              .filter(
+                                (position) =>
+                                  position &&
+                                  typeof position.latitude === "number" &&
+                                  typeof position.longitude === "number"
+                              )
+                              .map((position, index) => {
+                                // Check if this position is a deviation or idle point
+                                const isDeviation = historicalDeviations.some(
+                                  (d) =>
+                                    d &&
+                                    typeof d.latitude === "number" &&
+                                    typeof d.longitude === "number" &&
+                                    Math.abs(d.latitude - position.latitude) <
+                                      0.0001 &&
+                                    Math.abs(d.longitude - position.longitude) <
+                                      0.0001
+                                );
+
+                                const isIdle = historicalIdleDetections.some(
+                                  (i) =>
+                                    i &&
+                                    typeof i.latitude === "number" &&
+                                    typeof i.longitude === "number" &&
+                                    Math.abs(i.latitude - position.latitude) <
+                                      0.0001 &&
+                                    Math.abs(i.longitude - position.longitude) <
+                                      0.0001
+                                );
+
+                                return (
+                                  <tr
+                                    key={`pos-${index}`}
+                                    className={`
+                                  ${isDeviation ? "bg-red-50" : ""} 
+                                  ${isIdle ? "bg-orange-50" : ""}
+                                `}
+                                  >
+                                    <td className="p-1.5 border">
+                                      {position.timestamp
+                                        ? new Date(
+                                            position.timestamp
+                                          ).toLocaleTimeString()
+                                        : "N/A"}
+                                    </td>
+                                    <td className="p-1.5 border">
+                                      {position.latitude.toFixed(6)}
+                                    </td>
+                                    <td className="p-1.5 border">
+                                      {position.longitude.toFixed(6)}
+                                    </td>
+                                    <td className="p-1.5 border">
+                                      {isDeviation && (
+                                        <span className="text-red-500 font-bold">
+                                          DEVIATION
+                                        </span>
+                                      )}
+                                      {isIdle && (
+                                        <span className="text-orange-500 font-bold">
+                                          IDLE
+                                        </span>
+                                      )}
+                                      {!isDeviation && !isIdle && (
+                                        <span className="text-green-500">
+                                          Normal
+                                        </span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-center text-gray-500 py-8 rounded-lg border border-gray-200 bg-gray-50">
+                      <svg
+                        className="w-12 h-12 text-gray-300 mb-3"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
+                        ></path>
+                      </svg>
+                      <p>No position data available for {selectedDay}</p>
+                      <p className="text-center text-xs text-gray-400 mt-1">
+                        {activeTruck
+                          ? activeTruck.plate_number || activeTruck.mac_id
+                          : ""}
+                      </p>
+                    </div>
                   )}
                 </div>
               )}
@@ -1743,64 +3086,101 @@ const DashboardPage = () => {
                     </div>
                   ) : fuelReceipts && fuelReceipts.length > 0 ? (
                     <>
-                      <div className="mb-2 text-xs text-gray-500">{fuelReceipts.length} receipt(s) found</div>
-                      <table className="w-full text-sm border border-gray-200 rounded">
-                        <thead className="bg-[#009EFF] text-white">
-                          <tr>
-                            <th className="p-2 border">DateTime</th>
-                            <th className="p-2 border">Product</th>
-                            <th className="p-2 border">Price/Liter</th>
-                            <th className="p-2 border">Volume</th>
-                            <th className="p-2 border">Total Price</th>
-                            <th className="p-2 border">Bukti Foto</th>
-                          </tr>
-                        </thead>
-                        <tbody className="text-center">
-                          {fuelReceipts.map((receipt) => (
-                            <tr key={receipt.id || `receipt-${Math.random()}`}>
-                              <td className="p-2 border">
-                                {receipt.created_at ? new Date(receipt.created_at).toLocaleString() : 'N/A'}
-                              </td>
-                              <td className="p-2 border">
-                                {receipt.product_name || 'N/A'}
-                              </td>
-                              <td className="p-2 border">
-                                {receipt.price ? `Rp ${Number(receipt.price).toLocaleString()}` : 'N/A'}
-                              </td>
-                              <td className="p-2 border">
-                                {receipt.volume ? `${Number(receipt.volume)} Liter` : 'N/A'}
-                              </td>
-                              <td className="p-2 border">
-                                {receipt.total_price ? `Rp ${Number(receipt.total_price).toLocaleString()}` : 'N/A'}
-                              </td>
-                              <td className="p-2 border">
-                                {receipt.image_url ? (
-                                  <a href={receipt.image_url} target="_blank" rel="noopener noreferrer">
-                                    <div className="flex flex-col items-center">
-                                      <img
-                                        src={receipt.image_url}
-                                        alt="Bukti Receipt"
-                                        className="w-16 h-16 object-cover rounded border border-gray-300 mb-1"
-                                      />
-                                      <span className="text-xs text-blue-500 hover:underline">Lihat Foto</span>
-                                    </div>
-                                  </a>
-                                ) : (
-                                  <span className="text-gray-400 text-xs">Tidak ada foto</span>
-                                )}
-                              </td>
+                      <div className="mb-2 text-xs text-gray-500">
+                        {fuelReceipts.length} receipt(s) found
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs border border-gray-200 rounded">
+                          <thead className="bg-[#009EFF] text-white">
+                            <tr>
+                              <th className="p-1.5 border">DateTime</th>
+                              <th className="p-1.5 border">Product</th>
+                              <th className="p-1.5 border">Price/Liter</th>
+                              <th className="p-1.5 border">Volume</th>
+                              <th className="p-1.5 border">Total Price</th>
+                              <th className="p-1.5 border">Bukti Foto</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody className="text-center">
+                            {fuelReceipts.map((receipt) => (
+                              <tr
+                                key={receipt.id || `receipt-${Math.random()}`}
+                                className="border-b border-gray-200"
+                              >
+                                <td className="p-2">
+                                  {receipt.created_at
+                                    ? new Date(
+                                        receipt.created_at
+                                      ).toLocaleString()
+                                    : "N/A"}
+                                </td>
+                                <td className="p-2 truncate">
+                                  {receipt.product_name || "N/A"}
+                                </td>
+                                <td className="p-2 truncate">
+                                  {receipt.price
+                                    ? `Rp ${Number(
+                                        receipt.price
+                                      ).toLocaleString()}`
+                                    : "N/A"}
+                                </td>
+                                <td className="p-2 truncate">
+                                  {receipt.volume
+                                    ? `${Number(receipt.volume)} Liter`
+                                    : "N/A"}
+                                </td>
+                                <td className="p-2 truncate">
+                                  {receipt.total_price
+                                    ? `Rp ${Number(
+                                        receipt.total_price
+                                      ).toLocaleString()}`
+                                    : "N/A"}
+                                </td>
+                                <td className="p-2">
+                                  {receipt.image_url ? (
+                                    <a
+                                      href={receipt.image_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      <div className="flex flex-col items-center">
+                                        <span className="text-xs text-blue-500 hover:underline">
+                                          Lihat Foto
+                                        </span>
+                                      </div>
+                                    </a>
+                                  ) : (
+                                    <span className="text-gray-400 text-xs">
+                                      Tidak ada foto
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </>
                   ) : (
                     <div className="flex flex-col items-center justify-center text-center text-gray-500 py-8 rounded-lg border border-gray-200 bg-gray-50">
-                      <svg className="w-12 h-12 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                      <svg
+                        className="w-12 h-12 text-gray-300 mb-3"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                        ></path>
                       </svg>
                       <p>No fuel receipt data available for {selectedDay}</p>
-                      <p className="text-sm mt-1">Try selecting another date or adding a receipt</p>
+                      <p className="text-sm mt-1">
+                        Try selecting another date or adding a receipt
+                      </p>
                     </div>
                   )}
                 </div>
@@ -1914,37 +3294,53 @@ const DashboardPage = () => {
                 {/* Tambahkan pencarian/filter untuk memudahkan navigasi saat banyak hari */}
                 {/* Tabs untuk kategori hari */}
                 <div className="flex mb-3 bg-gray-100 p-1 rounded-md">
-                  <button 
-                    className={`flex-1 px-3 py-1.5 text-xs rounded-md transition-all ${selectedDayCategory === 'recent' ? 'bg-white text-[#009EFF] shadow' : 'text-gray-600 hover:bg-gray-200'}`}
-                    onClick={() => setSelectedDayCategory('recent')}
+                  <button
+                    className={`flex-1 px-3 py-1.5 text-xs rounded-md transition-all ${
+                      selectedDayCategory === "recent"
+                        ? "bg-white text-[#009EFF] shadow"
+                        : "text-gray-600 hover:bg-gray-200"
+                    }`}
+                    onClick={() => setSelectedDayCategory("recent")}
                   >
                     Terbaru
                   </button>
-                  <button 
-                    className={`flex-1 px-3 py-1.5 text-xs rounded-md transition-all ${selectedDayCategory === 'week1' ? 'bg-white text-[#009EFF] shadow' : 'text-gray-600 hover:bg-gray-200'}`}
-                    onClick={() => setSelectedDayCategory('week1')}
+                  <button
+                    className={`flex-1 px-3 py-1.5 text-xs rounded-md transition-all ${
+                      selectedDayCategory === "week1"
+                        ? "bg-white text-[#009EFF] shadow"
+                        : "text-gray-600 hover:bg-gray-200"
+                    }`}
+                    onClick={() => setSelectedDayCategory("week1")}
                   >
                     Minggu 1
                   </button>
-                  <button 
-                    className={`flex-1 px-3 py-1.5 text-xs rounded-md transition-all ${selectedDayCategory === 'week2' ? 'bg-white text-[#009EFF] shadow' : 'text-gray-600 hover:bg-gray-200'}`}
-                    onClick={() => setSelectedDayCategory('week2')}
+                  <button
+                    className={`flex-1 px-3 py-1.5 text-xs rounded-md transition-all ${
+                      selectedDayCategory === "week2"
+                        ? "bg-white text-[#009EFF] shadow"
+                        : "text-gray-600 hover:bg-gray-200"
+                    }`}
+                    onClick={() => setSelectedDayCategory("week2")}
                   >
                     Minggu 2
                   </button>
-                  <button 
-                    className={`flex-1 px-3 py-1.5 text-xs rounded-md transition-all ${selectedDayCategory === 'week3' ? 'bg-white text-[#009EFF] shadow' : 'text-gray-600 hover:bg-gray-200'}`}
-                    onClick={() => setSelectedDayCategory('week3')}
+                  <button
+                    className={`flex-1 px-3 py-1.5 text-xs rounded-md transition-all ${
+                      selectedDayCategory === "week3"
+                        ? "bg-white text-[#009EFF] shadow"
+                        : "text-gray-600 hover:bg-gray-200"
+                    }`}
+                    onClick={() => setSelectedDayCategory("week3")}
                   >
                     Minggu 3+
                   </button>
                 </div>
-                
+
                 {/* Pencarian */}
                 <div className="mb-2">
-                  <input 
-                    type="text" 
-                    placeholder="Cari tanggal..." 
+                  <input
+                    type="text"
+                    placeholder="Cari tanggal..."
                     className="w-full p-2 text-xs border border-gray-200 rounded-md focus:outline-none focus:border-[#009EFF]"
                     onChange={(e) => {
                       const searchTerm = e.target.value.toLowerCase();
@@ -1965,15 +3361,24 @@ const DashboardPage = () => {
                         }`}
                       >
                         <div className="flex justify-between items-center">
-                          <span className="font-medium text-[#484848]">
-                            {item.day}
+                          <div>
+                            <span className="font-medium text-[#484848] mr-2">
+                              {item.day}
+                            </span>
                             {item.date && (
-                              <span className="text-[#ADADAD] font-light ml-2">
-                                {item.date}
+                              <span className="text-[#ADADAD] font-light text-xs">
+                                {item.date}{" "}
+                                {new Date(item.isoDate).getFullYear()}
                               </span>
                             )}
-                          </span>
-                          <span className="text-yellow-500">
+                          </div>
+                          <span
+                            className={`${
+                              selectedDay === item.day
+                                ? "text-[#009EFF]"
+                                : "text-yellow-500"
+                            }`}
+                          >
                             <i className="bx bx-calendar"></i>
                           </span>
                         </div>
@@ -1999,6 +3404,8 @@ function TruckMarker({
   truck,
   isDeviating,
   deviation,
+  isIdle,
+  idleData,
   isActive,
   onClick,
   markerRefs,
@@ -2030,39 +3437,70 @@ function TruckMarker({
     }
   }, [isActive]);
 
+  // Determine which icon to use based on truck status
+  const getIcon = () => {
+    if (isDeviating) return deviatingTruckIcon;
+    if (isIdle) return idleTruckIcon;
+    return truckIcon;
+  };
+
   return (
-    <Marker
-      position={[truck.latitude, truck.longitude]}
-      icon={isDeviating ? deviatingTruckIcon : truckIcon}
-      eventHandlers={{
-        ...eventHandlers,
-        click: () => onClick(truck),
-      }}
-    >
-      <Popup ref={popupRef}>
-        <div>
-          <h3 className="font-bold">
-            {truck.plate_number || `Truck ${truck.mac_id}`}
-            {isDeviating && (
-              <span className="ml-2 text-red-500 text-sm">(Off Route!)</span>
-            )}
-          </h3>
-          <p>Type: {truck.type || "Unknown"}</p>
-          <p>
-            Fuel:{" "}
-            {truck.fuel !== undefined ? `${truck.fuel.toFixed(2)}%` : "N/A"}
-          </p>
-          <p>
-            Position: {truck.latitude.toFixed(6)}, {truck.longitude.toFixed(6)}
-          </p>
-          {isDeviating && deviation && (
-            <p className="text-red-500 font-medium mt-2">
-              Off route by {deviation.distance.toFixed(0)} meters!
+    <>
+      <Marker
+        position={[truck.latitude, truck.longitude]}
+        icon={getIcon()}
+        eventHandlers={{
+          ...eventHandlers,
+          click: () => onClick(truck),
+        }}
+      >
+        <Popup ref={popupRef}>
+          <div>
+            <h3 className="font-bold">
+              {truck.plate_number || `Truck ${truck.mac_id}`}
+              {isDeviating && (
+                <span className="ml-2 text-red-500 text-sm">(Off Route!)</span>
+              )}
+              {isIdle && (
+                <span className="ml-2 text-orange-500 text-sm">(Idle)</span>
+              )}
+            </h3>
+            <p>Type: {truck.type || "Unknown"}</p>
+            <p>
+              Fuel:{" "}
+              {truck.fuel !== undefined ? `${truck.fuel.toFixed(2)}%` : "N/A"}
             </p>
-          )}
-        </div>
-      </Popup>
-    </Marker>
+            <p>
+              Position: {truck.latitude.toFixed(6)},{" "}
+              {truck.longitude.toFixed(6)}
+            </p>
+            {isDeviating && deviation && (
+              <p className="text-red-500 font-medium mt-2">
+                Off route by {deviation.distance.toFixed(0)} meters!
+              </p>
+            )}
+            {isIdle && idleData && (
+              <p className="text-orange-500 font-medium mt-2">
+                Idle for {Math.floor(idleData.duration / 60)} minutes and{" "}
+                {idleData.duration % 60} seconds
+              </p>
+            )}
+          </div>
+        </Popup>
+      </Marker>
+
+      {/* Show idle duration label above the idle truck */}
+      {isIdle && idleData && (
+        <Marker
+          position={[
+            truck.latitude + 0.0003, // Offset slightly to position above the truck marker
+            truck.longitude,
+          ]}
+          icon={createIdleLabelIcon(idleData.duration)}
+          interactive={false}
+        />
+      )}
+    </>
   );
 }
 

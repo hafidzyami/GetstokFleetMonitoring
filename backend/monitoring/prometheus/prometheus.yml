@@ -1,0 +1,29 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Komentar sementara k6 target karena menyebabkan error
+  # - job_name: 'k6'
+  #   static_configs:
+  #     - targets: ['k6-prometheus-adapter:5665']
+
+  # Gunakan beberapa cara berbeda untuk mencoba mengakses backend
+  - job_name: 'backend'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['host.docker.internal:8080']
+      
+  - job_name: 'backend-local'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['localhost:8080']
+      
+  - job_name: 'backend-network'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['172.17.0.1:8080']  # IP default bridge Docker

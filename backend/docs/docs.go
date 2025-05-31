@@ -675,6 +675,171 @@ const docTemplate = `{
                 }
             }
         },
+        "/idle-detections": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get all truck idle detections",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "idle-detections"
+                ],
+                "summary": "Get all idle detections",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "default": "Bearer \u003ctoken\u003e",
+                        "description": "Bearer token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Idle detection data",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/idle-detections/active": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get all active (unresolved) idle detections",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "idle-detections"
+                ],
+                "summary": "Get active idle detections",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "default": "Bearer \u003ctoken\u003e",
+                        "description": "Bearer token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Active idle detection data",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/idle-detections/{id}/resolve": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mark an idle detection as resolved",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "idle-detections"
+                ],
+                "summary": "Resolve idle detection",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "default": "Bearer \u003ctoken\u003e",
+                        "description": "Bearer token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Idle detection ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success message",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/metrics": {
+            "get": {
+                "description": "Retrieve Prometheus metrics for monitoring",
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "metrics"
+                ],
+                "summary": "Get Prometheus metrics",
+                "responses": {
+                    "200": {
+                        "description": "Prometheus metrics",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/ocr/process": {
             "post": {
                 "security": [
@@ -824,6 +989,77 @@ const docTemplate = `{
                 "responses": {
                     "200": {
                         "description": "Success message",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/route-deviations": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get route deviations within a specific date range for a specific truck",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "route-deviations"
+                ],
+                "summary": "Get route deviations by date range and truck ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "default": "Bearer \u003ctoken\u003e",
+                        "description": "Bearer token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Truck ID",
+                        "name": "truck_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start date (format: 2006-01-02)",
+                        "name": "start_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (format: 2006-01-02)",
+                        "name": "end_date",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Route deviation data",
                         "schema": {
                             "$ref": "#/definitions/model.BaseResponse"
                         }
@@ -2108,6 +2344,120 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/trucks/mac/{macID}/idle-detections": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get idle detections for a specific MAC ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "idle-detections"
+                ],
+                "summary": "Get idle detections by MAC ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "default": "Bearer \u003ctoken\u003e",
+                        "description": "Bearer token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "MAC ID",
+                        "name": "macID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Idle detection data",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/trucks/{id}/idle-detections": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get idle detections for a specific truck",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "idle-detections"
+                ],
+                "summary": "Get idle detections by truck ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "default": "Bearer \u003ctoken\u003e",
+                        "description": "Bearer token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Truck ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Idle detection data",
                         "schema": {
                             "$ref": "#/definitions/model.BaseResponse"
                         }
