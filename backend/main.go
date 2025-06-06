@@ -86,6 +86,8 @@ func main() {
 	truckIdleService := service.NewTruckIdleService(
 		truckIdleRepo,
 		truckRepo,
+		userRepo,
+		routePlanRepo,
 	)
 	// Initialize OCR service
 	ocrService := service.NewOCRService()

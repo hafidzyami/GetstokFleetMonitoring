@@ -4,9 +4,9 @@ import json
 import datetime
 
 # MQTT settings
-broker = "mqtt.eclipseprojects.io"
+broker = "getstokfms.com"
 port = 1883
-mac_id = "MAC1"
+mac_id = "B0:B2:1C:A7:25:F4"
 topic_prefix = "getstokfms"
 
 # Payloads
@@ -16,14 +16,21 @@ fuel_payload = {
     "Timestamp": timestamp,
     "Fuel": 21.0
 }
+# Dayang Sumbi
+position_payload = {
+    "Timestamp": timestamp,
+    "Latitude": -6.887383985615818,
+    "Longitude": 107.6131624127243
+}
+
 # JAKARTA
 # LATITUDE: -6.1944
 # LONGITUDE: 106.8229
-position_payload = {
-    "Timestamp": timestamp,
-    "Latitude": -6.1944,
-    "Longitude": 106.8229
-}
+# position_payload = {
+#     "Timestamp": timestamp,
+#     "Latitude": -6.1944,
+#     "Longitude": 106.8229
+# }
 
 # BANDUNG
 # LATITUDE: -6.881644473995715

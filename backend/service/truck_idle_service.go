@@ -1,10 +1,13 @@
 package service
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
 	"math"
+	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -20,6 +23,7 @@ const (
 	// IdleDetectionCount is the number of position reports within IdleRadius needed to trigger idle detection
 	IdleDetectionCount = 12
 )
+
 
 // IdlePosition menyimpan posisi sementara untuk deteksi idle
 type IdlePosition struct {
@@ -46,20 +50,26 @@ type TruckIdleService interface {
 }
 
 type truckIdleService struct {
-	idleRepo    repository.TruckIdleRepository
-	truckRepo   repository.TruckRepository
+	idleRepo      repository.TruckIdleRepository
+	truckRepo     repository.TruckRepository
+	userRepo      repository.UserRepository
+	routePlanRepo repository.RoutePlanRepository
 	positionCache map[string]*PositionCache
-	cacheMutex  sync.RWMutex
+	cacheMutex    sync.RWMutex
 }
 
 // NewTruckIdleService creates a new instance of TruckIdleService
 func NewTruckIdleService(
 	idleRepo repository.TruckIdleRepository,
 	truckRepo repository.TruckRepository,
+	userRepo repository.UserRepository,
+	routePlanRepo repository.RoutePlanRepository,
 ) TruckIdleService {
 	return &truckIdleService{
-		idleRepo:    idleRepo,
-		truckRepo:   truckRepo,
+		idleRepo:      idleRepo,
+		truckRepo:     truckRepo,
+		userRepo:      userRepo,
+		routePlanRepo: routePlanRepo,
 		positionCache: make(map[string]*PositionCache),
 	}
 }
@@ -221,8 +231,16 @@ func (s *truckIdleService) createIdleDetection(macID string, startPos, endPos Id
 		return fmt.Errorf("failed to create idle detection: %w", err)
 	}
 	
-	// Send notification
+	log.Printf("Idle detection created for truck %s: duration %d seconds", macID, duration)
+	
+	// Send WebSocket notification
 	s.sendIdleNotification(macID, startPos.Latitude, startPos.Longitude, startPos.Timestamp, duration)
+	
+	// Send push notification
+	if err := s.sendIdlePushNotification(truck, duration); err != nil {
+		log.Printf("Error sending idle push notification: %v", err)
+		// Don't return the error here to avoid disrupting the main flow
+	}
 	
 	return nil
 }
@@ -389,4 +407,92 @@ func (s *truckIdleService) mapIdleDetectionsToResponses(idles []*model.TruckIdle
 	}
 	
 	return responses, nil
+}
+
+// sendIdlePushNotification sends a push notification about idle detection
+func (s *truckIdleService) sendIdlePushNotification(truck *model.Truck, duration int) error {
+	// Get notification service URL from environment
+	notificationServiceURL := os.Getenv("NOTIFICATION_SERVICE_URL")
+	if notificationServiceURL == "" {
+		// Default URL for container environment
+		notificationServiceURL = "http://getstok-notification:8081/api/v1/push/send"
+	} else {
+		notificationServiceURL = fmt.Sprintf("%s/api/v1/push/send", notificationServiceURL)
+	}
+
+	// Get vehicle plate number for notification
+	plateNumber := truck.PlateNumber
+	if plateNumber == "" {
+		plateNumber = truck.MacID
+	}
+
+	// Get driver information if available
+	var driverID uint
+	var driverName string
+
+	// Try to find active route plan to get driver info
+	if s.routePlanRepo != nil {
+		routePlan, err := s.routePlanRepo.FindActiveRoutePlansByTruckID(truck.ID)
+		if err == nil && routePlan != nil {
+			driverID = routePlan.DriverID
+
+			// Get driver name if userRepo is available
+			if s.userRepo != nil {
+				driver, err := s.userRepo.FindByID(driverID)
+				if err == nil && driver != nil {
+					driverName = driver.Name
+				}
+			}
+		}
+	}
+
+	if driverName == "" {
+		if driverID != 0 {
+			driverName = fmt.Sprintf("Driver #%d", driverID)
+		} else {
+			driverName = "Unknown Driver"
+		}
+	}
+
+	// Convert duration to minutes for user-friendly message
+	durationMinutes := duration / 60
+
+	// Prepare notification message
+	title := "Vehicle Idle Alert"
+	message := fmt.Sprintf("Vehicle %s operated by %s has been idle for %d minutes.", 
+		plateNumber, driverName, durationMinutes)
+
+	// Optional: Add URL to redirect to when notification is clicked
+	// This could be the dashboard page with the active truck selected
+	url := fmt.Sprintf("/management/dashboard?truck=%s", truck.MacID)
+
+	// Create notification request
+	notificationPayload := NotificationRequest{
+		Title:         title,
+		Message:       message,
+		URL:           url,
+		TargetRoles:   []string{"management"}, // Send to all management users
+		TargetUserIDs: []uint{driverID},       // Also notify the driver
+	}
+
+	// Convert to JSON
+	jsonData, err := json.Marshal(notificationPayload)
+	if err != nil {
+		return fmt.Errorf("error marshaling notification payload: %w", err)
+	}
+
+	// Send POST request to notification service
+	resp, err := http.Post(notificationServiceURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("error sending notification request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("notification service returned non-OK status: %d", resp.StatusCode)
+	}
+
+	log.Printf("Idle push notification sent for truck %s (Driver ID: %d)", truck.MacID, driverID)
+	return nil
 }
