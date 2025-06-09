@@ -23,10 +23,10 @@ const (
 
 // VehicleData menyimpan semua data kendaraan (posisi dan bahan bakar)
 type VehicleData struct {
-	Timestamp string  `json:"timestamp"`
-	Latitude  float64 `json:"latitude"`
-	Longitude float64 `json:"longitude"`
-	Fuel      float64 `json:"fuel"`
+	T   string  `json:"timestamp"`
+	Lat float64 `json:"latitude"`
+	Lon float64 `json:"longitude"`
+	F   float64 `json:"fuel"`
 }
 
 // Struct untuk data yang dikirim ke frontend
@@ -132,16 +132,16 @@ func (mc *MQTTClient) Subscribe() {
 		}
 
 		log.Printf("Received vehicle data for device %s: Timestamp=%s, Lat=%f, Lng=%f, Fuel=%f%%",
-			macID, vehicleData.Timestamp, vehicleData.Latitude, vehicleData.Longitude, vehicleData.Fuel)
+			macID, vehicleData.T, vehicleData.Lat, vehicleData.Lon, vehicleData.F)
 
 		// Save data to database if repository is set
 		if truckRepo != nil && truckHistoryRepo != nil {
 			// Parse timestamp
 			loc, _ := time.LoadLocation("Asia/Jakarta")
-			dataTime, err := time.Parse("2006-01-02 15:04:05.000 -0700", vehicleData.Timestamp)
+			dataTime, err := time.Parse("2006-01-02 15:04:05.000 -0700", vehicleData.T)
 			if err != nil {
 				// Coba format alternatif jika format pertama gagal
-				dataTime, err = time.Parse(time.RFC3339, vehicleData.Timestamp)
+				dataTime, err = time.Parse(time.RFC3339, vehicleData.T)
 				if err != nil {
 					log.Printf("Failed to parse vehicle timestamp: %v", err)
 					dataTime = time.Now().In(loc)
@@ -162,9 +162,9 @@ func (mc *MQTTClient) Subscribe() {
 				// Create new truck if not found
 				truck = &model.Truck{
 					MacID:        macID,
-					Latitude:     vehicleData.Latitude,
-					Longitude:    vehicleData.Longitude,
-					Fuel:         vehicleData.Fuel,
+					Latitude:     vehicleData.Lat,
+					Longitude:    vehicleData.Lon,
+					Fuel:         vehicleData.F,
 					LastPosition: dataTime,
 					LastFuel:     dataTime,
 					CreatedAt:    time.Now(),
@@ -186,9 +186,9 @@ func (mc *MQTTClient) Subscribe() {
 				truckID = newTruck.ID
 			} else {
 				// Update existing truck's current data
-				truck.Latitude = vehicleData.Latitude
-				truck.Longitude = vehicleData.Longitude
-				truck.Fuel = vehicleData.Fuel
+				truck.Latitude = vehicleData.Lat
+				truck.Longitude = vehicleData.Lon
+				truck.Fuel = vehicleData.F
 				truck.LastPosition = dataTime
 				truck.LastFuel = dataTime
 				truck.UpdatedAt = time.Now()
@@ -205,8 +205,8 @@ func (mc *MQTTClient) Subscribe() {
 			positionHistory := &model.TruckPositionHistory{
 				TruckID:   truckID,
 				MacID:     macID,
-				Latitude:  vehicleData.Latitude,
-				Longitude: vehicleData.Longitude,
+				Latitude:  vehicleData.Lat,
+				Longitude: vehicleData.Lon,
 				Timestamp: dataTime,
 				CreatedAt: time.Now(),
 			}
@@ -221,7 +221,7 @@ func (mc *MQTTClient) Subscribe() {
 			fuelHistory := &model.TruckFuelHistory{
 				TruckID:   truckID,
 				MacID:     macID,
-				Fuel:      vehicleData.Fuel,
+				Fuel:      vehicleData.F,
 				Timestamp: dataTime,
 				CreatedAt: time.Now(),
 			}
@@ -231,20 +231,20 @@ func (mc *MQTTClient) Subscribe() {
 			} else {
 				log.Printf("Saved fuel history for truck %s", macID)
 			}
-			
+
 			// Check and record route deviation if needed
 			if deviationService != nil {
 				log.Printf("Checking for route deviation for truck %s", macID)
-				if err := deviationService.DetectAndSaveDeviation(macID, vehicleData.Latitude, vehicleData.Longitude, dataTime); err != nil {
+				if err := deviationService.DetectAndSaveDeviation(macID, vehicleData.Lat, vehicleData.Lon, dataTime); err != nil {
 					// Just log the error, don't interrupt the main flow
 					log.Printf("Error checking route deviation: %v", err)
 				}
 			}
-			
+
 			// Process position for idle detection
 			if idleService != nil {
 				log.Printf("Processing position for idle detection for truck %s", macID)
-				if err := idleService.ProcessPosition(macID, vehicleData.Latitude, vehicleData.Longitude, dataTime); err != nil {
+				if err := idleService.ProcessPosition(macID, vehicleData.Lat, vehicleData.Lon, dataTime); err != nil {
 					// Just log the error, don't interrupt the main flow
 					log.Printf("Error processing idle detection: %v", err)
 				}
@@ -258,17 +258,17 @@ func (mc *MQTTClient) Subscribe() {
 			positionUpdate := RealtimePositionUpdate{
 				Type:      "position",
 				MacID:     macID,
-				Latitude:  vehicleData.Latitude,
-				Longitude: vehicleData.Longitude,
-				Timestamp: vehicleData.Timestamp,
+				Latitude:  vehicleData.Lat,
+				Longitude: vehicleData.Lon,
+				Timestamp: vehicleData.T,
 			}
 
 			// Buat pesan realtime untuk fuel
 			fuelUpdate := RealtimeFuelUpdate{
 				Type:      "fuel",
 				MacID:     macID,
-				Fuel:      vehicleData.Fuel,
-				Timestamp: vehicleData.Timestamp,
+				Fuel:      vehicleData.F,
+				Timestamp: vehicleData.T,
 			}
 
 			// Marshal position update ke JSON
