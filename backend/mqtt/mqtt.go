@@ -23,10 +23,10 @@ const (
 
 // VehicleData menyimpan semua data kendaraan (posisi dan bahan bakar)
 type VehicleData struct {
-	T   string  `json:"timestamp"`
-	Lat float64 `json:"latitude"`
-	Lon float64 `json:"longitude"`
-	F   float64 `json:"fuel"`
+	T   string  `json:"T"`
+	Lat float64 `json:"Lat"`
+	Lon float64 `json:"Lon"`
+	F   float64 `json:"F"`
 }
 
 // Struct untuk data yang dikirim ke frontend
@@ -123,6 +123,8 @@ func (mc *MQTTClient) Subscribe() {
 			return
 		}
 		macID := parts[1]
+
+		log.Printf("Received message: %s", msg.Payload())
 
 		// Parse JSON
 		var vehicleData VehicleData
