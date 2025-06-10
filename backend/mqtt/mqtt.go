@@ -140,7 +140,7 @@ func (mc *MQTTClient) Subscribe() {
 		if truckRepo != nil && truckHistoryRepo != nil {
 			// Parse timestamp
 			loc, _ := time.LoadLocation("Asia/Jakarta")
-			dataTime, err := time.Parse("2006-01-02 15:04:05.000 -0700", vehicleData.T)
+			dataTime, err := time.Parse("2006-01-02 15:04:05.000", vehicleData.T)
 			if err != nil {
 				// Coba format alternatif jika format pertama gagal
 				dataTime, err = time.Parse(time.RFC3339, vehicleData.T)
