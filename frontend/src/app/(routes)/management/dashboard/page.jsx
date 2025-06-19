@@ -1747,7 +1747,7 @@ const DashboardPage = () => {
                   updatedTrucks[message.mac_id].last_position =
                     message.timestamp;
                   console.log(
-                    `Updated position for truck ${message.mac_id}: (${message.latitude}, ${message.longitude})`
+                    `Updated position for truck ${message.mac_id}: (${message.latitude}, ${message.longitude} timestamp: ${message.timestamp})`
                   );
                 } else if (message.type === "fuel") {
                   updatedTrucks[message.mac_id].fuel = message.fuel;

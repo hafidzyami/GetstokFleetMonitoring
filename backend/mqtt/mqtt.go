@@ -136,25 +136,18 @@ func (mc *MQTTClient) Subscribe() {
 		log.Printf("Received vehicle data for device %s: Timestamp=%s, Lat=%f, Lng=%f, Fuel=%f%%",
 			macID, vehicleData.T, vehicleData.Lat, vehicleData.Lon, vehicleData.F)
 
+		// Parse timestamp and convert to WIB
+		timestampStr := strings.TrimSuffix(vehicleData.T, "Z")
+		wibLocation, _ := time.LoadLocation("Asia/Jakarta")
+		dataTime, err := time.ParseInLocation("2006-01-02T15:04:05", timestampStr, wibLocation)
+		if err != nil {
+			log.Printf("Error parsing timestamp: %v", err)
+		} else {
+			log.Printf("Parsed timestamp: %s WIB", dataTime.Format("2006-01-02 15:04:05"))
+		}
+
 		// Save data to database if repository is set
 		if truckRepo != nil && truckHistoryRepo != nil {
-			// Parse timestamp
-			loc, _ := time.LoadLocation("Asia/Jakarta")
-			dataTime, err := time.Parse("2006-01-02 15:04:05.000 -0700", vehicleData.T)
-			if err != nil {
-				// Coba format alternatif jika format pertama gagal
-				dataTime, err = time.Parse(time.RFC3339, vehicleData.T)
-				if err != nil {
-					log.Printf("Failed to parse vehicle timestamp: %v", err)
-					dataTime = time.Now().In(loc)
-				} else {
-					// Konversi ke zona waktu WIB jika parsing berhasil
-					dataTime = dataTime.In(loc)
-				}
-			} else {
-				// Pastikan menggunakan zona waktu WIB
-				dataTime = dataTime.In(loc)
-			}
 
 			var truckID uint
 
@@ -187,6 +180,7 @@ func (mc *MQTTClient) Subscribe() {
 				}
 				truckID = newTruck.ID
 			} else {
+
 				// Update existing truck's current data
 				truck.Latitude = vehicleData.Lat
 				truck.Longitude = vehicleData.Lon
@@ -194,6 +188,8 @@ func (mc *MQTTClient) Subscribe() {
 				truck.LastPosition = dataTime
 				truck.LastFuel = dataTime
 				truck.UpdatedAt = time.Now()
+
+				log.Printf("Timestamp for truck %s: %s", macID, dataTime)
 
 				if err := truckRepo.Update(truck); err != nil {
 					log.Printf("Failed to update truck data: %v", err)
@@ -262,7 +258,7 @@ func (mc *MQTTClient) Subscribe() {
 				MacID:     macID,
 				Latitude:  vehicleData.Lat,
 				Longitude: vehicleData.Lon,
-				Timestamp: vehicleData.T,
+				Timestamp: dataTime.Format("2006-01-02 15:04:05"),
 			}
 
 			// Buat pesan realtime untuk fuel
@@ -270,7 +266,7 @@ func (mc *MQTTClient) Subscribe() {
 				Type:      "fuel",
 				MacID:     macID,
 				Fuel:      vehicleData.F,
-				Timestamp: vehicleData.T,
+				Timestamp: dataTime.Format("2006-01-02 15:04:05"),
 			}
 
 			// Marshal position update ke JSON

@@ -5,12 +5,21 @@ import datetime
 
 # MQTT settings
 broker = "mqtt.eclipseprojects.io"
+# broker = "staging.getstokfms.com"
 port = 1883
-mac_id = "MAC1"
+mac_id = "MAC2"
 topic_prefix = "getstokfms"
 
 # Payloads
-timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S+0000")
+# Ambil waktu UTC sekarang
+utc_now = datetime.datetime.utcnow()
+
+# Tambah 7 jam
+wib_time = utc_now + datetime.timedelta(hours=7)
+
+# Format jadi string dengan +0700
+timestamp = wib_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+print(f"Timestamp: {timestamp}")
 
 
 # Dayang Sumbi (DEVIASI)
