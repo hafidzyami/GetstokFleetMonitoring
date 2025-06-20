@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"bytes"
+	"log"
 	"strconv"
 	"sync"
 	"time"
@@ -13,12 +14,12 @@ import (
 )
 
 var (
-	httpRequestsTotal   *prometheus.CounterVec
-	httpRequestDuration *prometheus.HistogramVec
+	httpRequestsTotal    *prometheus.CounterVec
+	httpRequestDuration  *prometheus.HistogramVec
 	httpRequestsInFlight prometheus.Gauge
-	metricsInitialized  bool
-	metricsMutex        sync.Mutex
-	registry            *prometheus.Registry
+	metricsInitialized   bool
+	metricsMutex         sync.Mutex
+	registry             *prometheus.Registry
 )
 
 // getOrCreateRegistry ensures we always use the same registry instance
@@ -64,13 +65,13 @@ func normalizeMethod(method string) string {
 func initMetrics() {
 	metricsMutex.Lock()
 	defer metricsMutex.Unlock()
-	
+
 	if metricsInitialized {
 		return
 	}
-	
+
 	reg := getOrCreateRegistry()
-	
+
 	// Create new metrics
 	httpRequestsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -79,7 +80,7 @@ func initMetrics() {
 		},
 		[]string{"method", "path", "status"},
 	)
-	
+
 	httpRequestDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "http_request_duration_seconds",
@@ -88,51 +89,57 @@ func initMetrics() {
 		},
 		[]string{"method", "path", "status"},
 	)
-	
+
 	httpRequestsInFlight = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "http_requests_in_flight",
 			Help: "Current number of HTTP requests in flight",
 		},
 	)
-	
+
 	// Register metrics with better error handling
 	if err := reg.Register(httpRequestsTotal); err != nil {
 		if are, ok := err.(prometheus.AlreadyRegisteredError); ok {
 			// If already registered, unregister first then re-register
 			reg.Unregister(are.ExistingCollector)
 			if err := reg.Register(httpRequestsTotal); err != nil {
-				// Handle re-registration error if needed
+				// Log re-registration error
+				log.Printf("Failed to re-register httpRequestsTotal: %v", err)
 				return
 			}
 		} else {
-			// Handle other registration errors
+			// Log other registration errors
+			log.Printf("Failed to register httpRequestsTotal: %v", err)
 			return
 		}
 	}
-	
+
 	if err := reg.Register(httpRequestDuration); err != nil {
 		if are, ok := err.(prometheus.AlreadyRegisteredError); ok {
 			reg.Unregister(are.ExistingCollector)
 			if err := reg.Register(httpRequestDuration); err != nil {
+				log.Printf("Failed to re-register httpRequestDuration: %v", err)
 				return
 			}
 		} else {
+			log.Printf("Failed to register httpRequestDuration: %v", err)
 			return
 		}
 	}
-	
+
 	if err := reg.Register(httpRequestsInFlight); err != nil {
 		if are, ok := err.(prometheus.AlreadyRegisteredError); ok {
 			reg.Unregister(are.ExistingCollector)
 			if err := reg.Register(httpRequestsInFlight); err != nil {
+				log.Printf("Failed to re-register httpRequestsInFlight: %v", err)
 				return
 			}
 		} else {
+			log.Printf("Failed to register httpRequestsInFlight: %v", err)
 			return
 		}
 	}
-	
+
 	metricsInitialized = true
 }
 
@@ -140,13 +147,13 @@ func initMetrics() {
 func CleanupMetrics() {
 	metricsMutex.Lock()
 	defer metricsMutex.Unlock()
-	
+
 	if !metricsInitialized {
 		return
 	}
-	
+
 	reg := getOrCreateRegistry()
-	
+
 	// Unregister all metrics
 	if httpRequestsTotal != nil {
 		reg.Unregister(httpRequestsTotal)
@@ -160,7 +167,7 @@ func CleanupMetrics() {
 		reg.Unregister(httpRequestsInFlight)
 		httpRequestsInFlight = nil
 	}
-	
+
 	metricsInitialized = false
 }
 
@@ -174,22 +181,25 @@ func ResetMetrics() {
 func PrometheusMiddleware() fiber.Handler {
 	// Initialize metrics
 	initMetrics()
-	
+
 	return func(c *fiber.Ctx) error {
 		start := time.Now()
-		
+
+		// Skip metrics endpoint to avoid self-counting
+		if c.Path() == "/metrics" {
+			return c.Next()
+		}
+
 		// Increment in-flight requests
 		httpRequestsInFlight.Inc()
-		
+		defer httpRequestsInFlight.Dec()
+
 		// Process request
 		err := c.Next()
-		
-		// Decrement in-flight requests
-		httpRequestsInFlight.Dec()
-		
+
 		// Get normalized method
 		method := normalizeMethod(c.Method())
-		
+
 		// Get path - use route path if available, otherwise use request path
 		var path string
 		if c.Route() != nil && c.Route().Path != "" {
@@ -197,7 +207,7 @@ func PrometheusMiddleware() fiber.Handler {
 		} else {
 			path = c.Path()
 		}
-		
+
 		// Sanitize path to prevent label explosion
 		if len(path) > 100 {
 			path = path[:100]
@@ -205,31 +215,30 @@ func PrometheusMiddleware() fiber.Handler {
 		if path == "" {
 			path = "/"
 		}
-		
+
 		// Get status code
 		status := strconv.Itoa(c.Response().StatusCode())
-		
+
 		// Record metrics with error handling
 		duration := time.Since(start).Seconds()
-		
+
 		// Use defer with recover to prevent panics from breaking the middleware
 		defer func() {
 			if r := recover(); r != nil {
-				// Log the panic but don't crash the application
-				// You might want to add proper logging here
-				// For now, we'll just continue without recording metrics
+				// Log the panic properly
+				log.Printf("Panic recovered in PrometheusMiddleware: %v", r)
 			}
 		}()
-		
+
 		// Record metrics
 		if httpRequestDuration != nil {
 			httpRequestDuration.WithLabelValues(method, path, status).Observe(duration)
 		}
-		
+
 		if httpRequestsTotal != nil {
 			httpRequestsTotal.WithLabelValues(method, path, status).Inc()
 		}
-		
+
 		return err
 	}
 }
@@ -239,37 +248,37 @@ func GetMetricsHandler() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		// Set proper content type
 		c.Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
-		
+
 		// Handle potential metric collection errors
 		defer func() {
 			if r := recover(); r != nil {
 				// Set error status and return error message
 				c.Status(500)
 				if _, err := c.WriteString("Error collecting metrics"); err != nil {
-					// If we can't even write the error, there's not much we can do
-					return
+					// Log the write error
+					log.Printf("Failed to write error response: %v", err)
 				}
 			}
 		}()
-		
+
 		// Get the registry and gather metrics
 		reg := getOrCreateRegistry()
 		gathering, err := reg.Gather()
 		if err != nil {
 			return c.Status(500).SendString("Error gathering metrics: " + err.Error())
 		}
-		
+
 		// Create a buffer to write metrics to
 		var buf bytes.Buffer
 		encoder := expfmt.NewEncoder(&buf, expfmt.NewFormat(expfmt.TypeTextPlain))
-		
+
 		// Encode each metric family
 		for _, mf := range gathering {
 			if err := encoder.Encode(mf); err != nil {
 				return c.Status(500).SendString("Error encoding metrics: " + err.Error())
 			}
 		}
-		
+
 		// Send the metrics
 		return c.Send(buf.Bytes())
 	}
