@@ -375,26 +375,36 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
+            "mode": "palette-classic"
           },
           "custom": {
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "Error Rate %",
             "axisPlacement": "auto",
-            "fillOpacity": 80,
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
               "tooltip": false,
               "viz": false
             },
-            "lineWidth": 1,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
             },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
             "thresholdsStyle": {
-              "mode": "dashed+area"
+              "mode": "area"
             }
           },
           "mappings": [],
@@ -433,25 +443,18 @@
       },
       "id": 14,
       "options": {
-        "barRadius": 0,
-        "barWidth": 0.7,
-        "fullHighlight": false,
-        "groupWidth": 0.7,
         "legend": {
-          "calcs": ["mean", "max"],
+          "calcs": ["mean", "last", "max"],
           "displayMode": "table",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "sortBy": "Last",
+          "sortDesc": true
         },
-        "orientation": "horizontal",
-        "showValue": "auto",
-        "stacking": "none",
         "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        },
-        "xTickLabelRotation": 0,
-        "xTickLabelSpacing": 0
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "targets": [
         {
@@ -466,8 +469,8 @@
           "refId": "A"
         }
       ],
-      "title": "Non-2xx by Endpoint",
-      "type": "barchart"
+      "title": "Error Rate % by Endpoint Over Time",
+      "type": "timeseries"
     },
     {
       "datasource": {

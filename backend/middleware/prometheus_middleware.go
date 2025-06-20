@@ -177,69 +177,71 @@ func ResetMetrics() {
 	initMetrics()
 }
 
-// PrometheusMiddleware returns a middleware that collects Prometheus metrics
 func PrometheusMiddleware() fiber.Handler {
 	// Initialize metrics
 	initMetrics()
 
 	return func(c *fiber.Ctx) error {
-		start := time.Now()
-
 		// Skip metrics endpoint to avoid self-counting
 		if c.Path() == "/metrics" {
 			return c.Next()
 		}
 
+		start := time.Now()
+
 		// Increment in-flight requests
 		httpRequestsInFlight.Inc()
-		defer httpRequestsInFlight.Dec()
-
-		// Process request
-		err := c.Next()
-
-		// Get normalized method
-		method := normalizeMethod(c.Method())
-
-		// Get path - use route path if available, otherwise use request path
-		var path string
-		if c.Route() != nil && c.Route().Path != "" {
-			path = c.Route().Path
-		} else {
-			path = c.Path()
-		}
-
-		// Sanitize path to prevent label explosion
-		if len(path) > 100 {
-			path = path[:100]
-		}
-		if path == "" {
-			path = "/"
-		}
-
-		// Get status code
-		status := strconv.Itoa(c.Response().StatusCode())
-
-		// Record metrics with error handling
-		duration := time.Since(start).Seconds()
-
-		// Use defer with recover to prevent panics from breaking the middleware
+		
+		// IMPORTANT: Use defer IMMEDIATELY after Inc() to ensure it always runs
 		defer func() {
-			if r := recover(); r != nil {
-				// Log the panic properly
-				log.Printf("Panic recovered in PrometheusMiddleware: %v", r)
+			// Decrement in-flight requests
+			httpRequestsInFlight.Dec()
+			
+			// Get normalized method
+			method := normalizeMethod(c.Method())
+
+			// Get path - use route path if available, otherwise use request path
+			var path string
+			if c.Route() != nil && c.Route().Path != "" {
+				path = c.Route().Path
+			} else {
+				path = c.Path()
+			}
+
+			// Sanitize path to prevent label explosion
+			if len(path) > 100 {
+				path = path[:100]
+			}
+			if path == "" {
+				path = "/"
+			}
+
+			// Get status code
+			status := strconv.Itoa(c.Response().StatusCode())
+
+			// Record metrics with error handling
+			duration := time.Since(start).Seconds()
+
+			// Recover from any panic during metric recording
+			defer func() {
+				if r := recover(); r != nil {
+					// Log the panic properly
+					log.Printf("Panic recovered in PrometheusMiddleware metrics recording: %v", r)
+				}
+			}()
+
+			// Record metrics
+			if httpRequestDuration != nil {
+				httpRequestDuration.WithLabelValues(method, path, status).Observe(duration)
+			}
+
+			if httpRequestsTotal != nil {
+				httpRequestsTotal.WithLabelValues(method, path, status).Inc()
 			}
 		}()
 
-		// Record metrics
-		if httpRequestDuration != nil {
-			httpRequestDuration.WithLabelValues(method, path, status).Observe(duration)
-		}
-
-		if httpRequestsTotal != nil {
-			httpRequestsTotal.WithLabelValues(method, path, status).Inc()
-		}
-
-		return err
+		// Process request
+		return c.Next()
 	}
 }
 
