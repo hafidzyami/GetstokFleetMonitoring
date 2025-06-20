@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"bytes"
 	"strconv"
 	"sync"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/hafidzyami/GetstokFleetMonitoring/backend/controller"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/common/expfmt"
 )
 
 var (
@@ -221,7 +223,7 @@ func PrometheusMiddleware() fiber.Handler {
 func GetMetricsHandler() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		// Set proper content type
-		c.Set("Content-Type", "text/plain; charset=utf-8")
+		c.Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 		
 		// Handle potential metric collection errors
 		defer func() {
@@ -237,17 +239,18 @@ func GetMetricsHandler() fiber.Handler {
 			return c.Status(500).SendString("Error gathering metrics: " + err.Error())
 		}
 		
-		// Convert to Prometheus format
-		encoder := &prometheus.TextEncoder{}
-		var buf []byte
+		// Create a buffer to write metrics to
+		var buf bytes.Buffer
+		encoder := expfmt.NewEncoder(&buf, expfmt.FmtText)
+		
+		// Encode each metric family
 		for _, mf := range gathering {
-			var err error
-			buf, err = encoder.Encode(buf, mf)
-			if err != nil {
+			if err := encoder.Encode(mf); err != nil {
 				return c.Status(500).SendString("Error encoding metrics: " + err.Error())
 			}
 		}
 		
-		return c.Send(buf)
+		// Send the metrics
+		return c.Send(buf.Bytes())
 	}
 }
