@@ -494,88 +494,7 @@
           "range": true,
           "refId": "B"
         }
-      ],
-      "title": "Endpoints with Non-Success Status Codes",
-      "transformations": [
-        {
-          "id": "merge",
-          "options": {}
-        },
-        {
-          "id": "groupBy",
-          "options": {
-            "fields": {
-              "Value #A": {
-                "aggregations": [
-                  "sum"
-                ],
-                "operation": "aggregate"
-              },
-              "Value #B": {
-                "aggregations": [
-                  "sum"
-                ],
-                "operation": "aggregate"
-              },
-              "path": {
-                "aggregations": [],
-                "operation": "groupby"
-              },
-              "status": {
-                "aggregations": [],
-                "operation": "groupby"
-              }
-            }
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {},
-            "indexByName": {},
-            "renameByName": {
-              "Value #A (sum)": "Total Errors",
-              "Value #B (sum)": "Total Requests",
-              "path": "Endpoint",
-              "status": "Status Code"
-            }
-          }
-        },
-        {
-          "id": "calculateField",
-          "options": {
-            "alias": "Error Rate %",
-            "binary": {
-              "left": "Total Errors",
-              "operator": "/",
-              "reducer": "sum",
-              "right": "Total Requests"
-            },
-            "mode": "binary",
-            "reduce": {
-              "reducer": "sum"
-            }
-          }
-        },
-        {
-          "id": "calculateField",
-          "options": {
-            "alias": "Error Rate %",
-            "binary": {
-              "left": "Error Rate %",
-              "operator": "*",
-              "reducer": "sum",
-              "right": "100"
-            },
-            "mode": "binary",
-            "reduce": {
-              "reducer": "sum"
-            },
-            "replaceFields": true
-          }
-        }
-      ],
-      "type": "table"
+      ]
     },
     {
       "datasource": {
@@ -683,7 +602,7 @@
           "refId": "A"
         }
       ],
-      "title": "Error Rate by Status Code",
+      "title": "Non-2xx Status Codes Rate",
       "type": "timeseries"
     },
     {
@@ -776,7 +695,7 @@
           "refId": "A"
         }
       ],
-      "title": "Error Rate by Endpoint",
+      "title": "Non-2xx by Endpoint",
       "type": "timeseries"
     },
     {
@@ -978,7 +897,7 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "Go Fiber Backend Dashboard with Error Tracking",
+  "title": "Go Fiber Backend Dashboard v2",
   "uid": "fiber-backend-enhanced",
   "version": 2,
   "weekStart": ""

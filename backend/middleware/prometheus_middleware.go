@@ -101,21 +101,35 @@ func initMetrics() {
 		if are, ok := err.(prometheus.AlreadyRegisteredError); ok {
 			// If already registered, unregister first then re-register
 			reg.Unregister(are.ExistingCollector)
-			reg.Register(httpRequestsTotal)
+			if err := reg.Register(httpRequestsTotal); err != nil {
+				// Handle re-registration error if needed
+				return
+			}
+		} else {
+			// Handle other registration errors
+			return
 		}
 	}
 	
 	if err := reg.Register(httpRequestDuration); err != nil {
 		if are, ok := err.(prometheus.AlreadyRegisteredError); ok {
 			reg.Unregister(are.ExistingCollector)
-			reg.Register(httpRequestDuration)
+			if err := reg.Register(httpRequestDuration); err != nil {
+				return
+			}
+		} else {
+			return
 		}
 	}
 	
 	if err := reg.Register(httpRequestsInFlight); err != nil {
 		if are, ok := err.(prometheus.AlreadyRegisteredError); ok {
 			reg.Unregister(are.ExistingCollector)
-			reg.Register(httpRequestsInFlight)
+			if err := reg.Register(httpRequestsInFlight); err != nil {
+				return
+			}
+		} else {
+			return
 		}
 	}
 	
@@ -203,6 +217,7 @@ func PrometheusMiddleware() fiber.Handler {
 			if r := recover(); r != nil {
 				// Log the panic but don't crash the application
 				// You might want to add proper logging here
+				// For now, we'll just continue without recording metrics
 			}
 		}()
 		
@@ -228,7 +243,12 @@ func GetMetricsHandler() fiber.Handler {
 		// Handle potential metric collection errors
 		defer func() {
 			if r := recover(); r != nil {
-				c.Status(500).SendString("Error collecting metrics")
+				// Set error status and return error message
+				c.Status(500)
+				if _, err := c.WriteString("Error collecting metrics"); err != nil {
+					// If we can't even write the error, there's not much we can do
+					return
+				}
 			}
 		}()
 		
@@ -241,7 +261,7 @@ func GetMetricsHandler() fiber.Handler {
 		
 		// Create a buffer to write metrics to
 		var buf bytes.Buffer
-		encoder := expfmt.NewEncoder(&buf, expfmt.FmtText)
+		encoder := expfmt.NewEncoder(&buf, expfmt.NewFormat(expfmt.TypeTextPlain))
 		
 		// Encode each metric family
 		for _, mf := range gathering {

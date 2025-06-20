@@ -13,8 +13,8 @@ services:
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
       - '--web.console.templates=/usr/share/prometheus/consoles'
       - '--web.enable-lifecycle'  # Tambahkan ini untuk memungkinkan reload konfigurasi
-      - '--web.external-url=https://staging.getstokfms.com/prometheus'
-      - '--web.route-prefix=/prometheus'
+      # - '--web.external-url=https://getstokfms.com/prometheus'
+      # - '--web.route-prefix=/prometheus'
     ports:
       - "9090:9090"
     restart: unless-stopped
@@ -49,8 +49,8 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_SERVER_HTTP_PORT=8083
-      - GF_SERVER_ROOT_URL=https://staging.getstokfms.com/grafana
-      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+      # - GF_SERVER_ROOT_URL=https://getstokfms.com/grafana
+      # - GF_SERVER_SERVE_FROM_SUB_PATH=true
     ports:
       - "8083:8083"
     restart: unless-stopped
