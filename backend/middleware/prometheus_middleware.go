@@ -11,16 +11,55 @@ import (
 )
 
 var (
-	httpRequestsTotal  *prometheus.CounterVec
+	httpRequestsTotal   *prometheus.CounterVec
 	httpRequestDuration *prometheus.HistogramVec
 	httpRequestsInFlight prometheus.Gauge
-	metricsInitialized bool
-	metricsMutex       sync.Mutex
+	metricsInitialized  bool
+	metricsMutex        sync.Mutex
+	registry            *prometheus.Registry
 )
 
-// initMetrics initializes the metrics
+// getOrCreateRegistry ensures we always use the same registry instance
+func getOrCreateRegistry() *prometheus.Registry {
+	if registry == nil {
+		registry = controller.GetRegistry()
+	}
+	return registry
+}
+
+// normalizeMethod properly normalizes HTTP methods
+func normalizeMethod(method string) string {
+	// Handle common corrupted methods and normalize to uppercase
+	switch method {
+	case "GET", "GETT", "GE", "G":
+		return "GET"
+	case "POST", "POSTT", "POS", "P":
+		return "POST"
+	case "PUT", "PUTT", "PU":
+		return "PUT"
+	case "DELETE", "DELETEE", "DEL", "D":
+		return "DELETE"
+	case "PATCH", "PATCHH", "PAT":
+		return "PATCH"
+	case "HEAD", "HEADD", "HE":
+		return "HEAD"
+	case "OPTIONS", "OPTIONSS", "OPT":
+		return "OPTIONS"
+	default:
+		// For any unrecognized method, return GET as fallback
+		if len(method) == 0 {
+			return "GET"
+		}
+		// Clean up the method by taking only the first few characters
+		if len(method) > 10 {
+			method = method[:10]
+		}
+		return method
+	}
+}
+
+// initMetrics initializes the metrics with better error handling
 func initMetrics() {
-	// Use mutex to ensure thread-safe initialization
 	metricsMutex.Lock()
 	defer metricsMutex.Unlock()
 	
@@ -28,20 +67,9 @@ func initMetrics() {
 		return
 	}
 	
-	registry := controller.GetRegistry()
+	reg := getOrCreateRegistry()
 	
-	// First, try to unregister existing metrics if they exist
-	if httpRequestsTotal != nil {
-		registry.Unregister(httpRequestsTotal)
-	}
-	if httpRequestDuration != nil {
-		registry.Unregister(httpRequestDuration)
-	}
-	if httpRequestsInFlight != nil {
-		registry.Unregister(httpRequestsInFlight)
-	}
-	
-	// Create metrics with consistent label order: method, path, status
+	// Create new metrics
 	httpRequestsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "http_requests_total",
@@ -66,23 +94,26 @@ func initMetrics() {
 		},
 	)
 	
-	// Register metrics, handling potential re-registration errors
-	if err := registry.Register(httpRequestsTotal); err != nil {
-		// If already registered, get the existing collector
+	// Register metrics with better error handling
+	if err := reg.Register(httpRequestsTotal); err != nil {
 		if are, ok := err.(prometheus.AlreadyRegisteredError); ok {
-			httpRequestsTotal = are.ExistingCollector.(*prometheus.CounterVec)
+			// If already registered, unregister first then re-register
+			reg.Unregister(are.ExistingCollector)
+			reg.Register(httpRequestsTotal)
 		}
 	}
 	
-	if err := registry.Register(httpRequestDuration); err != nil {
+	if err := reg.Register(httpRequestDuration); err != nil {
 		if are, ok := err.(prometheus.AlreadyRegisteredError); ok {
-			httpRequestDuration = are.ExistingCollector.(*prometheus.HistogramVec)
+			reg.Unregister(are.ExistingCollector)
+			reg.Register(httpRequestDuration)
 		}
 	}
 	
-	if err := registry.Register(httpRequestsInFlight); err != nil {
+	if err := reg.Register(httpRequestsInFlight); err != nil {
 		if are, ok := err.(prometheus.AlreadyRegisteredError); ok {
-			httpRequestsInFlight = are.ExistingCollector.(prometheus.Gauge)
+			reg.Unregister(are.ExistingCollector)
+			reg.Register(httpRequestsInFlight)
 		}
 	}
 	
@@ -98,23 +129,29 @@ func CleanupMetrics() {
 		return
 	}
 	
-	registry := controller.GetRegistry()
+	reg := getOrCreateRegistry()
 	
 	// Unregister all metrics
 	if httpRequestsTotal != nil {
-		registry.Unregister(httpRequestsTotal)
+		reg.Unregister(httpRequestsTotal)
 		httpRequestsTotal = nil
 	}
 	if httpRequestDuration != nil {
-		registry.Unregister(httpRequestDuration)
+		reg.Unregister(httpRequestDuration)
 		httpRequestDuration = nil
 	}
 	if httpRequestsInFlight != nil {
-		registry.Unregister(httpRequestsInFlight)
+		reg.Unregister(httpRequestsInFlight)
 		httpRequestsInFlight = nil
 	}
 	
 	metricsInitialized = false
+}
+
+// ResetMetrics forces a complete reset of all metrics
+func ResetMetrics() {
+	CleanupMetrics()
+	initMetrics()
 }
 
 // PrometheusMiddleware returns a middleware that collects Prometheus metrics
@@ -128,11 +165,14 @@ func PrometheusMiddleware() fiber.Handler {
 		// Increment in-flight requests
 		httpRequestsInFlight.Inc()
 		
-		// Next middlewares
+		// Process request
 		err := c.Next()
 		
 		// Decrement in-flight requests
 		httpRequestsInFlight.Dec()
+		
+		// Get normalized method
+		method := normalizeMethod(c.Method())
 		
 		// Get path - use route path if available, otherwise use request path
 		var path string
@@ -142,33 +182,72 @@ func PrometheusMiddleware() fiber.Handler {
 			path = c.Path()
 		}
 		
-		// Record metrics after response
-		status := strconv.Itoa(c.Response().StatusCode())
-		method := c.Method()
+		// Sanitize path to prevent label explosion
+		if len(path) > 100 {
+			path = path[:100]
+		}
+		if path == "" {
+			path = "/"
+		}
 		
-		// Normalize method to prevent duplicates (e.g., "GETT" -> "GET")
-		if len(method) > 0 {
-			switch method {
-			case "GETT":
-				method = "GET"
-			case "POSTT":
-				method = "POST"
-			case "PUTT":
-				method = "PUT"
-			case "DELETEE":
-				method = "DELETE"
-			case "PATCHH":
-				method = "PATCH"
+		// Get status code
+		status := strconv.Itoa(c.Response().StatusCode())
+		
+		// Record metrics with error handling
+		duration := time.Since(start).Seconds()
+		
+		// Use defer with recover to prevent panics from breaking the middleware
+		defer func() {
+			if r := recover(); r != nil {
+				// Log the panic but don't crash the application
+				// You might want to add proper logging here
+			}
+		}()
+		
+		// Record metrics
+		if httpRequestDuration != nil {
+			httpRequestDuration.WithLabelValues(method, path, status).Observe(duration)
+		}
+		
+		if httpRequestsTotal != nil {
+			httpRequestsTotal.WithLabelValues(method, path, status).Inc()
+		}
+		
+		return err
+	}
+}
+
+// GetMetricsHandler returns a handler for the /metrics endpoint with error handling
+func GetMetricsHandler() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		// Set proper content type
+		c.Set("Content-Type", "text/plain; charset=utf-8")
+		
+		// Handle potential metric collection errors
+		defer func() {
+			if r := recover(); r != nil {
+				c.Status(500).SendString("Error collecting metrics")
+			}
+		}()
+		
+		// Get the registry and gather metrics
+		reg := getOrCreateRegistry()
+		gathering, err := reg.Gather()
+		if err != nil {
+			return c.Status(500).SendString("Error gathering metrics: " + err.Error())
+		}
+		
+		// Convert to Prometheus format
+		encoder := &prometheus.TextEncoder{}
+		var buf []byte
+		for _, mf := range gathering {
+			var err error
+			buf, err = encoder.Encode(buf, mf)
+			if err != nil {
+				return c.Status(500).SendString("Error encoding metrics: " + err.Error())
 			}
 		}
 		
-		// Observe request duration with consistent label order: method, path, status
-		duration := time.Since(start).Seconds()
-		httpRequestDuration.WithLabelValues(method, path, status).Observe(duration)
-		
-		// Count total requests with consistent label order: method, path, status
-		httpRequestsTotal.WithLabelValues(method, path, status).Inc()
-		
-		return err
+		return c.Send(buf)
 	}
 }
