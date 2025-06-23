@@ -1415,7 +1415,7 @@ const DashboardPage = () => {
       const options = {
         chart: {
           type: "line",
-          height: 200,
+          height: 500,
           animations: {
             enabled: false, // Disable animations to prevent flickering
             dynamicAnimation: {
@@ -1526,16 +1526,15 @@ const DashboardPage = () => {
         },
         yaxis: {
           title: {
-            text: "Level BBM (%)",
+            text: "Level BBM (Liter)",
           },
           min: 0,
           max: 100,
-          forceNiceScale: true,
-          decimalsInFloat: 0, // Jangan tampilkan desimal
+          tickAmount: 20, // 100 / 5 = 20 ticks
+          forceNiceScale: false, // bisa true atau false tergantung preferensi kamu
+          decimalsInFloat: 0,
           labels: {
-            formatter: (value) => {
-              return parseInt(value); // Hanya tampilkan nilai bulat
-            },
+            formatter: (value) => `${parseInt(value)}`, // tampilkan bilangan bulat
           },
         },
         title: {
@@ -2823,7 +2822,7 @@ const DashboardPage = () => {
                     <i className="bx bx-map text-lg"></i> GPS
                   </button>
                 </div>
-                <div className="flex justify-between md:justify-end gap-3 text-xs md:text-sm">
+                {/* <div className="flex justify-between md:justify-end gap-3 text-xs md:text-sm">
                   <div className="flex flex-col items-center">
                     <p className="font-semibold">96.695</p>
                     <p className="text-[#707070]">Kilometer</p>
@@ -2836,7 +2835,7 @@ const DashboardPage = () => {
                     <p className="font-semibold">01:02:09</p>
                     <p className="text-[#707070]">Idling</p>
                   </div>
-                </div>
+                </div> */}
               </div>
               {viewMode === "sensor" && (
                 <div className="relative">
